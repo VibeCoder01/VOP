@@ -23,10 +23,11 @@ from vop.measurements import QueryPolicy, utc, timezone_for
 CSS = """
 :root{font-family:Segoe UI,Arial,sans-serif;color:#24313e;background:#f4f6f8;font-size:15px;--accent:#157b78;--line:#dce2e7}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
-.shell{display:grid;grid-template-columns:218px 1fr;min-height:100vh}.sidebar{padding:36px 24px;background:#172330;color:#bbc6d0;position:sticky;top:0;height:100vh}
+.shell{display:grid;grid-template-columns:218px minmax(0,1fr);min-height:100vh}.sidebar{padding:36px 24px;background:#172330;color:#bbc6d0;position:sticky;top:0;height:100vh}
 .brand{font-size:32px;letter-spacing:-2px;font-weight:700;color:white}.subtitle{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-top:6px;line-height:1.7}
 .navigation{display:grid;gap:5px;margin:38px -8px 0}.navigation a{padding:12px 14px;border-radius:5px;transition:background 120ms,color 120ms}
 .navigation a:hover,.navigation a.current{background:#2a3947;color:#fff}.sidebar small{display:block;margin-top:34px;line-height:1.65}.sidebar small,.sidebar p{color:#aab9c8}.sidebar button.secondary{color:#d6e0e9;border-color:#8f9eaa}
+.workspace{min-width:0}.sidebar a.button.secondary{display:inline-block;margin-top:12px;color:#d6e0e9;border-color:#8f9eaa}.filters .field{min-width:0;max-width:100%;flex:1 1 180px}
 .workspace{padding:38px 46px 64px;max-width:1550px;width:100%;animation:appear 160ms ease-out}.top{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:32px}
 h1{font-size:30px;line-height:1.15;letter-spacing:-.9px;margin:0 0 10px}h2{font-size:18px;letter-spacing:-.3px;margin:0 0 18px}h3{font-size:15px;margin:22px 0 10px}
 p{line-height:1.6;margin:8px 0;color:#667383}small,.muted{color:#637182;font-size:12px}section{margin:28px 0 38px}.divider{border:0;border-top:1px solid var(--line);margin:24px 0}
@@ -67,7 +68,8 @@ def action(label, path, csrf, *, secondary=False):
 
 
 def field(label, name, value="", *, type="text", required=False, **kwargs):
-    return Div(Label(label, _for=name), Input(id=name, name=name, value=value, type=type, required=required, **kwargs), cls="field")
+    control_id = kwargs.pop("id", name)
+    return Div(Label(label, _for=control_id), Input(id=control_id, name=name, value=value, type=type, required=required, **kwargs), cls="field")
 
 
 def chart(points, label):
@@ -112,6 +114,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return Html(Head(Title(f"{title} · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href="/?" + urlencode({"view": key}), cls="current" if key == view else "") for key, label in navigation), cls="navigation"),
+                                   A("Alerts and release tools", href="/release", cls="button secondary"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P("Review sampled conditions and their evidence.")),
@@ -137,6 +140,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def table(headers, rows):
         return Div(Table(Thead(Tr(*(Th(h) for h in headers))), Tbody(*rows)), cls="table-wrap")
+
+    app.state.page, app.state.table = page, table
 
     def filters(view, selected="", request=None):
         selected_zone = request.scope["session"].get("timezone", settings.timezone_name) if request else settings.timezone_name

@@ -22,6 +22,7 @@ from vop.storage import Store
 from vop.browser_auth import BrowserAuth
 from vop.dashboard import install_dashboard
 from vop.sampling import Sampler
+from vop.reliable import Reliable
 
 
 def create_app(settings: Settings, *, token: str | None = None,
@@ -43,12 +44,15 @@ def create_app(settings: Settings, *, token: str | None = None,
     pipeline = Pipeline(settings, engine, store, capture)
     store.replay_all()
     sampler = Sampler(pipeline)
+    reliable = Reliable(store, settings, pipeline)
     async def lifespan(app):
         sampler.start()
+        reliable.start()
         try:
             yield
         finally:
             sampler.stop()
+            reliable.stop()
 
     async def provider_error(req, exc):
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
@@ -71,13 +75,17 @@ def create_app(settings: Settings, *, token: str | None = None,
                    exception_handlers={ProviderError: provider_error, ValueError: bad_request, sqlite3.Error: database_error})
     app.state.pipeline, app.state.store = pipeline, store
     app.state.sampler = sampler
+    app.state.reliable = reliable
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
+    from vop.release_ui import install_release
+    install_release(app, settings, store, pipeline, reliable)
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
         return JSONResponse({"status": "ready", **store.health(), "in_flight": pipeline.busy.locked(),
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,
+                             "rules_error": reliable.last_error,
                              "engine": {"id": engine.engine_id, "version": engine.engine_version,
                                         "synthetic": engine.synthetic, "capabilities": list(engine.capabilities())}})
 

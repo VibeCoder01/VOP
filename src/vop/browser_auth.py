@@ -1,7 +1,9 @@
 """Browser sessions share API authorization; writes require session CSRF and same origin."""
 import hmac
+from collections import deque
 import sqlite3
 from threading import Lock
+from time import monotonic
 from urllib.parse import parse_qs, urlsplit
 
 from starlette.concurrency import run_in_threadpool
@@ -14,6 +16,8 @@ class BrowserAuth:
         self.app, self.token, self.store, self.pipeline = app, token.encode("ascii"), store, pipeline
         self.viewer = viewer_token.encode("ascii") if viewer_token else None
         self.admission = Lock()
+        self.login_attempts = deque()
+        self.login_lock = Lock()
 
     def credential_role(self, supplied: bytes):
         if hmac.compare_digest(supplied, self.token):
@@ -53,6 +57,14 @@ class BrowserAuth:
             await self.audit_denial("browser_origin")
             return await JSONResponse({"error": "browser_origin_denied"}, status_code=403)(scope, receive, send)
         if method not in ("GET", "HEAD", "OPTIONS"):
+            if path == "/login":
+                now = monotonic()
+                with self.login_lock:
+                    while self.login_attempts and self.login_attempts[0] < now - 60:
+                        self.login_attempts.popleft()
+                    if len(self.login_attempts) >= 20:
+                        return await JSONResponse({"error": "login_rate_limited"}, status_code=429, headers={"Retry-After": "60"})(scope, receive, send)
+                    self.login_attempts.append(now)
             if role == "viewer" and path != "/logout":
                 await self.audit_denial("permission")
                 return await JSONResponse({"error": "operator_required"}, status_code=403)(scope, receive, send)

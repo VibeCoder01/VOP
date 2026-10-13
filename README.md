@@ -1,20 +1,21 @@
-# Visual Observability Platform — Phase 2 browser capability
+# Visual Observability Platform — Phase 3 reliable release
 
 Phase 2 adds a local browser workspace, immutable question editing, sampled temporal states,
 confirmed episodes, metrics, ROI/privacy processing, explicit sampling and default-off evidence.
 It began on the tested Phase 1 branch while PR #2 was open. After the owner merged PR #2,
 Phase 2 was aligned with the updated `main` and its PR targets `main` directly. The SRS remains
-unchanged. No Phase 3 work is authorised.
+unchanged. Phase 3 was authorised after the owner accepted Phase 2. Phase 4 remains deferred.
 
 ## Test the dashboard on this laptop
 
 ```powershell
 # Run from your VOP checkout:
-git switch codex/phase-2
+git switch codex/phase-3
 .\.venv\Scripts\python.exe -m pip install -r requirements-offline.txt
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe tools\phase2_smoke.py
+.\.venv\Scripts\python.exe tools\phase3_smoke.py
 .\.venv\Scripts\python.exe tools\run_dashboard.py
 ```
 
@@ -105,7 +106,83 @@ remote-worker, model-format or accuracy claim is added. See `CODEX_PHASE_2.md` a
 `reports/phase2-validation.md` for gates, actual commands and limitations. The checked
 [Windows/Ubuntu Actions run](https://github.com/VibeCoder01/VOP/actions/runs/38452430979) passed
 installation, regressions, mock demo and both actual HTTP/restart smokes. Licence decisions
-remain separate. Stop after Phase 2; Phase 3 requires explicit authorisation.
+remain separate. That Phase 2 evidence is historical; see the Phase 3 report for current checks.
+
+## Phase 3 release tools
+
+Restart the dashboard after updating to Phase 3; the existing browser process keeps its old code
+until stopped with Ctrl+C. Schema v3 migrates v2 transactionally and retains
+`<database>.v2-backup.sqlite3` for rollback with the previous app. Never downgrade a v3 database.
+
+Open **Alerts and release tools** in the sidebar. Create a binary duration rule (sampled seconds
+greater than a threshold) or an episode-count rule (count greater than N in a moving interval).
+Rules apply to the current question version; query edits do not reuse old observations. Saving
+a rule makes a new immutable revision; old alerts retain their criteria/version/provenance.
+The duration rule emits at most one alert per episode. Count/health rules emit once per transition.
+UNKNOWN suspends detection re-arming rather than implying an all-clear. Source-offline and
+processing-degraded rules are distinct. Offline alerts require enabled sampling and an observed
+disconnect/stale condition. A stopped source does not assert a detection or connectivity result.
+Each alert records its mock/model provenance. Operator acknowledge, resolve and notes are audited;
+resolving an alert does not close the measured episode or change the underlying observation.
+Filter alerts by source, question, severity and UTC interval. Latest 1,000 matching alerts are shown.
+
+The alert worker runs independently of browser tabs. Dashboard delivery is durable by default.
+Optional webhook delivery requires checking the rule's webhook box **and** explicit server
+environment configuration: `VOP_WEBHOOK_URL` (HTTPS), `VOP_WEBHOOK_ALLOWED_HOSTS` (comma-separated
+exact hostnames) and optional `VOP_WEBHOOK_TOKEN`. These values are never saved in SQLite or
+exports. There is no default outbound destination. TLS certificate validation is enabled;
+redirects and inherited proxies are disabled. Explicit allow-listing permits an authorised private
+receiver; do not expose an arbitrary user-supplied endpoint. No email transport is implemented.
+The same `Idempotency-Key` is sent on every attempt; the receiver must deduplicate it. Delivery
+is at-least-once after an ambiguous timeout/crash, not a guarantee of exactly-once reception.
+Five attempts maximum, capped retry delays, five-second HTTP timeout, and visible delivery failure
+bound the worker. A restart retries an interrupted attempt without generating another alert.
+
+CSV/JSON event, metric and alert downloads include source/question versions, timezone and recorded
+provenance, excluding image pixels and credentials. CSV protects spreadsheet formula prefixes.
+Viewer access permits these metadata exports; configuration export, audit and maintenance require
+operator access. Export configuration includes file references and secret environment *names*,
+not their values. The service also exposes `GET /api/v1/alerts`. Login attempts are capped at
+20 per minute for this loopback, single-operator process.
+
+Retention has an explicit preview and apply step. No policy deletes data by default. Applied
+evidence/raw-provider-detail/audit windows run hourly while VOP runs. Normalized observations,
+frame hashes, query history and events remain to preserve deterministic replay/metrics; this
+is not full history erasure or a database size quota. Existing backups and downloaded copies are
+operator-managed and are not erased by retention. Backups can contain retained evidence and need
+the same access protection as the live data. Stop VOP for offline configuration import/backup:
+
+```powershell
+.\.venv\Scripts\python.exe tools\release.py export-config --config sample-config\phase1.json --output config-export.json
+.\.venv\Scripts\python.exe tools\release.py import-config --input config-export.json --output imported
+.\.venv\Scripts\python.exe tools\release.py backup --config sample-config\phase1.json --output backups\before-update
+.\.venv\Scripts\python.exe tools\release.py restore --input backups\before-update --output restored\test
+.\.venv\Scripts\python.exe tools\run_dashboard.py restored\test\config.json
+```
+
+Import/restore create a new directory and refuse overwrite. Configuration import validates schema,
+query policy, rules and references before writing the destination. Backups use SQLite's backup API
+(including committed WAL/evidence), a configuration snapshot, integrity/foreign-key checks and
+SHA-256 manifest checks. Checksums detect corruption; they do not authenticate an untrusted backup.
+Keep these exports/backups outside version control. Never substitute a backup under a running app.
+
+Build the development release with `python tools/build_release.py`. The output ZIP in `dist/`
+contains a VOP wheel, locked dependency list, synthetic fixture, Windows installer and runbook;
+local data, access keys, camera images and weights are excluded. See `install/README.md` for fresh
+installation and rollback. This package requires Python and dependency installation; it is not
+a standalone executable or unattended Windows service. It retains the local-development defaults.
+
+See `CODEX_PHASE_3.md` and `reports/phase3-validation.md`. Production release acceptance remains
+conditional on actual RTSP/reference-camera and workload accuracy validation, licence review,
+OS secret protection and deployment hardening. No new real-model/GPU/remote-worker measurement
+is claimed. Stop after Phase 3; Phase 4 needs separate authorisation.
+
+Opt-in online dependency check: `python tools/dependency_audit.py --allow-network` queries the
+[OSV API](https://google.github.io/osv.dev/api/) with public package names/versions from the
+pinned offline dependency list. It does not send configuration, images or secret values.
+The Phase 3 scan prompted verified updates to Pillow 12.3.0, setuptools 83.0.0, pytest 9.0.3
+and Pygments 2.20.0. Historical Phase 0 server lock/results remain unchanged; that old model
+environment is not the current development release or a production security recommendation.
 
 ## Phase 1 historical foundation (v0.2)
 
@@ -410,4 +487,4 @@ requires independent review before intended use/redistribution. No model weights
 real camera images or private network configuration are committed. Repository visibility remains
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
-**Phase 2 is authorised; Phase 3 requires explicit new authorisation.**
+**Phase 3 is authorised; Phase 4 requires explicit new authorisation.**

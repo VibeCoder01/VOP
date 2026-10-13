@@ -45,11 +45,11 @@ def test_relative_database_resolution_and_immutable_versions(settings):
         assert connection.execute("SELECT count(*) FROM question_versions").fetchone()[0] == 4
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             connection.execute("UPDATE question_versions SET specification='{}'")
-    assert Store(settings.database).health()["database_schema"] == 2
+    assert Store(settings.database).health()["database_schema"] == 3
 
 
 def test_newer_or_foreign_database_not_silently_modified(tmp_path):
-    for name, statement in (("future.sqlite3", "PRAGMA user_version=3"),
+    for name, statement in (("future.sqlite3", "PRAGMA user_version=4"),
                             ("other.sqlite3", "CREATE TABLE unrelated(id INTEGER)")):
         path = tmp_path / name
         with sqlite3.connect(path) as connection:
