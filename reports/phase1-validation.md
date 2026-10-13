@@ -80,7 +80,17 @@ same script is part of CI. It prints no secret values or private camera settings
 | P1-05 | PASS | Mandatory bearer secret, constant-time comparison, all-route 401 tests, denied-access audit, no cookies/default secret/CDN; loopback actual smoke. |
 | P1-06 | PASS | Source/capture/encoded-frame/observation endpoints, pagination bounds, duplicate/conflict semantics; no arbitrary URL/path registration endpoint. |
 | P1-07 | PASS | Source/model/storage/timeout/contract failures visible, null failed values, zero queue, overload audit/count and responsive health. |
-| P1-08 | LOCAL PASS; CI pending | 131 tests and real loopback HTTP smoke pass on Windows; Windows/Ubuntu Actions will be checked after push. |
+| P1-08 | PASS | 131 local tests and actual Windows HTTP smoke; Windows/Ubuntu Actions installation, tests, mock demo and HTTP/restart smoke all succeeded. |
+
+## Checked GitHub Actions and delivery
+
+Draft PR: https://github.com/VibeCoder01/VOP/pull/2, against `main`, left unmerged.
+Implementation commit: `631ae412763c2bb52dfa507b54fcc8430dd70412`.
+Checked [run 38433218680](https://github.com/VibeCoder01/VOP/actions/runs/38433218680):
+Windows job 115420482185 and Ubuntu job 115420482646 completed with `success`, including
+dependency installation, editable build, pip check, pytest, mock demo and actual HTTP/restart
+smoke. No camera/model dependencies or weights were installed. This following evidence commit
+changes documentation only; the implementation checked by that run is unchanged.
 
 ## Remaining limitations and explicit stop
 
@@ -105,5 +115,6 @@ event metrics, query/dashboard UI, alerts, camera discovery and distributed work
 Application licence remains undecided; model licensing remains separate. No secrets, real imagery,
 weights, database files or private network configuration are committed.
 
-**Phase 1 foundation gate achieved locally.** Prepare the unmerged PR, check CI, and stop for
-review. Phase 2 requires explicit new authorisation.
+**Phase 1 foundation gate achieved, including checked Windows/Ubuntu CI.** PR #2 remains draft
+and unmerged for review. Recommendation: GO for Phase 2 review, with the limitations
+above retained. Phase 2 implementation requires explicit new authorisation.

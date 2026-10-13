@@ -116,6 +116,8 @@ URL ingestion service; production DNS/transport and credential policy remain dep
 FastHTML/Starlette supplies the local API and diagnostic HTML; SQLite uses the standard library.
 There is no React app, dashboard, temporal state machine, event metric, alert, remote transport,
 installer, licence selection or Phase 2 implementation. See `reports/phase1-validation.md`.
+All 131 local tests passed, and the checked [Windows/Ubuntu Actions run](https://github.com/VibeCoder01/VOP/actions/runs/38433218680)
+passed installation, tests, mock demo and actual HTTP/restart smoke on both platforms.
 
 ## Phase 0 historical setup and evidence
 
