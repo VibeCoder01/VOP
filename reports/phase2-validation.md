@@ -124,7 +124,17 @@ re-inserting earlier timestamps into existing live history. Screenshots/traces a
 | P2-06 | PASS | Actual desktop/mobile browser interaction and masked synthetic ROI preview; no external assets/JS bundle. |
 | P2-07 | PASS | One worker/no backlog, stopped/disabled source, drop/audit overload, capped retries, stale/unknown state and no negative source-failure closure. |
 | P2-08 | PASS | Transactional schema migration with backup, restart controls/data, immutable versions, replay equality and late-frame audit/exclusion. |
-| P2-09 | LOCAL PASS; CI pending | 161 regressions plus two actual HTTP smokes and authorised USB/software check; Windows/Ubuntu CI to be checked after push. |
+| P2-09 | PASS software | 161 regressions, two actual HTTP smokes, browser and authorised USB/software checks; checked Windows/Ubuntu CI also passed. |
+
+## Checked CI and pull request
+
+Draft [PR #3](https://github.com/VibeCoder01/VOP/pull/3) targets `main` and remains unmerged.
+Checked implementation/editor-fix commit `b1184d12db29177d6c4191423c1d006e0001b012` in
+[Actions run 38452430979](https://github.com/VibeCoder01/VOP/actions/runs/38452430979).
+Windows job 115486476009 and Ubuntu job 115486476367 both completed with success, including
+dependency installation, editable build, pip check, pytest, mock demo and **both actual HTTP
+smoke scripts**. No optional camera library, model weights or real camera were used in CI.
+This following evidence commit updates documentation only; checked implementation is unchanged.
 
 | SRS scenario | Actual status |
 |---|---|

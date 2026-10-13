@@ -11,7 +11,8 @@
     "real_model_inference": "not_run", "evidence_retained": false},
   "rtsp_hardware": {"outcome": "not_run", "reason": "No authorised endpoint/configuration supplied"},
   "new_real_model_benchmark": {"outcome": "not_run", "model_load_ms": null, "peak_memory_bytes": null, "inference_latency_ms": null},
-  "ci": {"status": "pending_at_implementation_commit", "reason": "To be checked after push"},
+  "ci": {"status": "passed", "checked_commit": "b1184d12db29177d6c4191423c1d006e0001b012",
+    "run_url": "https://github.com/VibeCoder01/VOP/actions/runs/38452430979", "windows": "success", "ubuntu": "success"},
   "phase3_authorised": false,
   "raw_camera_images_committed": false
 }

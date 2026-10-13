@@ -102,7 +102,9 @@ Startup/sample controls never bypass the live-source opt-in. Network-camera endp
 environment references with exact allowed-host policy; do not paste credentials into repo/UI.
 Real d1-3B CPU feasibility remains the separately recorded Phase 0 server result; no GPU,
 remote-worker, model-format or accuracy claim is added. See `CODEX_PHASE_2.md` and
-`reports/phase2-validation.md` for gates, actual commands and limitations. Licence decisions
+`reports/phase2-validation.md` for gates, actual commands and limitations. The checked
+[Windows/Ubuntu Actions run](https://github.com/VibeCoder01/VOP/actions/runs/38452430979) passed
+installation, regressions, mock demo and both actual HTTP/restart smokes. Licence decisions
 remain separate. Stop after Phase 2; Phase 3 requires explicit authorisation.
 
 ## Phase 1 historical foundation (v0.2)
