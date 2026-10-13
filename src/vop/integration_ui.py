@@ -76,6 +76,7 @@ def install_integration(app, settings, store, pipeline):
                     Button("Save and select backend"), method="post", action="/integration/engine")),
                    Form(hidden(csrf), Button("Test worker identity and health (no images)"), method="post", action="/integration/health"),
                    Section(H2("Protected Tapo setup"), P("Credentials are protected locally and never saved in the configuration or audit. Saving does not connect or start sampling. A blank password preserves the existing camera credentials. Retry setup and connection tests as needed."),
+                    P("Use a different source ID for each camera, such as tapo-c200 and tapo-c210. Reusing an ID updates that camera's setup."),
                     Form(hidden(csrf), field("Camera source ID", "source_id", "tapo-c200", required=True),
                          Select(*(Option(m, value=m) for m in ("C200", "C210", "C510W")), name="model", aria_label="Camera model"),
                          field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", "rtsp://192.168.1.100:554/stream1", required=True),

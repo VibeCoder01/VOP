@@ -109,5 +109,19 @@ def decode_result(raw, request, engine_id, version):
         answers.append(QuestionAnswer(**a))
     if [(a.question_id, a.question_version, a.kind) for a in answers] != [(q.question_id, q.version, q.kind) for q in request.questions]:
         raise ValueError("Answer coverage mismatch")
+    for answer, question in zip(answers, request.questions):
+        if type(answer.calibrated) is not bool:
+            raise ValueError("Invalid calibration metadata")
+        for number in (answer.score, answer.threshold_used):
+            if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number)):
+                raise ValueError("Invalid answer score metadata")
+        if answer.status == Status.SUCCESS:
+            value = answer.value
+            if question.kind == AnswerKind.BINARY and type(value) is not bool:
+                raise ValueError("Binary answer must be boolean")
+            if question.kind == AnswerKind.CHOICE and value not in [name for name, _ in question.choices]:
+                raise ValueError("Choice answer is outside configured options")
+            if question.kind == AnswerKind.ORDINAL and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= len(question.levels) - 1):
+                raise ValueError("Ordinal answer is outside configured levels")
     result.update(answers=tuple(answers), error=error(result["error"]))
     return InferenceResult(**result)

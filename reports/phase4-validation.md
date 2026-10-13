@@ -69,7 +69,7 @@ Windows PowerShell, repository root:
 .\.venv\Scripts\python.exe tools\phase4_soak.py --seconds 3600 --output reports\phase4\soak-report.json
 ```
 
-196 offline tests passed. HTTP smoke checks passed for phases 1–4; persisted counts after
+199 offline tests passed after the final wire-answer validation checks. HTTP smoke checks passed for phases 1–4; persisted counts after
 restart were respectively 6, 21, 18 (backup/restore), and 3. Phase 4 uses a real HTTP mock
 worker and actual Windows DPAPI, no weights or cameras. Disconnect produced UNKNOWN/ERROR
 without fallback. Hard timeout/process kill/restart, wrong bearer/worker identity, expiry,
@@ -81,8 +81,16 @@ environment. Browser QA used a separate disposable dashboard and explicitly synt
 sign-in, camera credential form, engine selection and health worked, with a fitting 390px
 mobile layout. No fictional camera endpoint was contacted.
 
-The 60-minute synthetic overload run and final CI results will be recorded when complete.
-This paragraph does not claim pending checks passed.
+Windows and Ubuntu jobs passed in the observed [Phase 4 CI run](https://github.com/VibeCoder01/VOP/actions/runs/38481123375)
+for the initial implementation commit `f32503c`. The final wire-answer validation refinement
+is also locally verified; its subsequent CI result will be recorded after completion.
+The 60-minute synthetic overload run remains in progress. No pending check is claimed passed.
+
+The 35-package offline dependency scan had no known OSV findings at 22:59 UTC
+(`phase4/offline-dependency-audit.json`). Browser QA also performed a successful synthetic
+capture through the HTTP mock worker, switched back to local mock, and verified that a
+plaintext LAN worker URL produces the intended explanatory HTTP 400 page. Its console error
+for that deliberately invalid request was expected; no application script failure was seen.
 
 ## Pending hardware/acceptance gates
 

@@ -16,7 +16,7 @@ from vop.secrets import SecretStore
 from vop.service import create_app
 from vop.storage import dumps
 from vop.worker import SupervisedEngine, create_worker_app
-from vop.worker_protocol import decode_request, encode, request_body
+from vop.worker_protocol import decode_request, decode_result, encode, request_body
 
 TOKEN = "phase4-offline-worker-" + "x" * 32
 OWNER, VIEWER = "phase4-offline-owner-" + "o" * 32, "phase4-offline-viewer-" + "v" * 32
@@ -25,6 +25,16 @@ PROFILE = {"kind": "worker", "id": "mock-worker", "version": "deterministic-mock
 
 def mock_worker():
     return SupervisedEngine({"kind": "mock", "engine_id": "mock-worker", "answers": {"red_square": True, "background": "white", "brightness": 2.0}}, timeout_seconds=2)
+
+
+@pytest.mark.parametrize("field,value", [("value", "false"), ("score", float("inf")), ("calibrated", "false")])
+def test_remote_answer_rejects_malformed_typed_values(request_frame, field, value):
+    from vop.inference.mock import MockInferenceEngine
+    engine = MockInferenceEngine({"red_square": True}, "mock-worker")
+    raw = json.loads(encode(infer(engine, request_frame)))
+    raw["answers"][0][field] = value
+    with pytest.raises(ValueError):
+        decode_result(raw, request_frame, engine.engine_id, engine.engine_version)
 
 
 def test_supervised_real_child_and_restart(request_frame):

@@ -560,7 +560,7 @@ below the 512 MiB watchdog threshold; this is not zero paging. Linux child-tree 
 that threshold produces `failed_oom`; Windows per-process swap is not measurable by this tool.
 These results support sparse still images on this server. Median throughput is approximately
 0.148/0.106/0.088 images per second for 1/3/5 questions, derived from recorded median latency.
-GPU and Dell performance remain unmeasured. See `reports/alternate-server/phase0-report.json`
+GPU and Dell performance were unmeasured in Phase 0; the Phase 4 GPU evidence is recorded above. See `reports/alternate-server/phase0-report.json`
 and `.md` for actual native outputs. **GO** for Phase 1 foundation review under the accepted
 server criterion; Phase 1 work itself still requires explicit authorisation.
 
@@ -583,7 +583,7 @@ deployment service. Without ensurepip, use `python3 -m venv --without-pip .venv`
 Model load, throughput and workload accuracy must be validated before choosing a production
 engine. A server benchmark does not prove Dell feasibility. Alternative models/runtimes require
 explicit image/API-equivalence, licensing and accuracy checks through the same contracts.
-Capture, inference, storage and UI placement remain independent; no distributed service is built.
+Capture, inference, storage and UI placement remain independent; the Phase 4 worker adds an authenticated transport.
 
 The application licence remains **undecided**. The model's
 [checkpoint licence](https://huggingface.co/LiquidAI/d1-3B/blob/051bcc464b01b9f92942b364d9586b0ef5912432/LICENSE)
