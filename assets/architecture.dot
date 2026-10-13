@@ -1,0 +1,44 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", pad="0.2", nodesep="0.44", ranksep="0.50", fontname="DejaVu Sans", splines=polyline];
+  node [shape=box, style="rounded,filled", fillcolor="#EAF1F5", color="#7799AC", fontname="DejaVu Sans", fontsize=11, fontcolor="#173C50", margin="0.13,0.1"];
+  edge [color="#66889A", arrowsize=0.68, penwidth=1.3];
+  subgraph cluster_capture {
+    label="CAPTURE LAYER"; labelloc=t; fontsize=11; fontname="DejaVu Sans"; color="#D9E5EB"; style=rounded;
+    input [label="Cameras • webcams\nURLs • files • agents"];
+    adapters [label="Input adapters\nand source health"];
+    frames [label="Frame sampling\nROI • privacy masking"];
+    input -> adapters -> frames;
+  }
+  subgraph cluster_reason {
+    label="ANALYSIS LAYER"; labelloc=t; fontsize=11; fontname="DejaVu Sans"; color="#D9E5EB"; style=rounded;
+    scheduler [label="Priority scheduler\n& bounded queue"];
+    d1 [label="d1-3B decision\nengine", fillcolor="#D6EDE7",color="#569585"];
+    aux [label="Optional CV / OCR\n/ detector plugins",fillcolor="#F0F4F6"];
+    normalize [label="Typed observations\n& provenance"];
+    scheduler -> d1 -> normalize;
+    scheduler -> aux -> normalize;
+  }
+  subgraph cluster_measure {
+    label="MEASUREMENT LAYER"; labelloc=t; fontsize=11; fontname="DejaVu Sans"; color="#D9E5EB"; style=rounded;
+    state [label="State machine\n& metric plugins"];
+    rules [label="Rules & alert engine"];
+    state -> rules;
+  }
+  subgraph cluster_store {
+    label="PERSISTENCE / DELIVERY"; labelloc=t; fontsize=11; fontname="DejaVu Sans"; color="#D9E5EB"; style=rounded;
+    db [label="Config • observations\nevents • metrics", shape=cylinder,fillcolor="#F4F0E9",color="#B7A07C"];
+    evidence [label="Evidence images",shape=cylinder,fillcolor="#F4F0E9",color="#B7A07C"];
+    api [label="API & dashboard\ncharts • timeline"];
+    notify [label="Notifications\n& integrations"];
+    db -> api;
+    evidence -> api;
+    rules -> notify;
+  }
+  frames -> scheduler;
+  frames -> evidence [constraint=false];
+  normalize -> state;
+  normalize -> db [constraint=false];
+  state -> db;
+  rules -> db [constraint=false];
+  {rank=same; d1;aux}
+}

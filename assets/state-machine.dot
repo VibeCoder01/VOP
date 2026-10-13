@@ -1,0 +1,20 @@
+digraph G {
+ graph [rankdir=LR,bgcolor="white",pad="0.2",nodesep="0.55",ranksep="0.8",fontname="DejaVu Sans"];
+ node [shape=box, style="rounded,filled",fillcolor="#ECF2F4",color="#8AA5B2",fontname="DejaVu Sans",fontsize=11,fontcolor="#173C50"];
+ edge [color="#55798A",penwidth=1.35, arrowsize=.65,fontname="DejaVu Sans",fontsize=9];
+ unknown [label="UNKNOWN\n(no reliable answer)",fillcolor="#F8EBD7",color="#C19B5C"];
+ off [label="INACTIVE\n(confirmed false)"];
+ pending [label="PENDING\n(candidate true)"];
+ active [label="ACTIVE\n(confirmed true)",fillcolor="#DDEFE8",color="#64A28B"];
+ closing [label="RECOVERING\n(candidate false)"];
+ unknown -> off [label="confirmed false"];
+ unknown -> pending [label="candidate true"];
+ off -> pending [label="candidate true"];
+ pending -> active [label="positive confirmation"];
+ pending -> off [label="candidate rejected"];
+ active -> closing [label="candidate false"];
+ closing -> off [label="negative confirmation\nclose episode"];
+ closing -> active [label="true again"];
+ {off,pending,active,closing} -> unknown [label="disconnect / stale\ninvalid / ambiguous",style=dashed];
+ unknown -> active [label="resume and confirm\nexisting episode policy",style=dotted];
+}

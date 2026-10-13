@@ -1,0 +1,56 @@
+erDiagram
+    SOURCE ||--o{ QUERY : serves
+    QUERY ||--|{ QUERY_VERSION : versions
+    QUERY_VERSION ||--o{ OBSERVATION : produces
+    QUERY ||--o{ EPISODE : derives
+    QUERY ||--o{ METRIC_SAMPLE : aggregates
+    OBSERVATION o|--o| EVIDENCE : references
+    EPISODE ||--o{ ALERT : triggers
+    SOURCE {
+      string id PK
+      string type
+      string adapter_id
+      string status
+    }
+    QUERY {
+      string id PK
+      string source_id FK
+      string current_version_id
+    }
+    QUERY_VERSION {
+      string id PK
+      string query_id FK
+      string answer_kind
+      json criteria
+      json policy
+    }
+    OBSERVATION {
+      string id PK
+      string query_version_id FK
+      datetime captured_at_utc
+      string processing_status
+      json answer
+    }
+    EPISODE {
+      string id PK
+      string query_id FK
+      datetime started_at
+      datetime ended_at
+    }
+    METRIC_SAMPLE {
+      string id PK
+      string query_id FK
+      string metric_type
+      decimal value
+    }
+    EVIDENCE {
+      string id PK
+      string storage_ref
+      datetime captured_at_utc
+    }
+    ALERT {
+      string id PK
+      string episode_id FK
+      string severity
+      string status
+    }

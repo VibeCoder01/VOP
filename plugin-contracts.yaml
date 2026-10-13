@@ -1,0 +1,76 @@
+# Illustrative plugin contract starter; SRS v0.1, not an implemented runtime.
+contract_api_version: "0.1"
+manifest_schema:
+  required: [api_version, plugin_id, version, plugin_type, capabilities, configuration_schema]
+  plugin_type_enum: [input, inference, measurement, notification, dashboard_widget]
+
+interface_types:
+  FrameEnvelope:
+    required: [source_id, frame_id, captured_at_utc, received_at_utc, content_type, payload_ref]
+    optional: [sequence, width, height, transform, privacy_flags]
+  InferenceRequest:
+    required: [frame_ref, query_versions, deadline_utc]
+    optional: [priority, model_selection, policy]
+  InferenceResult:
+    required: [status, engine_id, engine_version, per_query_answers, elapsed_ms]
+    optional: [provider_raw, resource_metrics, error_code]
+  Observation:
+    required: [id, source_id, query_version_id, captured_at_utc, processed_at_utc, status]
+    optional: [answer, provenance, evidence_id]
+  MeasurementUpdate:
+    required: [metric_type, query_id, period_start_utc, value, unit, coverage]
+
+interfaces:
+  input:
+    operations: [validate, probe, open, next_frame, health, close]
+  inference:
+    operations: [capabilities, load, infer, health, unload]
+  measurement:
+    operations: [capabilities, initial_state, consume, replay, serialize_state]
+  notification:
+    operations: [validate_channel, deliver, health]
+  dashboard_widget:
+    phase: later
+    operations: [manifest, declared_data_requirements]
+
+example_plugins:
+  - api_version: "0.1"
+    plugin_id: "org.example.input.rtsp"
+    version: "0.1.0"
+    plugin_type: input
+    capabilities:
+      protocols: [rtsp]
+      media: [image_frames]
+      cpu_supported: true
+    configuration_schema: "schemas/input-rtsp.json"
+  - api_version: "0.1"
+    plugin_id: "org.example.inference.liquid-d1-3b"
+    version: "0.1.0"
+    plugin_type: inference
+    capabilities:
+      modalities: [image, text]
+      answer_kinds: [binary, choice, ordinal]
+      batch_questions_per_frame: true
+      cpu_supported: true
+      response_field_map:
+        binary: [noul]
+        choice: [choice, confidence, probabilities]
+        ordinal: [score, confidence, probabilities, legend]
+    configuration_schema: "schemas/inference-liquid-d1-3b.json"
+  - api_version: "0.1"
+    plugin_id: "org.example.measurement.binary-episode"
+    version: "0.1.0"
+    plugin_type: measurement
+    capabilities:
+      input_answer_kinds: [binary]
+      outputs: [episode_count, episode_duration, frequency, occupancy]
+      unknown_gap_policy: configurable
+    configuration_schema: "schemas/measurement-binary-episode.json"
+
+constraints:
+  - Unknown and missing observations cannot be converted to confirmed false.
+  - User-provided URLs must be network-policy validated before any connection attempt.
+  - Secrets must be referenced indirectly, and may not appear in event records.
+  - Every result must include provenance and a model or plugin revision.
+  - Measurement replay must be deterministic for identical inputs and policy versions.
+  - Plugin registry rejects unknown API versions rather than guessing compatibility.

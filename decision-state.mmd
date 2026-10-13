@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> UNKNOWN
+    UNKNOWN --> INACTIVE: confirmed negative
+    UNKNOWN --> PENDING: candidate positive
+    INACTIVE --> PENDING: candidate positive
+    PENDING --> ACTIVE: positive confirmation
+    PENDING --> INACTIVE: candidate rejected
+    ACTIVE --> RECOVERING: candidate negative
+    RECOVERING --> INACTIVE: negative confirmation
+    RECOVERING --> ACTIVE: positive again
+    ACTIVE --> UNKNOWN: camera down / stale
+    INACTIVE --> UNKNOWN: camera down / stale
+    PENDING --> UNKNOWN: camera down / stale
+    RECOVERING --> UNKNOWN: camera down / stale

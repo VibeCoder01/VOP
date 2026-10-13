@@ -1,0 +1,21 @@
+digraph G {
+ graph [rankdir=TB, bgcolor="white", pad="0.24", nodesep="0.45", ranksep="0.8", fontname="DejaVu Sans", fontsize=11];
+ node [shape=record,style="filled", fillcolor="#EAF1F5",color="#7999AA",fontname="DejaVu Sans",fontsize=10,fontcolor="#173C50",margin="0.07"];
+ edge [color="#65899B",arrowsize=0.62, penwidth=1.2];
+ source [label="{SOURCE|id • type • config_ref\lhealth • owner_scope\l}"];
+ query [label="{QUERY|id • source_id\lactive_version_id\l}"];
+ qv [label="{QUERY_VERSION|id • query_id\lquestion • decision_type\lcriteria • ROI • schedule\l}"];
+ obs [label="{OBSERVATION|id • query_version_id\lsource_id • captured_at\lstatus • result • provenance\l}"];
+ evt [label="{EVENT|id • query_id\lstarted_at • ended_at\lstate • confidence_summary\l}"];
+ measure [label="{METRIC_SAMPLE|id • query_id • metric_type\lbucket_at • value • unit\l}"];
+ evidence [label="{EVIDENCE|id • source_id\lcaptured_at • storage_ref\lretention_class\l}",fillcolor="#F4F0E9",color="#B7A07C"];
+ alert [label="{ALERT|id • rule_id\levent_id • severity\lstate • delivery_id\l}"];
+ audit [label="{AUDIT|actor • operation\ltarget_id • occurred_at\l}",fillcolor="#F5F3F0"];
+ source -> query [label="1:N"];
+ query -> qv [label="1:N"];
+ qv -> obs [label="1:N"];
+ query -> evt [label="1:N"];
+ query -> measure [label="1:N"];
+ obs -> evidence [label="0..1", style=dashed];
+ evt -> alert [label="0:N"];
+}

@@ -1,0 +1,23 @@
+flowchart LR
+    subgraph Capture[Capture layer]
+      A[Camera / webcam / URL / file / agent] --> B[Source adapter and health]
+      B --> C[Sampling / ROI / privacy masks]
+    end
+    subgraph Analysis[Analysis layer]
+      C --> D[Priority scheduler and bounded queue]
+      D --> E[Liquid d1-3B adapter]
+      D --> F[Other CV / OCR / tracking adapters]
+      E --> G[Normalised typed observations]
+      F --> G
+    end
+    subgraph Measure[Measurement layer]
+      G --> H[State machine and metrics]
+      H --> I[Rules and alerts]
+    end
+    G --> J[(Observations / events / metrics DB)]
+    H --> J
+    I --> J
+    C --> K[(Evidence image store)]
+    J --> L[Authenticated API / dashboard]
+    K --> L
+    I --> M[Notification sinks]
