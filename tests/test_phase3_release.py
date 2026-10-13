@@ -113,6 +113,18 @@ def test_count_transitions_revision_and_query_version(app):
     assert len(engine.alerts()) == 2  # new version has no old episodes
 
 
+def test_alert_provenance_comes_from_observations_not_current_engine(app):
+    now = utcnow()
+    samples(app, now - timedelta(seconds=30), [True, True, True], step=10)
+    original = app.state.pipeline.engine.engine_id
+    app.state.pipeline.engine.engine_id = "changed-after-capture"
+    app.state.reliable.save_rule(rule(threshold=0))
+    app.state.reliable.evaluate(now)
+    payload = app.state.reliable.alerts()[0]["payload"]
+    assert payload["engine_id"] == original
+    assert payload["provenance"][0]["synthetic"] is True
+
+
 @pytest.mark.parametrize("changes", [{"threshold": float("nan")}, {"kind": "bad"}, {"enabled": "yes"}, {"question_id": "background"}, {"source_id": "unknown"}, {"threshold": True}, {"unexpected": 1}])
 def test_rule_validation(app, changes):
     with pytest.raises(ValueError):
@@ -199,7 +211,18 @@ def test_retention_preview_apply_replay_and_backup_restore(app, tmp_path):
     assert not (tmp_path / "bad-restore").exists()
 
 
-def test_configuration_round_trip_policies_rules_and_invalid_import(app, tmp_path):
+def test_configuration_round_trip_policies_rules_and_invalid_import(app, tmp_path, monkeypatch):
+    import tempfile
+    original = tempfile.TemporaryDirectory
+    class AliasedTemporaryDirectory:
+        def __init__(self, *args, **kwargs):
+            self.directory = original(*args, **kwargs)
+        def __enter__(self):
+            folder = Path(self.directory.__enter__())
+            return str(folder / ".." / folder.name)
+        def __exit__(self, *args):
+            return self.directory.__exit__(*args)
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", AliasedTemporaryDirectory)
     engine, store = app.state.reliable, app.state.store
     engine.save_rule(rule("count", threshold=2))
     record = store.questions(SID)[0]

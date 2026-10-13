@@ -23,10 +23,11 @@ from vop.measurements import QueryPolicy, utc, timezone_for
 CSS = """
 :root{font-family:Segoe UI,Arial,sans-serif;color:#24313e;background:#f4f6f8;font-size:15px;--accent:#157b78;--line:#dce2e7}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
-.shell{display:grid;grid-template-columns:218px 1fr;min-height:100vh}.sidebar{padding:36px 24px;background:#172330;color:#bbc6d0;position:sticky;top:0;height:100vh}
+.shell{display:grid;grid-template-columns:218px minmax(0,1fr);min-height:100vh}.sidebar{padding:36px 24px;background:#172330;color:#bbc6d0;position:sticky;top:0;height:100vh}
 .brand{font-size:32px;letter-spacing:-2px;font-weight:700;color:white}.subtitle{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-top:6px;line-height:1.7}
 .navigation{display:grid;gap:5px;margin:38px -8px 0}.navigation a{padding:12px 14px;border-radius:5px;transition:background 120ms,color 120ms}
 .navigation a:hover,.navigation a.current{background:#2a3947;color:#fff}.sidebar small{display:block;margin-top:34px;line-height:1.65}.sidebar small,.sidebar p{color:#aab9c8}.sidebar button.secondary{color:#d6e0e9;border-color:#8f9eaa}
+.workspace{min-width:0}.sidebar a.button.secondary{display:inline-block;margin-top:12px;color:#d6e0e9;border-color:#8f9eaa}.filters .field{min-width:0;max-width:100%;flex:1 1 180px}
 .workspace{padding:38px 46px 64px;max-width:1550px;width:100%;animation:appear 160ms ease-out}.top{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:32px}
 h1{font-size:30px;line-height:1.15;letter-spacing:-.9px;margin:0 0 10px}h2{font-size:18px;letter-spacing:-.3px;margin:0 0 18px}h3{font-size:15px;margin:22px 0 10px}
 p{line-height:1.6;margin:8px 0;color:#667383}small,.muted{color:#637182;font-size:12px}section{margin:28px 0 38px}.divider{border:0;border-top:1px solid var(--line);margin:24px 0}

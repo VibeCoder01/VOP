@@ -32,7 +32,7 @@ Phase 4 has not started. PR must be reviewed/merged by the owner, never automati
 | P3-05 | Configuration round-trip preserves policy/disabled control/mock preset/rules; bad path/schema rejected before destination publication; backup restores 18 observations and acknowledged alert; corrupt checksum rejected; v2 backup remains v2. Passed. |
 | P3-06 | Preview leaves pixels intact; explicit application deletes old synthetic evidence and raw detail; normalized replay reproduces events; independent windows validated; hourly enforcement is enabled only after apply. Passed. |
 | P3-07 | Wheel/ZIP built; fresh Windows venv install with pinned dependencies, pip check and actual Phase 3 smoke passed. Development installer, not standalone executable/service. |
-| P3-08 | 179 offline tests passed; previous Host/origin/CSRF/viewer tests retained; new rule validation, formula/XSS/endpoint/rate-limit/native-form checks pass. Browser and CI evidence recorded below. |
+| P3-08 | 180 offline tests passed; previous Host/origin/CSRF/viewer tests retained; new rule validation, formula/XSS/endpoint/rate-limit/native-form checks pass. Browser and CI evidence recorded below. |
 
 ## Exact commands and local results
 
@@ -52,7 +52,7 @@ Executed in PowerShell from `C:\Users\shaun\Documents\ChatGPT\VOP`, Python 3.11.
 ```
 
 - `pip check`: no broken requirements; app 0.4.0 installed.
-- pytest: **179 passed**. The initial run exposed hardcoded schema-v2 expectations, which were
+- pytest: **180 passed**. The initial run exposed hardcoded schema-v2 expectations, which were
   updated to v3/v4 future-version refusal. New tests and actual browser work caught mistakes
   during implementation; only corrected reruns are acceptance evidence.
 - mock CLI demo: success, explicit synthetic fields, no weights.
@@ -87,7 +87,12 @@ Playwright uses a dedicated disposable browser `vop-phase3` and synthetic server
 port 8877; it never modifies the user's running port-8765 database. Native form encoding and
 unique IDs are regression-tested after browser work caught the common Form helper's multipart
 default, incompatible with the application's deliberately URL-encoded CSRF middleware.
-Detailed final browser/CI results will be appended after completion, not predicted.
+Native browser creation of a count rule, synthetic demo, one MOCK alert and acknowledgement/note
+submission passed. At 390×844, document width fits the viewport after fixing grid min-width and
+filter wrapping; desktop/mobile screenshots were inspected in ignored `output/playwright/`.
+An initial Windows CI run found temporary-path alias normalization in configuration import;
+the staging directory/expected path now resolve consistently, with an aliased-temp-path regression.
+Final CI results will be appended after completion, not predicted.
 
 ## Hardware, model and delivery limitations
 

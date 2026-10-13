@@ -22,11 +22,11 @@ def import_configuration(source, destination):
     import tempfile
     import shutil
     with tempfile.TemporaryDirectory(prefix="vop-config-import-") as folder:
-        stage = Path(folder)
+        stage = Path(folder).resolve()
         path = stage / "config.json"
         path.write_text(dumps(package["config"]), encoding="utf-8")
         settings = load_config(path)
-        if settings.database != stage / "data" / "vop.sqlite3":
+        if settings.database != (stage / "data" / "vop.sqlite3").resolve():
             raise ValueError("Configuration package must use data/vop.sqlite3")
         store = Store(settings.database)
         store.configure(settings)

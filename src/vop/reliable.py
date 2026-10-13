@@ -134,7 +134,8 @@ class Reliable:
                 active = eligible and summary["state"] == "ACTIVE" and event is not None and event["estimated_observed_seconds"] > rule["threshold"]
                 discriminator = event["id"] if event else "none"
             elif kind == "count":
-                count = sum(now - timedelta(seconds=rule["window_seconds"]) <= utc(e["started_at_utc"]) <= now for e in summary["events"])
+                counted_events = [e for e in summary["events"] if now - timedelta(seconds=rule["window_seconds"]) <= utc(e["started_at_utc"]) <= now]
+                count = len(counted_events)
                 active = eligible and summary["state"] != "UNKNOWN" and count > rule["threshold"]
                 discriminator = "window"
             elif kind == "source_offline":
@@ -146,6 +147,9 @@ class Reliable:
                 active = eligible and latest is not None and latest["status"] != "success" and latest["run"]["frame_id"] is not None
                 discriminator = "health"
             state_key = f"{rule['id']}:{rule['revision']}:{q.version}:{discriminator}"
+            observation_ids = [e["start_observation_id"] for e in counted_events] if kind == "count" else [summary["last_observation_id"]]
+            recorded_runs = [r["run"] for oid in observation_ids if oid and (r := self.store.observation(oid))]
+            provenance = sorted({(r["engine_id"], r["engine_version"], r["synthetic"]) for r in recorded_runs})
             with self.store.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
                 previous = db.execute("SELECT active,transition FROM rule_states WHERE id=?", (state_key,)).fetchone()
@@ -161,7 +165,9 @@ class Reliable:
                     payload = {"id": alert_id, "rule_id": rule["id"], "rule_revision": rule["revision"], "kind": kind,
                                "severity": rule["severity"], "source_id": sid, "question_id": qid, "question_version": q.version,
                                "created_at_utc": now.isoformat(), "event_id": event["id"] if event and kind == "duration" else None,
-                               "synthetic": self.pipeline.engine.synthetic, "engine_id": self.pipeline.engine.engine_id,
+                               "synthetic": any(synthetic for eid, ver, synthetic in provenance),
+                               "engine_id": provenance[0][0] if len(provenance) == 1 else "mixed",
+                               "provenance": [{"engine_id": eid, "engine_version": ver, "synthetic": synthetic} for eid, ver, synthetic in provenance],
                                "rule": rule,
                                "measurement": "bounded sampled intervals" if kind == "duration" else kind}
                     inserted = db.execute("INSERT OR IGNORE INTO alerts VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
