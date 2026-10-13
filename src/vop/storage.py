@@ -197,7 +197,7 @@ class Store:
                 raise ValueError("Question changed in another request; reload before editing")
             from dataclasses import replace
             versions = {r[0] for r in connection.execute("SELECT version FROM question_versions WHERE source_id=? AND question_id=?", (source_id, question.question_id))}
-            next_number = 1
+            next_number = max((int(v) for v in versions if v.isdecimal()), default=0) + 1
             while str(next_number) in versions:
                 next_number += 1
             question = replace(question, version=str(next_number))

@@ -2,7 +2,8 @@
 
 Owner authorisation: 13 October 2026 after the owner ran the Phase 1 laptop smoke successfully.
 Phase 1 PR #2 remains unmerged at commencement: develop on `codex/phase-2` based on that
-tested branch, with a separate stacked PR; do not merge either automatically.
+tested branch, initially planning a separate stacked PR. The owner subsequently merged PR #2
+(`4928889`); Phase 2 targets updated `main` directly. Do not merge Phase 2 automatically.
 
 Scope: SRS §15 Phase 2 — question editor, temporal state machine, event metrics, opt-in evidence,
 dashboard and disconnect handling. Keep existing byte-oriented inference and explicit live/model

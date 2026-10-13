@@ -2,8 +2,9 @@
 
 Phase 2 adds a local browser workspace, immutable question editing, sampled temporal states,
 confirmed episodes, metrics, ROI/privacy processing, explicit sampling and default-off evidence.
-It builds on the tested Phase 1 branch; PR #2 was still unmerged at commencement, so the Phase 2
-PR is stacked on `codex/phase-1`. The SRS remains unchanged. No Phase 3 work is authorised.
+It began on the tested Phase 1 branch while PR #2 was open. After the owner merged PR #2,
+Phase 2 was aligned with the updated `main` and its PR targets `main` directly. The SRS remains
+unchanged. No Phase 3 work is authorised.
 
 ## Test the dashboard on this laptop
 

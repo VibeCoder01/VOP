@@ -4,7 +4,8 @@ Date: 13 October 2026. Status: proposed for Phase 2 review.
 
 The owner authorised Phase 2 after running the laptop Phase 1 smoke successfully, and separately
 authorised brief local USB capture. PR #2 remains unmerged at commencement; the new branch/PR
-is stacked on the tested Phase 1 implementation, without automatic merging.
+began on the tested Phase 1 implementation. The owner subsequently merged PR #2 (`4928889`),
+so the Phase 2 branch was aligned with and targets `main` directly. No PR was merged automatically.
 
 Keep FastHTML native forms, local CSS/SVG and stdlib SQLite. Add signed one-hour browser sessions,
 CSRF, a local operator/viewer distinction and bearer API compatibility. No external assets, SPA,

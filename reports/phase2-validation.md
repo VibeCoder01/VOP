@@ -3,7 +3,10 @@
 Owner instruction: “Begin Phase 2”, after the owner independently ran the Phase 1 laptop smoke
 and obtained PASS. Separately authorised a brief local USB webcam test. Branch `codex/phase-2`
 is based on tested `codex/phase-1` (`d48b8be`); PR #2 was still unmerged at commencement.
-Use a stacked PR, not an automatic Phase 1 merge. SRS requirements/IDs are unchanged.
+An initially attempted stacked PR returned base-branch-invalid because the owner had subsequently
+merged PR #2 (`4928889`) and deleted its branch. Fetched/pruned remote references and merged the
+updated `origin/main` into the development branch; Phase 2 now targets `main` directly. Neither
+PR was merged automatically. SRS requirements/IDs are unchanged.
 
 ## Implemented and verified software
 

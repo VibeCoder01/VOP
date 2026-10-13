@@ -324,7 +324,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 Option("Require operator review before continuing", value="manual_review", selected=policy.unknown_gap_policy == "manual_review"), id="unknown_gap_policy", name="unknown_gap_policy"), cls="field"),
             field("ROI (optional: x, y, width, height in 0–1)", "roi", ",".join(str(v) for v in policy.roi) if policy.roi else ""),
             Label(Input(type="checkbox", name="enabled", checked=record["enabled"] if record else True), " Question enabled"),
-            field("Mock answer preset (true/false, option name, or level number)", "mock_answer", str(engine.configured.get(q.question_id, "")) if isinstance(engine, MockInferenceEngine) else "") if engine.synthetic else None,
+            field("Mock answer preset (true/false, option name, or level number)", "mock_answer", str(engine.source_answers.get((source_id, q.question_id, q.version), engine.configured.get(q.question_id, ""))) if isinstance(engine, MockInferenceEngine) else "") if engine.synthetic else None,
             P("Each save creates an immutable version. Mock presets are synthetic instructions, not image analysis.", cls="muted"),
             P("For a manual-review gap, review the history and save a new version to start fresh confirmations.", cls="muted"),
             Button("Save new version"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor")], view="questions")
