@@ -1,106 +1,83 @@
 """Authenticated local FastHTML service; all source destinations are operator configured."""
-import hmac
 import json
 import os
 import sqlite3
 from dataclasses import replace
 from uuid import uuid4
-from threading import Lock
 
 from fasthtml.core import FastHTML
-from fasthtml.components import H1, Main, P
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from vop.config import Settings, identifier
-from vop.contracts import InferenceEngine, ProviderError
+from vop.contracts import InferenceEngine, ProviderError, utcnow
 from vop.inference.mock import MockInferenceEngine
 from vop.inputs.file_image import FileImageAdapter
 from vop.inputs.sources import MAX_IMAGE_BYTES, SourceAdapters
 from vop.pipeline import Pipeline
 from vop.storage import Store
-
-
-class OperatorAuth:
-    def __init__(self, app, *, token: str, store: Store, pipeline: Pipeline):
-        self.app, self.token, self.store = app, token.encode("ascii"), store
-        self.pipeline = pipeline
-        self.admission = Lock()
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            return await self.app(scope, receive, send)
-        headers = dict(scope.get("headers", []))
-        supplied = headers.get(b"authorization", b"")
-        valid = supplied.startswith(b"Bearer ") and hmac.compare_digest(supplied[7:], self.token)
-        if not valid:
-            try:
-                await run_in_threadpool(self.store.audit, "authentication", "denied")
-            except sqlite3.Error:
-                pass  # Auth stays fail-closed even when audit storage is unavailable.
-            return await JSONResponse({"error": "authentication_required"}, status_code=401,
-                                      headers={"WWW-Authenticate": "Bearer", "Cache-Control": "no-store"})(scope, receive, send)
-        # No cookies, URL tokens or permissive CORS. Reject browser-originated cross-site calls.
-        if b"origin" in headers:
-            try:
-                await run_in_threadpool(self.store.audit, "browser_origin", "denied")
-            except sqlite3.Error:
-                pass
-            return await JSONResponse({"error": "browser_origin_denied"}, status_code=403)(scope, receive, send)
-        async def secured_send(message):
-            if message["type"] == "http.response.start":
-                message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
-                                      (b"x-content-type-options", b"nosniff"),
-                                      (b"content-security-policy", b"default-src 'none'; frame-ancestors 'none'")]
-            await send(message)
-        admitted = scope["method"] == "POST"
-        if admitted and not self.admission.acquire(blocking=False):
-            self.pipeline.skipped += 1
-            await run_in_threadpool(self.store.audit, "capture_skipped", "overload")
-            return await JSONResponse({"error": "overloaded"}, status_code=429)(scope, receive, secured_send)
-        try:
-            await self.app(scope, receive, secured_send)
-        finally:
-            if admitted:
-                self.admission.release()
+from vop.browser_auth import BrowserAuth
+from vop.dashboard import install_dashboard
+from vop.sampling import Sampler
 
 
 def create_app(settings: Settings, *, token: str | None = None,
-               engine: InferenceEngine | None = None, capture=None, allow_live_sources: bool = False):
+               engine: InferenceEngine | None = None, capture=None, allow_live_sources: bool = False,
+               viewer_token: str | None = None):
     token = token if token is not None else os.environ.get("VOP_API_TOKEN", "")
     if not isinstance(token, str) or len(token) < 32 or len(token) > 256 or not token.isascii() or any(c.isspace() for c in token):
         raise ValueError("Set VOP_API_TOKEN to a 32–256 character ASCII secret without whitespace")
+    viewer_token = viewer_token if viewer_token is not None else os.environ.get("VOP_VIEWER_TOKEN")
+    if viewer_token and (len(viewer_token) < 32 or len(viewer_token) > 256 or not viewer_token.isascii() or any(c.isspace() for c in viewer_token) or viewer_token == token):
+        raise ValueError("Viewer key must be a distinct 32–256 character ASCII secret")
     store = Store(settings.database)
     store.configure(settings)
     engine = engine or MockInferenceEngine(settings.mock_answers, settings.engine_id)
+    if isinstance(engine, MockInferenceEngine):
+        for source_id, qid, version, value in store.mock_values():
+            engine.configure_source_answer(source_id, qid, version, value)
     capture = capture or SourceAdapters(allow_live_sources=allow_live_sources, timeout_seconds=settings.capture_timeout_seconds)
     pipeline = Pipeline(settings, engine, store, capture)
+    store.replay_all()
+    sampler = Sampler(pipeline)
+    async def lifespan(app):
+        sampler.start()
+        try:
+            yield
+        finally:
+            sampler.stop()
 
     async def provider_error(req, exc):
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
         return JSONResponse({"error": exc.code}, status_code=code)
 
     async def bad_request(req, exc):
+        if "text/html" in req.headers.get("accept", "") and hasattr(app.state, "render_error"):
+            from fasthtml.core import to_xml
+            from starlette.responses import HTMLResponse
+            return HTMLResponse(to_xml(app.state.render_error(req, str(exc))), status_code=400)
         return JSONResponse({"error": "invalid_request"}, status_code=400)
 
     async def database_error(req, exc):
         return JSONResponse({"error": "storage_unavailable"}, status_code=503)
 
     app = FastHTML(default_hdrs=False, sess_cls=None, secret_key=token,
-                   middleware=[Middleware(OperatorAuth, token=token, store=store, pipeline=pipeline)],
+                   middleware=[Middleware(SessionMiddleware, secret_key=token, session_cookie="vop_session", max_age=3600, same_site="strict"),
+                               Middleware(BrowserAuth, token=token, viewer_token=viewer_token, store=store, pipeline=pipeline)],
+                   lifespan=lifespan,
                    exception_handlers={ProviderError: provider_error, ValueError: bad_request, sqlite3.Error: database_error})
     app.state.pipeline, app.state.store = pipeline, store
-
-    @app.route("/", methods=["GET"])
-    def index():
-        return Main(H1("VOP Phase 1 service"), P("Authenticated foundation API. No dashboard or continuous capture."))
+    app.state.sampler = sampler
+    install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
         return JSONResponse({"status": "ready", **store.health(), "in_flight": pipeline.busy.locked(),
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
+                             "sampling_error": sampler.last_error,
                              "engine": {"id": engine.engine_id, "version": engine.engine_version,
                                         "synthetic": engine.synthetic, "capabilities": list(engine.capabilities())}})
 
@@ -146,5 +123,31 @@ def create_app(settings: Settings, *, token: str | None = None,
             raise ValueError("Invalid pagination")
         rows = store.observations(source_id, after=after, limit=limit)
         return JSONResponse({"observations": rows, "next_after": rows[-1]["sequence"] if rows else after})
+
+    @app.route("/api/v1/events", methods=["GET"])
+    def events(request: Request):
+        source_id = request.query_params.get("source_id")
+        return JSONResponse({"events": store.events(source_id)})
+
+    @app.route("/api/v1/metrics", methods=["GET"])
+    def metrics(request: Request):
+        source_id = request.query_params.get("source_id")
+        values = []
+        for sid in pipeline.sources:
+            if source_id and source_id != sid:
+                continue
+            for record in store.questions(sid):
+                q = record["spec"]
+                values.append({"source_id": sid, "question_id": q.question_id, "question_version": q.version,
+                               "summary": store.summary(sid, q.question_id, q.version, kind=q.kind, as_of=utcnow(),
+                                                        timezone_name=settings.timezone_name)})
+        return JSONResponse({"metrics": values})
+
+    @app.route("/api/v1/replay", methods=["POST"])
+    async def replay_history():
+        if pipeline.busy.locked():
+            raise ProviderError("overloaded", "Replay requires an idle inference slot")
+        await run_in_threadpool(store.replay_all)
+        return JSONResponse({"status": "replayed", "events": store.event_count()})
 
     return app

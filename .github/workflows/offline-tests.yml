@@ -23,3 +23,4 @@ jobs:
       - run: python -m pytest -q
       - run: python -m vop demo --image fixtures/scene.png --engine mock
       - run: python tools/phase1_smoke.py
+      - run: python tools/phase2_smoke.py

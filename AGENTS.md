@@ -1,8 +1,8 @@
 # Repository instructions for Codex
 
 The version-controlled source of truth is `SRS-v0.2.md`. Phase 0 is merged. The product owner
-authorised **Phase 1 foundation** on 13 October 2026. `CODEX_PHASE_1.md` records its scope and
-exit criteria; Phase 2+ remains unauthorised. Phase-specific restrictions below apply to the
+authorised **Phase 2 MVP capability** after successfully testing Phase 1 on 13 October 2026.
+`CODEX_PHASE_2.md` records its scope and exit criteria; Phase 3+ remains unauthorised. Phase-specific restrictions below apply to the
 named phase, not to all future work.
 
 ## Working rules
@@ -26,4 +26,4 @@ named phase, not to all future work.
 Provide changed files, exact commands/results, skipped hardware tests, any actual model
 revision/versions/measurements, open limitations, and a recommendation for the next phase.
 Phase 0 measurements remain historical evidence; do not invent a new model or camera run.
-Stop after Phase 1; Phase 2 requires explicit new authorisation.
+Stop after Phase 2; Phase 3 requires explicit new authorisation.

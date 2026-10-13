@@ -6,7 +6,8 @@ import math
 from threading import Lock
 
 from vop.config import Settings
-from vop.contracts import FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow
+from vop.contracts import FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow, result as make_result
+from vop.preprocessing import preprocess
 from vop.inputs.sources import FrameSource, SourceAdapters
 from vop.storage import Store
 
@@ -18,17 +19,22 @@ class Pipeline:
         self.sources = {s.source_id: s for s in settings.sources}
         self.busy = Lock()
         self.skipped = 0
+        self.latest_preview = None  # One privacy-masked, downscaled preview; never an unbounded cache.
 
     def source(self, source_id: str):
         if source_id not in self.sources:
             raise ProviderError("source_not_found", "Source does not exist")
         source = self.sources[source_id]
-        if not source.enabled:
+        control = self.store.source_control(source_id)
+        if not control["enabled"]:
             raise ProviderError("source_disabled", "Source is disabled")
-        return source
+        return replace(source, questions=tuple(q["spec"] for q in self.store.questions(source_id, active_only=True)),
+                       retain_evidence=control["retain_evidence"], sample_interval_seconds=control["sample_interval_seconds"])
 
     def run(self, source_id: str, frame=None) -> dict:
         source = self.source(source_id)
+        if not source.questions:
+            raise ProviderError("no_active_questions", "Enable at least one question before capturing")
         if not self.busy.acquire(blocking=False):
             self.skipped += 1
             self.store.audit("capture_skipped", "overload")
@@ -54,7 +60,28 @@ class Pipeline:
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
             else:
-                outcome = infer(self.engine, request)
+                records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
+                groups = {}
+                for record in records:
+                    groups.setdefault(record["policy"].roi, []).append(record["spec"])
+                outcomes = []
+                masks = source.settings.get("privacy_masks", [])
+                for roi, group in groups.items():
+                    input_frame = preprocess(frame, masks, roi) if masks or roi else frame
+                    group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
+                    group_result = infer(self.engine, group_request)
+                    if (group_result.frame_id != frame.frame_id or group_result.source_id != source_id
+                        or group_result.engine_id != self.engine.engine_id or group_result.engine_version != self.engine.engine_version
+                        or [(a.question_id, a.question_version) for a in group_result.answers] != [(q.question_id, q.version) for q in group]):
+                        group_result = failed(group_request, self.engine, ProviderError("provider_contract", "Provider group provenance did not match request"))
+                    outcomes.append(group_result)
+                if len(outcomes) == 1:
+                    outcome = outcomes[0]
+                else:
+                    answers = {a.question_id: a for r in outcomes for a in r.answers}
+                    outcome = make_result(request, self.engine, tuple(answers[q.question_id] for q in source.questions),
+                                          sum(r.elapsed_ms for r in outcomes), {"roi_groups": [r.provider_raw for r in outcomes]},
+                                          {"roi_group_usage": [r.usage for r in outcomes]})
             expected = [(q.question_id, q.version, q.kind) for q in source.questions]
             returned = [(a.question_id, a.question_version, a.kind) for a in outcome.answers]
             invalid_value = any(a.status == Status.SUCCESS and not (
@@ -72,7 +99,11 @@ class Pipeline:
             except (TypeError, ValueError):
                 outcome = failed(request, self.engine, ProviderError("provider_contract", "Provider fields are not finite JSON values"))
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
-            return self.store.save(source_id, frame, result)
+            preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
+            self.latest_preview = (source_id, frame.frame_id, preview.payload)
+            result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
+                                       "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi]}
+            return self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
         finally:
             self.busy.release()
 
@@ -86,3 +117,8 @@ class Pipeline:
                                "status": str(error.status), "value": None, "error": {"code": error.code}}
                               for q in source.questions]}
         return self.store.save(source.source_id, None, result)
+
+    def record_gap(self, source_id: str, code: str = "source_disabled"):
+        source = replace(self.sources[source_id], questions=tuple(r["spec"] for r in self.store.questions(source_id, active_only=True)))
+        if source.questions:
+            return self.save_capture_error(source, ProviderError(code, "Source is not being observed"))
