@@ -12,7 +12,7 @@ from vop.contracts import (AnswerKind, InferenceRequest, InferenceResult, Provid
                            QuestionAnswer, QuestionSpec, Status, result)
 
 MODEL_ID = "LiquidAI/d1-3B"
-# Official source/API inspected on 2026-10-13; real runtime validation is pending.
+# Official pin: actual CPU validation in Phase 0 and CUDA/BF16 validation in Phase 4.
 CHECKPOINT_REVISION = "051bcc464b01b9f92942b364d9586b0ef5912432"
 TYPE_MAP = {AnswerKind.BINARY: "noul", AnswerKind.CHOICE: "choice", AnswerKind.ORDINAL: "score"}
 
@@ -88,7 +88,10 @@ class LiquidD1InferenceAdapter:
     engine_version = CHECKPOINT_REVISION
     synthetic = False
 
-    def __init__(self) -> None:
+    def __init__(self, *, device: str = "cpu", precision: str = "float32") -> None:
+        if device not in ("cpu", "cuda:0") or precision not in ("float32", "float16", "bfloat16") or device == "cpu" and precision != "float32":
+            raise ValueError("Supported runtimes: CPU FP32 or CUDA device 0 with explicit precision")
+        self.device, self.precision = device, precision
         self.model = None
         self.snapshot_path: str | None = None
         self.download_ms: float | None = None
@@ -116,10 +119,13 @@ class LiquidD1InferenceAdapter:
         # Local snapshot also pins the model's internal tokenizer/processor lookups.
         started = perf_counter()
         try:
+            if self.device != "cpu" and not torch.cuda.is_available():
+                raise ProviderError("gpu_unavailable", "Requested GPU runtime is unavailable; no CPU fallback")
+            placement = {"device_map": {"": self.device}} if self.device != "cpu" else {}
             self.model = AutoModel.from_pretrained(self.snapshot_path, revision=CHECKPOINT_REVISION,
                                                    code_revision=CHECKPOINT_REVISION,
                                                    trust_remote_code=True, local_files_only=True,
-                                                   dtype=torch.float32).to("cpu")
+                                                   dtype=getattr(torch, self.precision), **placement).to(self.device)
             self.model.eval()
         finally:
             self.model_load_ms = (perf_counter() - started) * 1000
@@ -146,5 +152,7 @@ class LiquidD1InferenceAdapter:
                             for q in request.questions)
         else:
             answers = tuple(normalise(q, raw["answers"][q.question_id]) for q in request.questions)
-        return result(request, self, answers, elapsed, deepcopy(raw),
-                      deepcopy(raw.get("usage")) if isinstance(raw, dict) else None, error)
+        usage = deepcopy(raw.get("usage")) if isinstance(raw, dict) else None
+        if isinstance(usage, dict):
+            usage["runtime"] = {"device": self.device, "precision": self.precision}
+        return result(request, self, answers, elapsed, deepcopy(raw), usage, error)

@@ -1,5 +1,18 @@
 # Specification change log
 
+## Phase 4 GPU worker and live-camera integration — 13 October 2026
+
+- Added an authenticated loopback worker with process-isolated hard deadlines, bounded admission,
+  request identities/cache, explicit remote consent and validated source/model/query provenance.
+- Added native backend selection/health and protected Tapo C200/C210/C510W credential setup,
+  local one-shot connection tests and registration of the requested human-presence query.
+- Added Windows DPAPI and Linux OS Secret Service references; no camera credentials in SQLite,
+  exported configuration, worker requests or native diagnostics.
+- Verified real pinned d1-3B on antec RTX 5060 Ti in BF16, and a laptop-to-antec GPU request through
+  SSH plus application auth. Existing llama service restored after authorised test windows.
+- Preserved CPU FP32 configuration and offline mocks; no unverified AMD/Vulkan/GPU pooling path
+  or automatic fallback. Actual camera/accuracy gates depend on local owner provisioning.
+
 ## Phase 3 reliable development release — 13 October 2026
 
 - Added immutable alert rule revisions, duration/count/health transitions, stable keys, durable

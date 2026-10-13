@@ -1,0 +1,212 @@
+{
+  "result": "PASS",
+  "input": "synthetic fixture",
+  "transport": "SSH tunnel + separate application bearer",
+  "roundtrip_seconds": 1.8683492000000115,
+  "worker_health": {
+    "protocol": 1,
+    "worker_id": "antec-d1",
+    "engine_id": "liquid-d1-3b",
+    "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+    "synthetic": false,
+    "capabilities": [
+      "binary",
+      "choice",
+      "ordinal"
+    ],
+    "ready": true,
+    "runtime": {
+      "device": "cuda:0",
+      "precision": "torch.bfloat16",
+      "gpu_name": "NVIDIA GeForce RTX 5060 Ti"
+    },
+    "busy": false,
+    "queue_depth": 0,
+    "skipped": 0,
+    "error": null,
+    "utc": "2026-10-13T22:54:45.451433+00:00"
+  },
+  "inference": {
+    "status": "success",
+    "engine_id": "liquid-d1-3b",
+    "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+    "source_id": "file-image",
+    "frame_id": "775650d5-00d4-4c68-bff9-70539e452b25",
+    "captured_at_utc": "2026-10-13T22:54:45.299787+00:00",
+    "processed_at_utc": "2026-10-13T22:54:47.347863+00:00",
+    "answers": [
+      {
+        "question_id": "red_square",
+        "question_version": "1",
+        "kind": "binary",
+        "status": "success",
+        "value": true,
+        "raw_provider_fields": {
+          "noul": 0.9924227587321393,
+          "type": "noul"
+        },
+        "score": 0.9924227587321393,
+        "score_semantics": "Liquid noul: model score for yes",
+        "threshold_used": 0.5,
+        "calibrated": false,
+        "error": null
+      },
+      {
+        "question_id": "background",
+        "question_version": "1",
+        "kind": "choice",
+        "status": "success",
+        "value": "white",
+        "raw_provider_fields": {
+          "choice": "white",
+          "confidence": 0.9830850867332734,
+          "probabilities": {
+            "black": 0.01691491326672651,
+            "white": 0.9830850867332734
+          },
+          "type": "choice"
+        },
+        "score": 0.9830850867332734,
+        "score_semantics": "Liquid confidence: maximum option probability",
+        "threshold_used": null,
+        "calibrated": false,
+        "error": null
+      },
+      {
+        "question_id": "brightness",
+        "question_version": "1",
+        "kind": "ordinal",
+        "status": "success",
+        "value": 1.8412321291673066,
+        "raw_provider_fields": {
+          "confidence": 0.8550527699875972,
+          "legend": {
+            "0": "Dark",
+            "1": "Medium",
+            "2": "Bright"
+          },
+          "probabilities": {
+            "0": 0.013820640820290766,
+            "1": 0.1311265891921122,
+            "2": 0.8550527699875972
+          },
+          "score": 1.8412321291673066,
+          "type": "score"
+        },
+        "score": 0.8550527699875972,
+        "score_semantics": "Liquid confidence: maximum option probability",
+        "threshold_used": null,
+        "calibrated": false,
+        "error": null
+      }
+    ],
+    "elapsed_ms": 1810.795622994192,
+    "provider_raw": {
+      "answers": {
+        "background": {
+          "choice": "white",
+          "confidence": 0.9830850867332734,
+          "probabilities": {
+            "black": 0.01691491326672651,
+            "white": 0.9830850867332734
+          },
+          "type": "choice"
+        },
+        "brightness": {
+          "confidence": 0.8550527699875972,
+          "legend": {
+            "0": "Dark",
+            "1": "Medium",
+            "2": "Bright"
+          },
+          "probabilities": {
+            "0": 0.013820640820290766,
+            "1": 0.1311265891921122,
+            "2": 0.8550527699875972
+          },
+          "score": 1.8412321291673066,
+          "type": "score"
+        },
+        "red_square": {
+          "noul": 0.9924227587321393,
+          "type": "noul"
+        }
+      },
+      "usage": {
+        "input_tokens": 179,
+        "output_tokens": 0
+      }
+    },
+    "usage": {
+      "input_tokens": 179,
+      "output_tokens": 0,
+      "runtime": {
+        "device": "cuda:0",
+        "precision": "bfloat16"
+      },
+      "worker": {
+        "id": "antec-d1",
+        "transport": "ssh",
+        "request_id": "a80110b96d14b50f07a1d8366c1215fb4b5a5c8b6c7634d042f6ce3894415f9d"
+      }
+    },
+    "error": null,
+    "synthetic": false
+  },
+  "human_question_fixture": {
+    "status": "success",
+    "engine_id": "liquid-d1-3b",
+    "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+    "source_id": "file-image",
+    "frame_id": "775650d5-00d4-4c68-bff9-70539e452b25",
+    "captured_at_utc": "2026-10-13T22:54:45.299787+00:00",
+    "processed_at_utc": "2026-10-13T22:54:47.426707+00:00",
+    "answers": [
+      {
+        "question_id": "human_present",
+        "question_version": "1",
+        "kind": "binary",
+        "status": "success",
+        "value": false,
+        "raw_provider_fields": {
+          "noul": 0.014063627043245474,
+          "type": "noul"
+        },
+        "score": 0.014063627043245474,
+        "score_semantics": "Liquid noul: model score for yes",
+        "threshold_used": 0.5,
+        "calibrated": false,
+        "error": null
+      }
+    ],
+    "elapsed_ms": 47.48311000003014,
+    "provider_raw": {
+      "answers": {
+        "human_present": {
+          "noul": 0.014063627043245474,
+          "type": "noul"
+        }
+      },
+      "usage": {
+        "input_tokens": 122,
+        "output_tokens": 0
+      }
+    },
+    "usage": {
+      "input_tokens": 122,
+      "output_tokens": 0,
+      "runtime": {
+        "device": "cuda:0",
+        "precision": "bfloat16"
+      },
+      "worker": {
+        "id": "antec-d1",
+        "transport": "ssh",
+        "request_id": "d775fbaa749c7bbe72bb759517c1972063bf9d5d4403f5993168ebead60409f9"
+      }
+    },
+    "error": null,
+    "synthetic": false
+  },
+  "model_accuracy": "not_claimed"
+}

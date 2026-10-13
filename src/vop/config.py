@@ -50,6 +50,7 @@ class Settings:
     capture_timeout_seconds: float = 10
     inference_timeout_seconds: float = 30
     timezone_name: str = "Europe/London"
+    engine: dict | None = None
 
 
 def load_config(path: str | Path) -> Settings:
@@ -68,9 +69,13 @@ def _load_config(path: str | Path) -> Settings:
     if type(data.get("schema_version")) is not int or data["schema_version"] != 1:
         raise ValueError("Unsupported configuration schema version")
     engine = data["engine"]
-    keys(engine, {"kind", "id", "answers"})
-    if engine.get("kind") != "mock" or not isinstance(engine.get("answers"), dict):
-        raise ValueError("Service CLI supports configured mock engines; real engines require explicit Python injection")
+    if engine.get("kind") == "worker":
+        from vop.inference.remote import profile
+        engine = profile(engine)
+    else:
+        keys(engine, {"kind", "id", "answers"})
+        if engine.get("kind") != "mock" or not isinstance(engine.get("answers"), dict):
+            raise ValueError("Engine must be mock or an explicit authenticated worker profile")
     engine_id = identifier(engine["id"])
     timeouts = [data.get("capture_timeout_seconds", 10), data.get("inference_timeout_seconds", 30)]
     if any(isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t) or not 0 < t <= 300 for t in timeouts):
@@ -87,7 +92,7 @@ def _load_config(path: str | Path) -> Settings:
             raise ValueError("enabled must be boolean")
         kind, options = raw["kind"], raw.get("settings", {})
         allowed = {"synthetic": set(), "file": {"path"}, "usb": {"device"},
-                   "rtsp": {"endpoint_env", "allowed_hosts"}, "snapshot": {"endpoint_env", "allowed_hosts"}}
+                   "rtsp": {"endpoint_env", "endpoint_secret_ref", "allowed_hosts", "secret_ref"}, "snapshot": {"endpoint_env", "allowed_hosts"}}
         if kind not in allowed:
             raise ValueError("Unsupported source kind")
         keys(options, allowed[kind] | {"privacy_masks"})
@@ -103,8 +108,16 @@ def _load_config(path: str | Path) -> Settings:
         if kind == "usb" and (type(options.get("device")) is not int or not 0 <= options["device"] <= 32):
             raise ValueError("USB device must be an index in [0, 32]")
         if kind in ("rtsp", "snapshot"):
-            if not ENV.fullmatch(options.get("endpoint_env", "")):
-                raise ValueError("Camera endpoint must reference an environment variable")
+            if options.get("secret_ref") is not None:
+                from vop.secrets import reference
+                reference(options["secret_ref"])
+            if options.get("endpoint_secret_ref") and kind == "rtsp":
+                from vop.secrets import reference
+                reference(options["endpoint_secret_ref"])
+                if "endpoint_env" in options:
+                    raise ValueError("Choose one endpoint reference")
+            elif not ENV.fullmatch(options.get("endpoint_env", "")):
+                raise ValueError("Camera endpoint must reference an environment variable or protected endpoint")
             hosts = options.get("allowed_hosts")
             if not isinstance(hosts, list) or not hosts or any(not isinstance(h, str) or not h or any(c in h for c in "/@* ") for h in hosts):
                 raise ValueError("Camera requires explicit literal allowed_hosts")
@@ -131,4 +144,4 @@ def _load_config(path: str | Path) -> Settings:
         raise ValueError("Configuration requires 1–32 distinct sources")
     zone = data.get("timezone", "Europe/London")
     ZoneInfo(zone)
-    return Settings((path.parent / data["database"]).resolve(), tuple(sources), engine_id, dict(engine["answers"]), *timeouts, zone)
+    return Settings((path.parent / data["database"]).resolve(), tuple(sources), engine_id, dict(engine.get("answers", {})), *timeouts, zone, engine)

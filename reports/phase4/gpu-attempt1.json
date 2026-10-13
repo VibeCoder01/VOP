@@ -1,0 +1,19 @@
+{
+  "created_at_utc": "2026-10-13T22:02:53.957446+00:00",
+  "model_revision": "051bcc464b01b9f92942b364d9586b0ef5912432",
+  "device_requested": "cuda:0",
+  "precision": "bfloat16",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "outcome": "aborted_resource_guard",
+  "cases": [],
+  "peak_host_rss_bytes": 1414184960,
+  "peak_child_swap_bytes": 2172227584,
+  "gpu_name": "NVIDIA GeForce RTX 5060 Ti",
+  "gpu_capability": [
+    12,
+    0
+  ],
+  "free_vram_before_bytes": 16475947008,
+  "total_vram_bytes": 16619667456
+}

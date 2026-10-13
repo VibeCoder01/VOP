@@ -43,7 +43,9 @@ def test_official_schema_mapping_and_single_image_batch(request_frame):
     assert [v["type"] for v in mapped.values()] == ["noul", "choice", "score"]
     assert mapped["background"]["criteria"] == {"white": "White background", "black": "Black background"}
     assert mapped["brightness"]["criteria"] == ["Dark", "Medium", "Bright"]
-    assert output.provider_raw == raw and output.usage == raw["usage"]
+    assert output.provider_raw == raw
+    assert {k: output.usage[k] for k in raw["usage"]} == raw["usage"]
+    assert output.usage["runtime"] == {"device": "cpu", "precision": "float32"}
     raw["extension"].append("mutation")
     assert output.provider_raw["extension"] == ["preserved"]
     assert not output.answers[0].calibrated and output.answers[0].threshold_used == 0.5

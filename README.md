@@ -1,10 +1,10 @@
-# Visual Observability Platform — Phase 3 reliable release
+# Visual Observability Platform — Phase 4 GPU worker and camera integration
 
-Phase 2 adds a local browser workspace, immutable question editing, sampled temporal states,
-confirmed episodes, metrics, ROI/privacy processing, explicit sampling and default-off evidence.
-It began on the tested Phase 1 branch while PR #2 was open. After the owner merged PR #2,
-Phase 2 was aligned with the updated `main` and its PR targets `main` directly. The SRS remains
-unchanged. Phase 3 was authorised after the owner accepted Phase 2. Phase 4 remains deferred.
+Phase 4 adds an authenticated process-isolated inference worker, explicit dashboard backend
+selection, protected Tapo credentials and repeatable camera connection tests. Actual pinned
+d1-3B CUDA/BF16 execution and a laptop→antec fixture request passed. Default inference remains
+mock until deliberately changed. C200/C210 live validation needs local credential setup;
+C510W is reported temporarily unavailable. Phase 5 is not authorised.
 
 ## Test the dashboard on this laptop
 
@@ -16,6 +16,7 @@ git switch main
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe tools\phase2_smoke.py
 .\.venv\Scripts\python.exe tools\phase3_smoke.py
+.\.venv\Scripts\python.exe tools\phase4_smoke.py
 .\.venv\Scripts\python.exe tools\run_dashboard.py
 ```
 
@@ -32,7 +33,7 @@ provenance. **Questions → Edit** creates a new immutable version; old observat
 their original version. Binary, choice and ordinal questions validate their respective criteria.
 The mock preset is a user-selected synthetic answer, not computer vision. Its per-source/version
 override survives restart. Unconfigured mock questions return unsupported instead of fabricated
-answers. The source and model interfaces remain independent; no remote worker transport is added.
+answers. The source and model interfaces remain independent; Phase 4 worker setup is described below.
 
 **Sources → Edit source** controls enabled state, evidence retention and sample interval. A nonzero
 interval (1–3600 seconds) explicitly starts background sampling, independent of browser tabs;
@@ -175,7 +176,7 @@ a standalone executable or unattended Windows service. It retains the local-deve
 See `CODEX_PHASE_3.md` and `reports/phase3-validation.md`. Production release acceptance remains
 conditional on actual RTSP/reference-camera and workload accuracy validation, licence review,
 OS secret protection and deployment hardening. No new real-model/GPU/remote-worker measurement
-is claimed. Stop after Phase 3; Phase 4 needs separate authorisation.
+is claimed. This was the Phase 3 boundary; Phase 4 has since received separate authorisation.
 
 Opt-in online dependency check: `python tools/dependency_audit.py --allow-network` queries the
 [OSV API](https://google.github.io/osv.dev/api/) with public package names/versions from the
@@ -183,6 +184,109 @@ pinned offline dependency list. It does not send configuration, images or secret
 The Phase 3 scan prompted verified updates to Pillow 12.3.0, setuptools 83.0.0, pytest 9.0.3
 and Pygments 2.20.0. Historical Phase 0 server lock/results remain unchanged; that old model
 environment is not the current development release or a production security recommendation.
+
+## Phase 4: GPU worker and protected camera setup
+
+Use **Engine and camera setup** in the sidebar. Operator access and CSRF are required; viewers
+cannot see credential forms or invoke connection tests. Live capture and remote transmission
+are independent opt-ins. Saving credentials never starts capture/sampling. Saved remote profiles
+restart with transmission consent **off**, unless `--allow-remote-inference` is deliberately set.
+Local mock stays available and clearly labelled; there is no automatic mock/CPU fallback.
+
+For Tapo **C200, C210 and C510W**, register a distinct source ID (for example `tapo-c200`), model,
+literal private LAN RTSP address such as `rtsp://192.168.1.100:554/stream1`, and the dedicated
+camera account username/password from the Tapo app. Do not put credentials in the address.
+The GUI accepts stream1/stream2 on port 554; the existing generic adapter also retains explicit
+operator configuration. The new source is disabled with sampling/evidence off and binary query
+**“Is there a human in the picture?”**. Correct credentials can be saved repeatedly; a blank
+password preserves the existing account. Consent and **Test camera connection** acquire one
+local frame, show a privacy-masked memory-only preview and store diagnostic metadata; no model
+request is made by that connection test. Capture failure never asserts “no human”.
+
+Windows credential/key values are encrypted with user-bound DPAPI under
+`%LOCALAPPDATA%/VOP/secrets`. Configuration, SQLite and exports contain references, not secret
+values. RTSP credentials are resolved and inserted into the locator only within the capture child;
+native diagnostics are suppressed. Linux camera secret setup requires an unlocked OS Secret
+Service (`secret-tool`), rather than falling back to plaintext. After restoring/moving configuration,
+re-provision the referenced secrets on the destination host/account. Backups do not copy the vault.
+
+For regular authorised live evaluation, start the dashboard with:
+
+```powershell
+.\.venv\Scripts\python.exe tools\run_dashboard.py --allow-live-sources
+```
+
+Then enable the configured source in **Sources**. Leave its interval at 0 for manual captures,
+or explicitly choose a measured sample interval. Select the authenticated worker profile and
+check its separate image-transmission consent when ready. Privacy masks and ROI are applied
+on the capture host before any remote request. Evidence remains off unless separately enabled.
+
+The first remote transport uses SSH forwarding to an antec **loopback** worker. For the verified
+installation, the environment/source/cache live under `~/.local/share/vop/phase4`. It was created
+without modifying system Python, drivers or existing GPU services. The pinned checkpoint is
+`051bcc464b01b9f92942b364d9586b0ef5912432`; the tested NVIDIA path is Torch 2.14.1+cu130,
+CUDA 13.0, Transformers 5.19.0, accelerate 1.15.0, BF16. The complete actually installed closure
+is `requirements-liquid-linux-cuda.lock.txt`. Vulkan and AMD/ROCm are not tested backends here.
+
+On antec, when sufficient GPU capacity has been made available, run the **foreground** worker:
+
+```bash
+vop_root="$HOME/.local/share/vop/phase4"
+PYTHONPATH="$vop_root/source/src" HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+  "$vop_root/venv/bin/python" "$vop_root/source/tools/run_worker.py" \
+  --worker-id antec-d1 --token-file "$vop_root/worker.token" --port 8878 \
+  --device cuda:0 --precision bfloat16 --cache-dir "$vop_root/model-cache" \
+  --allow-model-download --accept-model-risk
+```
+
+The worker key file must be owner-only (mode 600); it was generated for the test installation
+without exposing its value in logs. The laptop's `antec-worker` reference was protected with
+DPAPI for the verified connection. An operator can provision/rotate it in the GUI. For another
+installation create a strong key locally, protect the worker file and supply the same key to the
+laptop's secret reference. Do not add token files or `.env` credentials to Git.
+
+In a separate laptop terminal, keep the encrypted tunnel open:
+
+```powershell
+ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=10 -L 127.0.0.1:8878:127.0.0.1:8878 antec.local
+```
+
+The GUI worker profile uses engine `liquid-d1-3b`, the pinned revision above, identity `antec-d1`,
+URL `http://127.0.0.1:8878`, transport `ssh`, secret reference `antec-worker`, and synthetic **off**.
+**Test worker identity and health** sends no pixels and reports actual device/precision/readiness
+or a diagnostic. A profile alone is not a working GPU connection. Direct plaintext LAN worker URLs
+are rejected; no public worker port, insecure TLS option or automatic SSH host-key acceptance exists.
+
+The existing antec llama workload occupied approximately 10 GB of NVIDIA VRAM. It was paused
+only for the expressly authorised benchmark/proof windows and restored afterwards. d1-3B used
+approximately 6.3 GB of GPU allocations plus runtime overhead; simultaneous operation is not
+promised. Startup conservatively requires 8 GiB free VRAM for GPU BF16/FP16 (14 GiB for GPU FP32)
+and 8 GiB available host RAM for GPU,
+or 24 GiB available host RAM for CPU FP32, reporting `gpu_capacity`/`host_capacity`. Decide which
+workload gets that GPU before sustained live inference. No unattended service/autostart was added.
+
+For a capable local CPU host, run the same worker with `--device cpu --precision float32` and
+select transport `local`. This requires its own installed model dependencies/resources and
+explicit model consent. The Dell CPU remains unvalidated/infeasible for this model; a mock or
+remote worker on the laptop needs no Torch/model weights locally.
+
+Requests carry bounded image bytes and complete question criteria, not file paths. The worker
+accepts JPG/PNG up to 20 MiB and 16 megapixels, at most 32 questions, total request 29 MiB,
+response 2 MiB, and one active inference with no queue. Bodies have a ten-second read deadline;
+inference has a hard child timeout (default 30 seconds), and repeated failures have a bounded
+restart/cooldown. Request identities include preprocessed bytes/criteria so ROI groups remain
+distinct. Results are cached for 30 seconds with at most 16 entries; stale/deadline/identity/digest
+failures become UNKNOWN/ERROR and cannot rewrite already persisted frames/events. Runtime and
+worker/request provenance accompany model usage. No incoming worker images are saved by default.
+
+Offline checks use a mock worker and no real cameras/model weights. The actual synthetic HTTP
+restart/disconnection smoke is `tools/phase4_smoke.py`; Windows uses real DPAPI while Linux CI
+uses an explicitly labelled fixture for secret retrieval. Manual load evidence is generated by
+`python tools/phase4_soak.py --seconds 3600 --output reports/local/phase4-soak.json` (synthetic
+only). See `reports/phase4-validation.md` for completed measurements and honest pending gates.
+Real human-presence accuracy still needs owner-approved labelled frames for each camera; no face
+identity, tracking, person count, calibrated confidence or real-time-video promise is made.
+Stop after Phase 4; Phase 5 requires separate authorisation.
 
 ## Phase 1 historical foundation (v0.2)
 
@@ -487,4 +591,4 @@ requires independent review before intended use/redistribution. No model weights
 real camera images or private network configuration are committed. Repository visibility remains
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
-**Phase 3 is authorised; Phase 4 requires explicit new authorisation.**
+**Phase 4 is authorised; Phase 5 requires explicit new authorisation.**

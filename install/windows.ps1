@@ -19,6 +19,6 @@ if ($vopWheel.Count -ne 1) { throw "Expected exactly one VOP wheel." }
 if ($LASTEXITCODE -ne 0) { throw "VOP installation failed." }
 & .\.venv\Scripts\python.exe -m pip check
 if ($LASTEXITCODE -ne 0) { throw "Dependency validation failed." }
-& .\.venv\Scripts\python.exe tools\phase3_smoke.py
+& .\.venv\Scripts\python.exe tools\phase4_smoke.py
 if ($LASTEXITCODE -ne 0) { throw "Release smoke failed." }
 Write-Output "Installed. Run: .\.venv\Scripts\python.exe tools\run_dashboard.py"

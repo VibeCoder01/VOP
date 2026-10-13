@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from process_cleanup import stop_process
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -39,8 +40,7 @@ with tempfile.TemporaryDirectory(prefix="vop-phase1-smoke-") as directory:
                 if proc.poll() is not None:
                     raise RuntimeError("Service exited during startup")
                 time.sleep(0.05)
-        proc.terminate()
-        proc.wait(timeout=5)
+        stop_process(proc)
         raise RuntimeError("Service startup timed out")
     proc = start()
     try:
@@ -59,8 +59,7 @@ with tempfile.TemporaryDirectory(prefix="vop-phase1-smoke-") as directory:
         second_status, second = call("/api/v1/sources/synthetic-scene/frames", method="POST", body=payload, headers=headers)
         assert first_status == 201 and second_status == 200 and first["run_id"] == second["run_id"]
     finally:
-        proc.terminate()
-        proc.wait(timeout=5)
+        stop_process(proc)
     proc = start()
     try:
         _, health = call("/api/v1/health")
@@ -69,5 +68,4 @@ with tempfile.TemporaryDirectory(prefix="vop-phase1-smoke-") as directory:
                           "duplicate_ingestion_http": 200, "persisted_after_process_restart": 6,
                           "bind": "127.0.0.1", "live_cameras": "not_connected", "model_weights": "not_loaded"}))
     finally:
-        proc.terminate()
-        proc.wait(timeout=5)
+        stop_process(proc)

@@ -1,0 +1,5 @@
+{
+  "scope": "actual CUDA runtime lock; PyPI package advisories, not OS/driver audit",
+  "packages_checked": 74,
+  "findings": []
+}

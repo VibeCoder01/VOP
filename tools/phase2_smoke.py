@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from process_cleanup import stop_process
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
@@ -43,8 +44,7 @@ def main():
                     if proc.poll() is not None:
                         raise RuntimeError("Service startup failed")
                     time.sleep(0.05)
-            proc.terminate()
-            proc.wait(timeout=5)
+            stop_process(proc)
             raise RuntimeError("Service startup timed out")
         proc = start()
         try:
@@ -87,8 +87,7 @@ def main():
                 assert "VOP" in html("/?view=" + view)
             before = api("/api/v1/health")["observation_count"]
         finally:
-            proc.terminate()
-            proc.wait(timeout=5)
+            stop_process(proc)
         proc = start()
         try:
             assert api("/api/v1/health")["observation_count"] == before
@@ -99,8 +98,7 @@ def main():
                               "persisted_observations_after_restart": before, "views": 6,
                               "input": "synthetic", "model": "explicit mock", "live_cameras": "not_connected"}))
         finally:
-            proc.terminate()
-            proc.wait(timeout=5)
+            stop_process(proc)
 
 
 if __name__ == "__main__":

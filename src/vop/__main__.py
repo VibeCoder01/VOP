@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--config", required=True)
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--allow-live-sources", action="store_true", help="Allow explicitly configured one-shot camera capture")
+    serve.add_argument("--allow-remote-inference", action="store_true")
     bench = sub.add_parser("benchmark", help="Explicit model-code/download/RAM consent required")
     bench.add_argument("--image", required=True)
     bench.add_argument("--engine", choices=["liquid-d1-3b"], default="liquid-d1-3b")
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             from vop.config import load_config
             from vop.service import create_app
             import uvicorn
-            app = create_app(load_config(args.config), allow_live_sources=args.allow_live_sources)
+            app = create_app(load_config(args.config), allow_live_sources=args.allow_live_sources, allow_remote_inference=args.allow_remote_inference)
             uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False, log_level="warning")
             return 0
         else:
