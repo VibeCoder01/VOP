@@ -15,6 +15,10 @@ class MockInferenceEngine:
         self.engine_id = engine_id
         self.configured = dict(answers)
         self.supported = supported
+        self.source_answers = {}
+
+    def configure_source_answer(self, source_id, question_id, version, value):
+        self.source_answers[(source_id, question_id, version)] = value
 
     def capabilities(self) -> tuple[AnswerKind, ...]:
         return self.supported
@@ -23,10 +27,11 @@ class MockInferenceEngine:
         answers = []
         for q in request.questions:
             error = None
-            value = self.configured.get(q.question_id)
+            source_key = (request.frame.source_id, q.question_id, q.version)
+            value = self.source_answers.get(source_key, self.configured.get(q.question_id))
             if q.kind not in self.supported:
                 error = ProviderError("unsupported_kind", "Mock capability unavailable", Status.UNSUPPORTED)
-            elif q.question_id not in self.configured:
+            elif q.question_id not in self.configured and source_key not in self.source_answers:
                 error = ProviderError("mock_unconfigured", "No synthetic answer configured", Status.UNSUPPORTED)
             elif not (q.kind == AnswerKind.BINARY and isinstance(value, bool)
                       or q.kind == AnswerKind.CHOICE and value in dict(q.choices)

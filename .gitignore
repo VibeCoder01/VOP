@@ -44,4 +44,6 @@ data/
 *.db
 config.local.json
 .sesskey
+.playwright-cli/
+output/playwright/
 benchmark-*/

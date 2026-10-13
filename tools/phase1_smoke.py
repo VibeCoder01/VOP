@@ -64,7 +64,7 @@ with tempfile.TemporaryDirectory(prefix="vop-phase1-smoke-") as directory:
     proc = start()
     try:
         _, health = call("/api/v1/health")
-        assert health["observation_count"] == 6 and health["database_schema"] == 1
+        assert health["observation_count"] == 6 and health["database_schema"] >= 1
         print(json.dumps({"result": "PASS", "synthetic_capture_http": 201, "unauthenticated_http": 401,
                           "duplicate_ingestion_http": 200, "persisted_after_process_restart": 6,
                           "bind": "127.0.0.1", "live_cameras": "not_connected", "model_weights": "not_loaded"}))

@@ -39,7 +39,7 @@ def test_full_synthetic_capture_persist_api_restart(settings):
         assert observations[1]["normalised_state"] == "not_applicable"
         assert client.get("/api/v1/health").json()["observation_count"] == 3
         assert client.get("/api/v1/sources").json()["sources"][0]["status"] == "HEALTHY"
-        assert "<script" not in client.get("/").text and "VOP Phase 1" in client.get("/").text
+        assert "<script" not in client.get("/").text and "VOP" in client.get("/").text
     with TestClient(create_app(settings, token=TOKEN), headers=HEADERS) as restarted:
         assert len(restarted.get("/api/v1/observations").json()["observations"]) == 3
     database_bytes = settings.database.read_bytes()

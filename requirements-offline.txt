@@ -33,3 +33,4 @@ itsdangerous==2.2.0
 python-multipart==0.0.32
 beautifulsoup4==4.15.0
 soupsieve==3.0.3
+tzdata==2026.5

@@ -1,0 +1,17 @@
+{
+  "phase": 2,
+  "date": "2026-10-13",
+  "software_status": "implemented_and_locally_verified",
+  "recommendation": "CONDITIONAL GO",
+  "offline_tests": {"passed": 161, "failed": 0},
+  "actual_http_smoke": {"phase1": "passed", "phase2": "passed", "phase2_restart_observation_count": 21},
+  "browser_qa": {"desktop": "passed", "mobile_390x844": "passed", "console_errors": 0, "input": "synthetic_only"},
+  "usb_hardware": {"outcome": "passed", "device_index": 0, "width": 640, "height": 480,
+    "pipeline_capture_calls": 2, "observations": 6, "dashboard_http": 200, "inference": "explicit_mock",
+    "real_model_inference": "not_run", "evidence_retained": false},
+  "rtsp_hardware": {"outcome": "not_run", "reason": "No authorised endpoint/configuration supplied"},
+  "new_real_model_benchmark": {"outcome": "not_run", "model_load_ms": null, "peak_memory_bytes": null, "inference_latency_ms": null},
+  "ci": {"status": "pending_at_implementation_commit", "reason": "To be checked after push"},
+  "phase3_authorised": false,
+  "raw_camera_images_committed": false
+}

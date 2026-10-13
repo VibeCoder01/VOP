@@ -1,5 +1,16 @@
 # Specification change log
 
+## Phase 2 browser capability — 13 October 2026
+
+- Added browser sessions/CSRF, operator/viewer permissions, immutable question/policy editing,
+  source controls, replayed temporal states/episodes, calendar/coverage metrics and SVG trends.
+- Added privacy-before-ROI preprocessing, opt-in evidence viewing/deletion, explicit bounded
+  background sampling, stale/disconnect handling, schema-v2 migration/backup and browser UI.
+- Preserved byte-oriented engine interchangeability and the Phase 0 model pin. No dashboard
+  inference pretends to be real vision: default answers remain clearly labelled deterministic mocks.
+- Authorised real USB acquisition/software checks passed without retaining pixels. No new
+  real-model/GPU/RTSP test, network worker service, application licence or Phase 3 features added.
+
 ## Phase 1 foundation — 13 October 2026
 
 - Recorded owner authorisation after Phase 0 PR #1 merge; added a Phase 1 exit contract

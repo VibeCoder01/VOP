@@ -1,4 +1,113 @@
-# Visual Observability Platform — Phase 1 foundation
+# Visual Observability Platform — Phase 2 browser capability
+
+Phase 2 adds a local browser workspace, immutable question editing, sampled temporal states,
+confirmed episodes, metrics, ROI/privacy processing, explicit sampling and default-off evidence.
+It builds on the tested Phase 1 branch; PR #2 was still unmerged at commencement, so the Phase 2
+PR is stacked on `codex/phase-1`. The SRS remains unchanged. No Phase 3 work is authorised.
+
+## Test the dashboard on this laptop
+
+```powershell
+# Run from your VOP checkout:
+git switch codex/phase-2
+.\.venv\Scripts\python.exe -m pip install -r requirements-offline.txt
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe tools\phase2_smoke.py
+.\.venv\Scripts\python.exe tools\run_dashboard.py
+```
+
+Create the venv first (`py -3.11 -m venv .venv`) for a new checkout. The smoke script uses a
+temporary synthetic database/key and prints `result: PASS`. The dashboard launcher intentionally
+prints a local operator key for sign-in. Open **http://127.0.0.1:8765**, paste that key into
+**Access key**, and select **Open workspace**. The service runs in that terminal; Ctrl+C stops it.
+The default synthetic/mock setup needs no GPU, d1-3B weights or camera. An existing `VOP_API_TOKEN`
+can be used; a generated key changes on restart. Neither key is stored in the application DB.
+
+Try **Run synthetic demo** to record six rapid, explicitly mocked samples and a closed episode.
+Use **Capture once** to inspect the privacy-masked frame, optional ROI outline, native fields and
+provenance. **Questions → Edit** creates a new immutable version; old observations/events keep
+their original version. Binary, choice and ordinal questions validate their respective criteria.
+The mock preset is a user-selected synthetic answer, not computer vision. Its per-source/version
+override survives restart. Unconfigured mock questions return unsupported instead of fabricated
+answers. The source and model interfaces remain independent; no remote worker transport is added.
+
+**Sources → Edit source** controls enabled state, evidence retention and sample interval. A nonzero
+interval (1–3600 seconds) explicitly starts background sampling, independent of browser tabs;
+0 stops it. Saved sampling controls resume after restart. There is one worker and zero queued
+frames; missed/busy samples are dropped and audited, failed sources back off up to 300 seconds.
+The overview shows sampling status; use **Refresh view** to refresh the native HTML. Heavy injected
+inference retains the Phase 1 soft deadline and can occupy the slot until process restart;
+hard real-model isolation remains later work, not an unattended-production claim.
+
+Temporal states are **UNKNOWN**, **INACTIVE**, **PENDING**, **ACTIVE**, **RECOVERING** (binary), or
+**OBSERVED** (valid choice/ordinal). Binary activation/recovery use configurable confirmation
+counts (default 2/2). Episodes start at the activation-confirmation timestamp and close only
+after confirmed negatives. Error, unsupported, missing and stale samples remain UNKNOWN.
+Gap policies: **resume** after reconfirmation, **split** into an interrupted/new episode without
+claiming a negative end, or **manual review** (remains UNKNOWN until an operator reviews history
+and saves a new version). A revised question supersedes any old open episode without fake closure.
+
+**Events** shows the latest 100 recorded episodes. **Metrics** provides source/date/timezone
+filters, counts, estimated sampled durations, rates per covered hour, occupancy/coverage,
+choice dwell and ordinal SVG trends. UTC instants remain intact; timezone labels include offsets
+and distinguish repeated DST hours. Date filters are local-calendar inclusive dates converted
+to UTC intervals; clipping does not restart an already active episode. UNKNOWN intervals break
+chart lines. No observations/eligible interval displays **No data**, not a fabricated zero.
+Durations interpolate only bounded intervals with successful endpoints; they do not prove
+continuous visual truth. Rates from tiny samples are not forecasts. Ordinal levels are not
+physical measurement units or a universally calibrated confidence.
+
+**Evidence is off by default.** When enabled per source, only a privacy-masked PNG preview
+(up to 1920×1920, original metadata stripped) is retained in SQLite. Query ROI crops are applied
+after privacy masks; compatible ROI groups share the original frame identity while preserving
+all native provider outputs/usage. Source `settings.privacy_masks` is an optional list of
+normalised `[x,y,width,height]` rectangles in the private operator configuration. A single masked
+preview can also exist temporarily in memory for immediate inspection without retention.
+Retained frames and previews require operator access; viewers get 403. Deletion removes the BLOB,
+clears the matching in-memory preview and checkpoints SQLite with secure deletion enabled.
+It cannot retract copies already made by users or externally managed backups.
+
+Browser login uses a signed HttpOnly/SameSite=Strict one-hour cookie; write forms require CSRF
+and same-origin checks. Optional read-only access uses a distinct `VOP_VIEWER_TOKEN` set before
+startup (same 32–256 ASCII-character requirement). Viewers can inspect metadata/metrics, but cannot
+capture, edit, sample or access image evidence. There are no individual user accounts or SSO.
+Bearer API access continues to work. No key-in-URL login, external scripts/CDNs, SPA or frontend
+build tooling is used. Templates escape user text, and CSS respects reduced motion.
+
+Additional authenticated APIs: `GET /api/v1/events`, `GET /api/v1/metrics`, `POST /api/v1/replay`.
+**Settings** also permits an idle, operator-requested deterministic replay. SQLite schema v2
+upgrades v1 transactionally, retaining observations and making a consistent
+`<database>.v1-backup.sqlite3` before migration. Existing UI revisions/controls win over unchanged
+bootstrap config on restart. New declared config versions can be activated; historical versions
+cannot be edited. Late frames are retained/audited but excluded from live state/event replay.
+
+## Authorised USB test and remaining hardware limits
+
+The owner authorised a brief USB test on this Dell. Index 0 returned a real **640×480 PNG**.
+Two subsequent USB captures traversed mock inference, storage and dashboard rendering: six
+observations, HTTP 200 dashboard, mock ACTIVE binary state. **No camera pixels were retained
+or committed, and no real-model inference ran.** This validates capture/software, not model
+accuracy. Tapo/RTSP hardware is untested because no authorised endpoint/configuration was supplied.
+
+For an explicitly authorised future USB session, install `.[camera]`, prepare ignored
+`config.local.json` with kind `usb` and `settings: {"device":0}`, and run:
+
+```powershell
+.\.venv\Scripts\python.exe tools\run_dashboard.py .\config.local.json --allow-live-sources
+```
+
+Startup/sample controls never bypass the live-source opt-in. Network-camera endpoints remain
+environment references with exact allowed-host policy; do not paste credentials into repo/UI.
+Real d1-3B CPU feasibility remains the separately recorded Phase 0 server result; no GPU,
+remote-worker, model-format or accuracy claim is added. See `CODEX_PHASE_2.md` and
+`reports/phase2-validation.md` for gates, actual commands and limitations. Licence decisions
+remain separate. Stop after Phase 2; Phase 3 requires explicit authorisation.
+
+## Phase 1 historical foundation (v0.2)
+
+The following section describes the earlier Phase 1 baseline. Browser sessions, retained evidence
+and schema v2 above supersede its historical no-cookie/no-pixel statements in the current build.
 
 Phase 1 adds validated JSON configuration, a local authenticated service, SQLite observations
 and one-shot source adapters to the merged Phase 0 inference contracts. `CODEX_PHASE_1.md`
@@ -6,7 +115,7 @@ records the current foundation scope; `SRS-v0.2.md` remains the product specific
 The default pipeline is explicitly **MOCK — no vision**. Model weights are never downloaded
 or loaded by service startup. Phase 0 benchmark evidence remains in the existing reports.
 
-## Phase 1 operator quickstart (PowerShell)
+### Phase 1 operator quickstart (PowerShell, historical)
 
 ```powershell
 git switch codex/phase-1  # Until the Phase 1 PR is merged
@@ -298,4 +407,4 @@ requires independent review before intended use/redistribution. No model weights
 real camera images or private network configuration are committed. Repository visibility remains
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
-**Phase 1 is authorised and implemented; Phase 2 requires explicit new authorisation.**
+**Phase 2 is authorised; Phase 3 requires explicit new authorisation.**
