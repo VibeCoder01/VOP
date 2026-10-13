@@ -1,0 +1,49 @@
+{
+  "phase": 3,
+  "recommendation": "CONDITIONAL GO for review and development testing",
+  "application_version": "0.4.0",
+  "python_version": "3.11.9",
+  "local_tests_passed": 180,
+  "smokes": {
+    "phase1": {"result": "PASS", "restart_observations": 6},
+    "phase2": {"result": "PASS", "restart_observations": 21},
+    "phase3": {"result": "PASS", "restored_observations": 18, "same_acknowledged_alert": true}
+  },
+  "browser": {
+    "input": "synthetic",
+    "rule_create": "passed",
+    "alert_and_acknowledgement": "passed",
+    "retention_preview_apply": "passed on disposable synthetic database",
+    "csv_download": "passed",
+    "mobile_viewport": [390, 844],
+    "mobile_document_fits_viewport": true,
+    "final_console_errors": 0,
+    "final_console_warnings": 0,
+    "qa_browser_server_stopped": true
+  },
+  "dependencies": {
+    "Pillow": "12.3.0",
+    "setuptools": "83.0.0",
+    "pytest": "9.0.3",
+    "Pygments": "2.20.0",
+    "python-fasthtml": "0.14.13",
+    "scan": {"source": "OSV", "checked_at_utc": "2026-10-13T21:21:42.485067+00:00", "packages": 35, "known_findings": 0, "scope": "requirements-offline.txt only"}
+  },
+  "release": {
+    "archive": "dist/vop-0.4.0-windows-dev.zip",
+    "sha256": "a5e8c358cffce04f0e52d49293f3932c6dc95757674056a43f9a637a5e779bf3",
+    "fresh_windows_install": "passed",
+    "rebuilt_package_smoke": "passed",
+    "temporary_install_cleanup": "automatic approval review rejected: blocked by policy"
+  },
+  "ci": {
+    "verified_commit": "80d69ccc55530929424e5af5dcc7f8e1e9214ea0",
+    "run_id": 38471835449,
+    "windows_job": {"id": 115552597116, "conclusion": "success"},
+    "ubuntu_job": {"id": 115552597460, "conclusion": "success"}
+  },
+  "hardware": {"new_usb_test": "not_run", "rtsp": "not_run", "new_model_test": "not_run", "antec": "not_run", "gpu": "not_run", "model_revision": null, "latency_seconds": null, "ram_bytes": null},
+  "outbound_delivery": "not_configured; retries and HTTPS policy verified with offline simulations",
+  "open_limits": ["actual reference-camera and workload accuracy acceptance", "normalized history retained", "backups operator-managed", "foreground development installation", "production secret provisioning and access policy", "application licensing undecided"],
+  "phase4_started": false
+}
