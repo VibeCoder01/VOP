@@ -90,8 +90,12 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
+            if version > 3:
                 raise ValueError("Database schema is newer than this application; restore/use compatible software")
+            if version == 3:
+                tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                if not {"sources", "question_versions", "runs", "observations", "audit", "rules", "rule_versions", "alerts", "deliveries", "release_settings"} <= tables:
+                    raise ValueError("Database schema version does not match its tables")
             if version == 0:
                 if connection.execute("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchone():
                     raise ValueError("Refusing to adopt an unversioned nonempty database")
@@ -103,6 +107,13 @@ class Store:
                     with sqlite3.connect(backup_path) as backup:
                         connection.backup(backup)
                 connection.executescript(MIGRATION_2)
+            if version <= 2:
+                backup_path = self.path.with_name(self.path.name + ".v2-backup.sqlite3")
+                if version == 2 and not backup_path.exists():
+                    with sqlite3.connect(backup_path) as backup:
+                        connection.backup(backup)
+                from vop.reliable import MIGRATION_3
+                connection.executescript(MIGRATION_3)
             connection.execute("PRAGMA journal_mode=WAL")
 
     @contextmanager

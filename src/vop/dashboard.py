@@ -67,7 +67,8 @@ def action(label, path, csrf, *, secondary=False):
 
 
 def field(label, name, value="", *, type="text", required=False, **kwargs):
-    return Div(Label(label, _for=name), Input(id=name, name=name, value=value, type=type, required=required, **kwargs), cls="field")
+    control_id = kwargs.pop("id", name)
+    return Div(Label(label, _for=control_id), Input(id=control_id, name=name, value=value, type=type, required=required, **kwargs), cls="field")
 
 
 def chart(points, label):
@@ -112,6 +113,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return Html(Head(Title(f"{title} · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href="/?" + urlencode({"view": key}), cls="current" if key == view else "") for key, label in navigation), cls="navigation"),
+                                   A("Alerts and release tools", href="/release", cls="button secondary"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P("Review sampled conditions and their evidence.")),
@@ -137,6 +139,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def table(headers, rows):
         return Div(Table(Thead(Tr(*(Th(h) for h in headers))), Tbody(*rows)), cls="table-wrap")
+
+    app.state.page, app.state.table = page, table
 
     def filters(view, selected="", request=None):
         selected_zone = request.scope["session"].get("timezone", settings.timezone_name) if request else settings.timezone_name

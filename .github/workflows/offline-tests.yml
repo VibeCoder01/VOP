@@ -24,3 +24,9 @@ jobs:
       - run: python -m vop demo --image fixtures/scene.png --engine mock
       - run: python tools/phase1_smoke.py
       - run: python tools/phase2_smoke.py
+      - run: python tools/phase3_smoke.py
+      - run: python tools/build_release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vop-release-${{ matrix.os }}
+          path: dist/*.zip

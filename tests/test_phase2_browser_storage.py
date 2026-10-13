@@ -140,7 +140,7 @@ def test_schema1_upgrade_preserves_history_and_backup(settings):
         connection.executescript(SCHEMA)
         connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (utcnow().isoformat(), "legacy", "preserved"))
     store = Store(settings.database)
-    assert store.health()["database_schema"] == 2
+    assert store.health()["database_schema"] == 3
     backup = settings.database.with_name(settings.database.name + ".v1-backup.sqlite3")
     assert backup.exists()
     with sqlite3.connect(backup) as connection:

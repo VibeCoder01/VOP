@@ -1,16 +1,16 @@
 [build-system]
-requires = ["setuptools==80.9.0"]
+requires = ["setuptools==83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vop"
-version = "0.3.0"
+version = "0.4.0"
 description = "Provider-neutral visual observability foundation and local API"
 requires-python = ">=3.11"
-dependencies = ["Pillow==12.0.0", "psutil==7.1.0", "python-fasthtml==0.14.13", "tzdata==2026.5"]
+dependencies = ["Pillow==12.3.0", "psutil==7.1.0", "python-fasthtml==0.14.13", "tzdata==2026.5"]
 
 [project.optional-dependencies]
-dev = ["pytest==8.4.2"]
+dev = ["pytest==9.0.3"]
 camera = ["opencv-python-headless==4.13.0.92"]
 
 [project.scripts]

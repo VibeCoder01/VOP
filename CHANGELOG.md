@@ -1,5 +1,16 @@
 # Specification change log
 
+## Phase 3 reliable development release — 13 October 2026
+
+- Added immutable alert rule revisions, duration/count/health transitions, stable keys, durable
+  dashboard delivery, audited acknowledgement/resolution/notes and explicit bounded HTTPS webhook retries.
+- Added filtered CSV/JSON exports with provenance and formula protection; validated configuration
+  import/export, SQLite-consistent backup/restore and schema-v3 migration with rollback backup.
+- Added preview/apply evidence/raw-detail/audit retention, hourly opted-in policy enforcement,
+  login throttling and release security/restart/recovery tests.
+- Added an allow-listed wheel/ZIP Windows development installer and fresh-install smoke/runbook.
+  No new camera/model/GPU test, remote inference, email delivery or licence selection is claimed.
+
 ## Phase 2 browser capability — 13 October 2026
 
 - Added browser sessions/CSRF, operator/viewer permissions, immutable question/policy editing,
