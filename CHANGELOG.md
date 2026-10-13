@@ -1,5 +1,15 @@
 # Specification change log
 
+## Phase 0 implementation — 13 October 2026
+
+- Implemented the P0-01–P0-10 contract as a still-image CLI, byte-oriented typed contracts,
+  interchangeable synthetic mock engines and an optional pinned Liquid adapter.
+- Added offline tests, Windows/Linux CI, locked offline dependencies, synthetic fixture,
+  guarded isolated benchmark, PowerShell runbook and feasibility/validation reports.
+- Corrected the illustrative plugin starter's SRS reference from v0.1 to v0.2; no SRS
+  requirements, IDs or intended plugin semantics changed.
+- Application licence remains open. No Phase 1 services or remote worker networking added.
+
 ## v0.2.1 — 13 October 2026 — Inference placement clarification
 
 - Confirmed that the SRS already mandates provider-neutral inference (INF-001) and plans remote workers (INF-011, OPS-010, NFR-017). **No SRS requirements or numbering changed.**

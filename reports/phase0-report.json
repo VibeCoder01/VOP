@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-10-13T15:58:20.378426+00:00",
+  "benchmark_target": "reference_dell",
+  "outcome": "not_run",
+  "reason": "Operator has not consented to model download and execution",
+  "environment": {
+    "os": "Microsoft Windows 11 Pro",
+    "windows_build": "10.0.26300",
+    "python": "3.11.9",
+    "architecture": "AMD64",
+    "hardware": {
+      "cpu": "Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz",
+      "manufacturer": "Dell Inc.",
+      "model": "Latitude 5510",
+      "video_controllers": [
+        "Intel(R) UHD Graphics"
+      ]
+    },
+    "total_physical_bytes": 16760946688,
+    "available_physical_bytes": 5829545984,
+    "free_disk_bytes": 15582531584,
+    "dependencies": {
+      "Pillow": "12.0.0",
+      "psutil": "7.1.0",
+      "pytest": "8.4.2",
+      "torch": null,
+      "torchvision": null,
+      "transformers": null,
+      "huggingface-hub": null
+    },
+    "accelerator_runtime_probe": "not_run; CPU benchmark; controllers are inventory only"
+  },
+  "model": {
+    "id": "LiquidAI/d1-3B",
+    "requested_revision": "051bcc464b01b9f92942b364d9586b0ef5912432",
+    "resolved_revision": null,
+    "revision_validation": "source/API inspected; runtime unvalidated",
+    "cache_path": null,
+    "weight_blob_hashes": null,
+    "dtype": "float32",
+    "device": "cpu"
+  },
+  "image": null,
+  "model_load_ms": null,
+  "download_ms": null,
+  "peak_process_tree_rss_bytes": null,
+  "minimum_available_physical_bytes": null,
+  "sampling_interval_seconds": 0.1,
+  "memory_measurement": "sampled RSS/working set; can miss transient peaks; no pagefile guarantee",
+  "cases": [],
+  "operator_consent": false,
+  "preflight_override": false,
+  "recommendation": "CONDITIONAL GO: offline architecture; real inference feasibility remains unresolved",
+  "preflight_issues": [
+    "Available physical RAM is below the conservative 16 GiB experiment threshold",
+    "Free cache disk space is below the conservative 20 GiB threshold"
+  ],
+  "timeout_seconds": 900,
+  "phase0_review": {
+    "recommendation": "GO",
+    "basis": "Owner accepts alternate-server CPU feasibility; Dell inference is nonblocking and remains not_run"
+  }
+}

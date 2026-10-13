@@ -1,0 +1,5 @@
+# Optional direct version pins; candidate combination, NOT real-model validated.
+# Do not install as part of offline CI. Transitive runtime lock follows a real run.
+transformers==5.19.0
+torch==2.14.1
+torchvision==0.29.1

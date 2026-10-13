@@ -1,4 +1,4 @@
-# Illustrative plugin contract starter; SRS v0.1, not an implemented runtime.
+# Illustrative plugin contract starter; SRS v0.2, not an implemented runtime.
 contract_api_version: "0.1"
 manifest_schema:
   required: [api_version, plugin_id, version, plugin_type, capabilities, configuration_schema]
