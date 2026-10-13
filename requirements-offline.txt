@@ -1,0 +1,10 @@
+# Installation needs PyPI or a pre-populated wheelhouse; execution is offline.
+setuptools==80.9.0
+Pillow==12.0.0
+psutil==7.1.0
+pytest==8.4.2
+colorama==0.4.6; sys_platform == 'win32'
+iniconfig==2.1.0
+packaging==25.0
+pluggy==1.6.0
+Pygments==2.19.2
