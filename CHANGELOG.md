@@ -1,5 +1,15 @@
 # Specification change log
 
+## Phase 1 foundation — 13 October 2026
+
+- Recorded owner authorisation after Phase 0 PR #1 merge; added a Phase 1 exit contract
+  traceable to the existing SRS §15 without renumbering/redesigning requirements.
+- Added validated JSON configuration, explicit one-shot source adapters, mandatory
+  loopback service authentication, SQLite immutable question versions/observations/audit,
+  byte ingestion/idempotency, bounded admission and offline API/persistence tests.
+- Reused provider-neutral inference and image validation; added a typed guard for untyped
+  provider results. No dashboard, episode metrics, remote workers or Phase 2 features added.
+
 ## Phase 0 implementation — 13 October 2026
 
 - Implemented the P0-01–P0-10 contract as a still-image CLI, byte-oriented typed contracts,

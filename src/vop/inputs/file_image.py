@@ -12,11 +12,17 @@ from vop.contracts import FrameEnvelope, ProviderError, utcnow
 class FileImageAdapter:
     def read(self, path: str | Path, source_id: str = "file-image") -> FrameEnvelope:
         try:
-            payload = Path(path).read_bytes()
+            with Path(path).open("rb") as stream:
+                payload = stream.read(20 * 1024 * 1024 + 1)
         except FileNotFoundError as exc:
             raise ProviderError("image_missing", "Image file does not exist") from exc
         except OSError as exc:
             raise ProviderError("image_io", str(exc)) from exc
+        return self.from_bytes(payload, source_id)
+
+    def from_bytes(self, payload: bytes, source_id: str = "image-bytes") -> FrameEnvelope:
+        if len(payload) > 20 * 1024 * 1024:
+            raise ProviderError("image_too_large", "Image exceeds 20 MiB limit")
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("error", Image.DecompressionBombWarning)

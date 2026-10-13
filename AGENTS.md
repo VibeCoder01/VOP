@@ -1,6 +1,9 @@
 # Repository instructions for Codex
 
-The version-controlled source of truth is `SRS-v0.2.md`. The immediate task is **Phase 0 only**, as specified in `CODEX_PHASE_0.md`. The SRS MVP requirements describe later releases; do not implement them all in Phase 0.
+The version-controlled source of truth is `SRS-v0.2.md`. Phase 0 is merged. The product owner
+authorised **Phase 1 foundation** on 13 October 2026. `CODEX_PHASE_1.md` records its scope and
+exit criteria; Phase 2+ remains unauthorised. Phase-specific restrictions below apply to the
+named phase, not to all future work.
 
 ## Working rules
 
@@ -20,4 +23,7 @@ The version-controlled source of truth is `SRS-v0.2.md`. The immediate task is *
 
 ## Required completion report
 
-Provide: changed files; exact commands run and pass/fail results; any commands you could not run; model checkpoint SHA and dependency versions if a real run occurred; measured peak memory/latency **or** the reason these could not be measured; open issues; and a clear `GO / CONDITIONAL GO / NO-GO` recommendation for Phase 1. Do not progress to Phase 1 without an explicit new request.
+Provide changed files, exact commands/results, skipped hardware tests, any actual model
+revision/versions/measurements, open limitations, and a recommendation for the next phase.
+Phase 0 measurements remain historical evidence; do not invent a new model or camera run.
+Stop after Phase 1; Phase 2 requires explicit new authorisation.
