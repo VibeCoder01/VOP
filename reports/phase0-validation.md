@@ -105,9 +105,20 @@ or system-Python modification was installed. GPU inference has not been attempte
 | P0-05 | PASS | Two consent flags, approved SHA only, memory/disk preflight, local override, isolated timeout/memory watchdog; no CI model install/download. |
 | P0-06 | PASS | JSON/Markdown report with actual Dell inventory, requested candidate SHA, not-run reason and null measurements; alternate run separated. |
 | P0-07 | PASS | PowerShell setup/benchmark instructions, expected outputs, limits, licence separation and recommendation. |
-| P0-08 | LOCAL PASS; CI pending | 78 offline tests passed on Windows 3.11 and Linux 3.14; Actions matrix result must be checked after push. |
+| P0-08 | PASS | 78 offline tests on Windows 3.11/Linux 3.14; GitHub Actions Windows/Ubuntu install, pip check, tests and demo all succeeded. |
 | P0-09 | DELL NOT RUN; ALTERNATE CPU PASS | Actual official FP32/CPU outputs for 1/3/5 questions on alternate host, accepted by owner as sufficient; Dell result remains unknown. |
 | P0-10 | GO | ADR-0003; proceed to Phase 1 foundation review using sparse server CPU inference, with routine later accuracy/capacity/licence decisions open. |
+
+## GitHub Actions and pull request
+
+Draft PR: https://github.com/VibeCoder01/VOP/pull/1, against `main`, left unmerged.
+Implementation commit: `2e0d22a158176d3a0adcad37369a8899003c43fd`.
+Checked [Actions run 38429400246](https://github.com/VibeCoder01/VOP/actions/runs/38429400246):
+both `offline (windows-latest)` (job 115407293047) and `offline (ubuntu-latest)` (job
+115407293239) completed with `success`. Their installation, editable package build,
+`pip check`, pytest and mock-demo steps all succeeded. No inference libraries or weights
+were installed. This records checked CI execution, not merely the existence of a workflow.
+This evidence update changes documentation only; the implementation checked by that run is unchanged.
 
 ## Changed files and boundaries
 

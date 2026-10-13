@@ -169,7 +169,7 @@ deployment service. Without ensurepip, use `python3 -m venv --without-pip .venv`
 - `decisions/ADR-0003-phase0-feasibility.md`: Phase 0 recommendation and real-engine decision.
 - `.github/workflows/offline-tests.yml`: Python 3.11 tests on Windows/Ubuntu. Setup fetches only
   offline dependencies; test sockets are denied, Torch is absent and models are never downloaded.
-  CI success is reported only after checked execution.
+  Both jobs passed in the checked [initial PR run](https://github.com/VibeCoder01/VOP/actions/runs/38429400246).
 
 Model load, throughput and workload accuracy must be validated before choosing a production
 engine. A server benchmark does not prove Dell feasibility. Alternative models/runtimes require
