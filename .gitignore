@@ -37,4 +37,11 @@ models/
 *.bin
 *.gguf
 reports/local/
+data/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+config.local.json
+.sesskey
 benchmark-*/

@@ -167,6 +167,8 @@ def infer(engine: InferenceEngine, request: InferenceRequest) -> InferenceResult
         if request.deadline_utc and utcnow() >= request.deadline_utc:
             raise ProviderError("deadline", "Request expired", Status.TIMEOUT)
         outcome = engine.infer(request)
+        if not isinstance(outcome, InferenceResult):
+            raise ProviderError("provider_contract", "Provider did not return an InferenceResult")
         if request.deadline_utc and utcnow() >= request.deadline_utc:
             raise ProviderError("deadline", "Provider exceeded deadline", Status.TIMEOUT)
         return outcome

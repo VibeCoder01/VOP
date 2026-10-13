@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "database": "../data/vop.sqlite3",
+  "capture_timeout_seconds": 10,
+  "inference_timeout_seconds": 30,
+  "engine": {
+    "kind": "mock",
+    "id": "synthetic-mock",
+    "answers": {"red_square": true, "background": "white", "brightness": 2.0}
+  },
+  "sources": [{
+    "id": "synthetic-scene",
+    "name": "Synthetic shapes — no camera",
+    "kind": "synthetic",
+    "settings": {},
+    "questions": [
+      {"id": "red_square", "version": "1", "text": "Is a red square visible?", "kind": "binary"},
+      {"id": "background", "version": "1", "text": "What is the background colour?", "kind": "choice", "choices": [["white", "White background"], ["black", "Black background"]]},
+      {"id": "brightness", "version": "1", "text": "How bright is the image?", "kind": "ordinal", "levels": ["Dark", "Medium", "Bright"]}
+    ]
+  }]
+}

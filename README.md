@@ -1,9 +1,123 @@
-# Visual Observability Platform — Phase 0
+# Visual Observability Platform — Phase 1 foundation
 
-Provider-neutral still-image CLI, deterministic **MOCK — no vision** engine, offline tests
-and an optional guarded LiquidAI/d1-3B CPU benchmark. `CODEX_PHASE_0.md` controls this phase;
-`SRS-v0.2.md` remains the product specification. No dashboard, database, camera capture,
-remote worker transport or Phase 1 service is implemented.
+Phase 1 adds validated JSON configuration, a local authenticated service, SQLite observations
+and one-shot source adapters to the merged Phase 0 inference contracts. `CODEX_PHASE_1.md`
+records the current foundation scope; `SRS-v0.2.md` remains the product specification.
+The default pipeline is explicitly **MOCK — no vision**. Model weights are never downloaded
+or loaded by service startup. Phase 0 benchmark evidence remains in the existing reports.
+
+## Phase 1 operator quickstart (PowerShell)
+
+```powershell
+git switch codex/phase-1  # Until the Phase 1 PR is merged
+.\.venv\Scripts\python.exe -m pip install -r requirements-offline.txt
+.\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
+.\.venv\Scripts\python.exe -m pip check
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
+.\.venv\Scripts\python.exe -m pytest -q
+# Actual HTTP/restart smoke with temporary token/database; no internet or camera:
+.\.venv\Scripts\python.exe tools\phase1_smoke.py
+```
+
+Create the venv first with `py -3.11 -m venv .venv` if this is a new checkout. Start a persistent
+local service and exercise it from the same PowerShell session without putting the token in
+a file or command-line argument:
+
+```powershell
+$env:VOP_API_TOKEN = & .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
+$service = Start-Process -FilePath (Resolve-Path .\.venv\Scripts\python.exe).Path -ArgumentList '-m vop serve --config sample-config/phase1.json --port 8765' -WindowStyle Hidden -PassThru
+$headers = @{ Authorization = "Bearer $env:VOP_API_TOKEN" }
+# Wait for startup, without displaying the secret:
+for ($attempt = 0; $attempt -lt 50; $attempt++) {
+    try { $health = Invoke-RestMethod http://127.0.0.1:8765/api/v1/health -Headers $headers -TimeoutSec 2; break }
+    catch { Start-Sleep -Milliseconds 200 }
+}
+Invoke-RestMethod http://127.0.0.1:8765/api/v1/sources -Headers $headers
+Invoke-RestMethod http://127.0.0.1:8765/api/v1/sources/synthetic-scene/capture -Method Post -Headers $headers
+Invoke-RestMethod 'http://127.0.0.1:8765/api/v1/observations?limit=20' -Headers $headers
+# Also accepts encoded JPEG/PNG bytes; frame ID enables safe duplicate detection:
+Invoke-RestMethod http://127.0.0.1:8765/api/v1/sources/synthetic-scene/frames -Method Post -Headers (@{Authorization=$headers.Authorization; 'X-Frame-ID'='manual-frame-1'}) -ContentType image/png -InFile .\fixtures\scene.png
+# When finished:
+Stop-Process -Id $service.Id
+```
+
+Alternatively run `python -m vop serve --config sample-config/phase1.json --port 8765` in the
+foreground with the same environment secret. The CLI binds **127.0.0.1 only** and all routes
+require a 32–256 character ASCII bearer secret. There are no cookies, default credentials,
+public health exceptions, account management or permissive CORS. This is a single-operator
+development foundation, not a production multi-user authentication system. Rotate the secret
+by restarting with a newly generated value; it is never stored in the database or logged.
+
+The sample produces three independent questions over one generated shape image. Capture returns
+201 with a run ID, stable source/frame/question provenance, native fields, UTC timestamps and
+`synthetic: true`. Persisted observations survive restart; no pixels are saved. SQLite stores
+frame metadata, immutable question versions, runs, individual answers and minimal audit events.
+Changing question content requires a new version. The initial schema migrates transactionally;
+unknown/newer schemas are rejected. Before a future migration, stop the service and back up the
+database with SQLite's backup API; do not copy an active WAL database file alone. Roll back by
+restoring that backup and the matching application version; no downgrade is attempted.
+
+Endpoints: authenticated `GET /` (diagnostic HTML), `GET /api/v1/health`,
+`GET /api/v1/sources`, `POST /api/v1/sources/{id}/capture`,
+`POST /api/v1/sources/{id}/frames`, and `GET /api/v1/observations`.
+Observation pagination uses `limit` (1–100) and `after` (last sequence); optionally filter by
+configured `source_id`. Byte ingestion accepts only JPEG/PNG and at most 20 MiB. A repeated
+source/frame ID returns the original result without inference; changed content under that ID
+returns 409. A failed capture has **null frame/capture timestamp and null values**, not a fake
+image or confirmed negative. Binary answers use positive/negative; valid choice/ordinal answers
+have `normalised_state: not_applicable`, without pretending they are binary decisions.
+
+One POST is admitted at a time, with no queued frames; excess work returns 429 and is audited.
+Health remains responsive during inference. Capture and inference identities stay independent;
+the service never silently substitutes a model. `create_app(settings, engine=...)` accepts an
+explicitly prepared engine implementing the Phase 0 protocol, so model code and hardware remain
+outside callers. The CLI intentionally uses configured mocks; optional real-model preparation
+continues through the explicitly consented Phase 0 tooling. Synchronous inference deadlines are
+soft: late results become timeout failures, but a hung injected engine cannot be killed by this
+service. Process-isolated real inference/remote workers remain later work; do not deploy this
+foundation for unattended heavy models. No new real-model run occurred in Phase 1.
+
+## Optional one-shot camera inputs
+
+Camera inputs require operator-owned `config.local.json` (ignored), explicit
+`--allow-live-sources`, and the same authenticated POST capture endpoint. Startup never opens
+a device; there is no continuous capture or scheduler. Configuration is read from the local
+file, not accepted through an HTTP registration API. Supported source kinds:
+
+| Kind | `settings` | Additional requirement |
+|---|---|---|
+| `synthetic` | `{}` | No hardware; generated shapes |
+| `file` | `{"path":"fixtures/scene.png"}` | Path relative to the configuration file |
+| `usb` | `{"device":0}` | Optional OpenCV installation |
+| `rtsp` | `{"endpoint_env":"VOP_CAMERA_URL","allowed_hosts":["camera.example"]}` | Optional OpenCV; endpoint set locally in environment |
+| `snapshot` | Same environment reference/host list | Stdlib HTTP(S) acquisition |
+
+Use authorised local hostnames in private configuration; the table's hostname is fictional.
+Camera URLs and query credentials belong only in the referenced environment variable, not
+source control. Userinfo credentials in URLs are rejected. Username/password camera
+authentication, discovery and arbitrary redirects are deliberately unsupported at this stage.
+Only exact configured hostnames/schemes are allowed; HTTP redirects and inherited proxies are
+disabled. The API returns no endpoint, environment-reference or local-path settings.
+
+```powershell
+# Only for USB/RTSP adapter use; not installed in CI:
+.\.venv\Scripts\python.exe -m pip install -e '.[camera]'
+# Explicit live capture consent (foreground example):
+.\.venv\Scripts\python.exe -m vop serve --config .\config.local.json --allow-live-sources
+```
+
+USB/RTSP/HTTP acquisition runs in a spawned child with a hard total deadline; blocked reads
+are terminated and persisted as typed failures. Native camera diagnostics are suppressed to
+avoid exposing endpoints. Adapter behaviour is tested with fakes; **no real camera was connected**.
+Optional OpenCV installation/version availability is checked separately; codec/hardware support
+is not claimed. The allow-list is for operator-controlled destinations, not a general public
+URL ingestion service; production DNS/transport and credential policy remain deployment work.
+
+FastHTML/Starlette supplies the local API and diagnostic HTML; SQLite uses the standard library.
+There is no React app, dashboard, temporal state machine, event metric, alert, remote transport,
+installer, licence selection or Phase 2 implementation. See `reports/phase1-validation.md`.
+
+## Phase 0 historical setup and evidence
 
 ## Windows 11 setup (PowerShell)
 
@@ -15,7 +129,7 @@ tests and demo need no internet, model dependencies, weights, GPU or credentials
 git clone https://github.com/VibeCoder01/VOP.git
 Set-Location VOP
 # Until merged, select the implementation branch:
-git switch codex/phase-0
+git switch codex/phase-1
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-offline.txt
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
@@ -182,4 +296,4 @@ requires independent review before intended use/redistribution. No model weights
 real camera images or private network configuration are committed. Repository visibility remains
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
-**Stop at Phase 0. Phase 1 requires explicit authorisation.**
+**Phase 1 is authorised and implemented; Phase 2 requires explicit new authorisation.**

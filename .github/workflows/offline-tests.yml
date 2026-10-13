@@ -1,4 +1,4 @@
-name: Phase 0 offline tests
+name: Foundation offline tests
 on: [push, pull_request]
 permissions:
   contents: read
@@ -22,3 +22,4 @@ jobs:
       - run: python -m pip check
       - run: python -m pytest -q
       - run: python -m vop demo --image fixtures/scene.png --engine mock
+      - run: python tools/phase1_smoke.py
