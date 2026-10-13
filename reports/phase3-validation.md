@@ -3,7 +3,9 @@
 Recommendation: **CONDITIONAL GO for review and laptop development testing**. The owner
 accepted Phase 2 and authorised the next phase. The Phase 3 reliable-release capabilities
 are implemented; this is not a claim that all hardware/production MVP gates are complete.
-Phase 4 has not started. PR must be reviewed/merged by the owner, never automatically.
+Phase 4 has not started. The owner merged PR #4 at 21:37:48 UTC; the implementation is on
+`main` at `ba78a225d1c7681bea154cee54680be54cfdb4d3`. The final evidence was committed after
+that merge and is provided as a documentation-only follow-up. Codex did not merge either PR.
 
 ## Changed files and traceability
 
@@ -92,7 +94,22 @@ submission passed. At 390×844, document width fits the viewport after fixing gr
 filter wrapping; desktop/mobile screenshots were inspected in ignored `output/playwright/`.
 An initial Windows CI run found temporary-path alias normalization in configuration import;
 the staging directory/expected path now resolve consistently, with an aliased-temp-path regression.
-Final CI results will be appended after completion, not predicted.
+Retention preview and application on disposable synthetic data and actual CSV download also
+passed in the browser. The corrected flow reported zero console errors/warnings. The dedicated
+QA browser and server were stopped; the user's port-8765 process/database was not modified.
+
+Verified implementation commit `80d69ccc55530929424e5af5dcc7f8e1e9214ea0` in
+[Actions run 38471835449](https://github.com/VibeCoder01/VOP/actions/runs/38471835449):
+Windows job **115552597116 success**, Ubuntu job **115552597460 success**. Both jobs run locked
+installation, editable install/pip check, pytest, mock demo, Phase 1/2/3 subprocess smokes and
+wheel/ZIP build/upload. The earlier failing Windows run is superseded by this checked result.
+
+The final ZIP was also installed into the isolated test venv and the actual Phase 3 smoke rerun
+successfully. Local ZIP SHA-256:
+`a5e8c358cffce04f0e52d49293f3932c6dc95757674056a43f9a637a5e779bf3`.
+Automatic approval review rejected removal of the three owned temporary installer test folders
+with “blocked by policy”; they remain under the user's Temp directory. No deletion was attempted
+against project/user data. The application release ZIP is retained in ignored `dist/`.
 
 ## Hardware, model and delivery limitations
 

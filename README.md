@@ -10,7 +10,7 @@ unchanged. Phase 3 was authorised after the owner accepted Phase 2. Phase 4 rema
 
 ```powershell
 # Run from your VOP checkout:
-git switch codex/phase-3
+git switch main
 .\.venv\Scripts\python.exe -m pip install -r requirements-offline.txt
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
 .\.venv\Scripts\python.exe -m pip check
