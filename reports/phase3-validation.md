@@ -3,7 +3,9 @@
 Recommendation: **CONDITIONAL GO for review and laptop development testing**. The owner
 accepted Phase 2 and authorised the next phase. The Phase 3 reliable-release capabilities
 are implemented; this is not a claim that all hardware/production MVP gates are complete.
-Phase 4 has not started. PR must be reviewed/merged by the owner, never automatically.
+Phase 4 has not started. The owner merged PR #4 at 21:37:48 UTC; the implementation is on
+`main` at `ba78a225d1c7681bea154cee54680be54cfdb4d3`. The final evidence was committed after
+that merge and is provided as a documentation-only follow-up. Codex did not merge either PR.
 
 ## Changed files and traceability
 
