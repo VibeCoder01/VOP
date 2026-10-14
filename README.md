@@ -203,6 +203,12 @@ password preserves the existing account. Consent and **Test camera connection** 
 local frame, show a privacy-masked memory-only preview and store diagnostic metadata; no model
 request is made by that connection test. Capture failure never asserts “no human”.
 
+If a connection test reports that another capture is running, wait for that request to finish
+before retrying. A capture timeout is a separate camera-connectivity failure. Check the actual
+camera IP in Tapo Device Settings → Device Info and its dedicated account in Advanced Settings
+→ Camera Account. A refused TCP connection to port 554 occurs before authentication; check the
+address, camera availability and RTSP setup before changing passwords.
+
 Windows credential/key values are encrypted with user-bound DPAPI under
 `%LOCALAPPDATA%/VOP/secrets`. Configuration, SQLite and exports contain references, not secret
 values. RTSP credentials are resolved and inserted into the locator only within the capture child;

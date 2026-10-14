@@ -69,6 +69,11 @@ def create_app(settings: Settings, *, token: str | None = None,
 
     async def provider_error(req, exc):
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
+        if "text/html" in req.headers.get("accept", "") and hasattr(app.state, "render_error"):
+            from fasthtml.core import to_xml
+            from starlette.responses import HTMLResponse
+            message = "Another capture or inference is running. Wait for it to finish, then return to setup and retry." if exc.code == "overloaded" else exc.message
+            return HTMLResponse(to_xml(app.state.render_error(req, message)), status_code=code)
         return JSONResponse({"error": exc.code}, status_code=code)
 
     async def bad_request(req, exc):

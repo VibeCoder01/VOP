@@ -1,5 +1,10 @@
 # Specification change log
 
+## Phase 4 browser error follow-up — 14 October 2026
+
+- Browser capture/setup errors now render readable guidance while API clients retain their
+  JSON errors and HTTP status codes. Added a regression check for an occupied capture slot.
+
 ## Phase 4 GPU worker and live-camera integration — 13 October 2026
 
 - Added an authenticated loopback worker with process-isolated hard deadlines, bounded admission,

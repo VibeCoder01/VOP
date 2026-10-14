@@ -152,3 +152,19 @@ Next: enter C200/C210 camera-account credentials in the local setup screen and d
 test connectivity; agree a resource window for the GPU worker, then validate privacy-processed
 frames and labelled human-present/absent/difficult examples. Recover and test C510W separately.
 Complete these Phase 4 gates before recommending broader deployment or seeking Phase 5 approval.
+
+## Owner setup follow-up — 14 October 2026 (UK)
+
+The owner saved a protected C200 profile and attempted its local connection test. The retained
+diagnostic was `capture_timeout`; another request during the occupied slot returned HTTP 429
+`overloaded`. Read-only health subsequently confirmed the slot was free, sampling was off,
+and the selected engine remained local mock. A separate TCP probe of the protected configured
+endpoint returned `ConnectionRefusedError` on port 554 before authentication. No password value,
+camera IP, private URL or camera frame is included here. Live-camera acceptance remains pending.
+
+`src/vop/service.py` now renders existing dashboard error pages for browser ProviderErrors,
+including a clear busy/retry message, while preserving JSON responses and status codes for API
+clients. `tests/test_phase4_worker.py` verifies both behaviours with the real busy lock and no
+camera connection. `python -m pytest -q` passed **200 tests**; the Phase 4 HTTP smoke passed.
+README troubleshooting and this report record the observed limitation. No GPU/model test was
+repeated for this UI correction, and the previous implementation CI result remains historical.

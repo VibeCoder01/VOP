@@ -211,6 +211,22 @@ def test_camera_connection_form_uses_fixture_and_never_transmits_to_engine(app, 
         assert not app.state.store.source_control("tapo-c210")["enabled"]
 
 
+def test_busy_camera_test_renders_browser_guidance_and_keeps_api_json(app):
+    with TestClient(app) as client:
+        csrf = login(client)
+        body = {"csrf": csrf, "source_id": "tapo-c200", "model": "C200", "endpoint": "rtsp://192.168.1.100:554/stream1", "username": "offline-user", "password": "offline-fake-password"}
+        assert client.post("/integration/camera", data=body).status_code == 200
+        app.state.pipeline.busy.acquire()
+        try:
+            page = client.post("/integration/cameras/tapo-c200/test", data={"csrf": csrf, "capture_consent": "on"}, headers={"Accept": "text/html"})
+            assert page.status_code == 429 and "text/html" in page.headers["content-type"]
+            assert "Another capture or inference is running" in page.text
+            response = client.post("/api/v1/sources/synthetic-scene/capture", headers={"Authorization": "Bearer " + OWNER})
+            assert response.status_code == 429 and response.json() == {"error": "overloaded"}
+        finally:
+            app.state.pipeline.busy.release()
+
+
 @pytest.mark.skipif(__import__('os').name != 'nt', reason="Windows DPAPI hardware/OS-specific")
 def test_actual_windows_dpapi_round_trip_without_plaintext(tmp_path):
     store = SecretStore(tmp_path)
