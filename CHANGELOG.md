@@ -2,6 +2,10 @@
 
 ## Phase 4 browser error follow-up — 14 October 2026
 
+- Fixed protected camera forms reopening with a hardcoded example endpoint. Saved camera
+  selection, address, username and model now reload, with separate edit/add links and blank
+  password fields. Added two-camera save/reopen/restart regression coverage.
+
 - Browser capture/setup errors now render readable guidance while API clients retain their
   JSON errors and HTTP status codes. Added a regression check for an occupied capture slot.
 

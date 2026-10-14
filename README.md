@@ -203,6 +203,11 @@ password preserves the existing account. Consent and **Test camera connection** 
 local frame, show a privacy-masked memory-only preview and store diagnostic metadata; no model
 request is made by that connection test. Capture failure never asserts “no human”.
 
+The setup page reopens the saved camera's address, username and model; passwords stay blank.
+Use **Edit tapo-c200** / **Edit tapo-c210** to choose an existing camera, or **Add another camera**
+for an empty new-camera form. Saving returns to the camera just edited. The sample IP is a
+placeholder only and is never submitted as a default address.
+
 If a connection test reports that another capture is running, wait for that request to finish
 before retrying. A capture timeout is a separate camera-connectivity failure. Check the actual
 camera IP in Tapo Device Settings → Device Info and its dedicated account in Advanced Settings

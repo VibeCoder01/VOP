@@ -193,6 +193,36 @@ def test_gui_protected_camera_retry_profile_restart_and_viewer_denial(app):
     assert "tapo-c200" in restarted.state.pipeline.sources
 
 
+def test_camera_form_reloads_selected_saved_endpoint_and_never_prefills_password(app):
+    def input_value(page, name):
+        from html import unescape
+        tag = re.search(r'<input\b[^>]*\bname="' + name + r'"[^>]*>', page)[0]
+        value = re.search(r'\bvalue="([^"]*)"', tag)
+        return unescape(value[1]) if value else ""
+    with TestClient(app) as client:
+        csrf = login(client)
+        for sid, model, address in (("tapo-c200", "C200", "192.168.1.201"), ("tapo-c210", "C210", "192.168.1.202")):
+            body = {"csrf": csrf, "source_id": sid, "model": model, "endpoint": "rtsp://" + address + ":554/stream2", "username": sid + "-user", "password": "offline-form-secret"}
+            page = client.post("/integration/camera", data=body)
+            assert page.status_code == 200 and page.url.params["camera"] == sid
+            assert input_value(page.text, "endpoint") == body["endpoint"]
+            assert input_value(page.text, "username") == body["username"]
+            assert input_value(page.text, "password") == "" and body["password"] not in page.text
+        saved = client.get("/integration?camera=tapo-c200")
+        assert input_value(saved.text, "endpoint") == "rtsp://192.168.1.201:554/stream2"
+        body.update(source_id="tapo-c200", model="C200", endpoint=input_value(saved.text, "endpoint"), password="", username=input_value(saved.text, "username"))
+        assert client.post("/integration/camera", data=body).status_code == 200
+        new = client.get("/integration?new_camera=1")
+        assert input_value(new.text, "endpoint") == "" and input_value(new.text, "source_id") == ""
+    restarted = create_app(app.state.pipeline.settings, token=OWNER)
+    with TestClient(restarted) as client:
+        login(client)
+        saved = client.get("/integration?camera=tapo-c210")
+        assert input_value(saved.text, "source_id") == "tapo-c210"
+        assert input_value(saved.text, "endpoint") == "rtsp://192.168.1.202:554/stream2"
+        assert re.search(r'<option(?=[^>]*value="C210")(?=[^>]*selected)[^>]*>', saved.text)
+
+
 def test_camera_connection_form_uses_fixture_and_never_transmits_to_engine(app, monkeypatch):
     from vop.inputs.sources import SourceAdapters, capture_inline
     with TestClient(app) as client:

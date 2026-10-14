@@ -59,6 +59,20 @@ def install_integration(app, settings, store, pipeline):
         current = pipeline.engine_profile
         worker = current if current["kind"] == "worker" else {}
         cams = [s for s in pipeline.sources.values() if s.kind == "rtsp"]
+        saved_cams = [s for s in cams if s.settings.get("endpoint_secret_ref")]
+        selected_id = request.query_params.get("camera")
+        selected = next((s for s in saved_cams if s.source_id == selected_id), None) if selected_id else (saved_cams[0] if saved_cams and "new_camera" not in request.query_params else None)
+        if selected_id and selected is None:
+            raise ValueError("Saved camera setup does not exist")
+        endpoint, username, camera_notice = "", "", "Add a new camera."
+        if selected:
+            camera_notice = "Editing saved setup: " + selected.source_id
+            try:
+                endpoint = secrets.get(selected.settings["endpoint_secret_ref"])
+                username = secrets.camera(selected.settings["secret_ref"])["username"]
+            except ProviderError:
+                camera_notice += ". Protected values are unavailable; re-enter them for this account."
+        model = selected.name.removeprefix("Tapo ") if selected else "C200"
         content = [Section(H2("Selected inference backend"), Pre(dumps(current)),
                     P("Remote consent is active for this process." if getattr(pipeline.engine, "allow_remote", False) else "Remote image transmission is not enabled. Mock/local configuration is explicit."),
                     P("Worker profiles use a local loopback endpoint reached directly or through an SSH tunnel. Camera location and model location are independent.")),
@@ -77,10 +91,13 @@ def install_integration(app, settings, store, pipeline):
                    Form(hidden(csrf), Button("Test worker identity and health (no images)"), method="post", action="/integration/health"),
                    Section(H2("Protected Tapo setup"), P("Credentials are protected locally and never saved in the configuration or audit. Saving does not connect or start sampling. A blank password preserves the existing camera credentials. Retry setup and connection tests as needed."),
                     P("Use a different source ID for each camera, such as tapo-c200 and tapo-c210. Reusing an ID updates that camera's setup."),
-                    Form(hidden(csrf), field("Camera source ID", "source_id", "tapo-c200", required=True),
-                         Select(*(Option(m, value=m) for m in ("C200", "C210", "C510W")), name="model", aria_label="Camera model"),
-                         field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", "rtsp://192.168.1.100:554/stream1", required=True),
-                         field("Camera account username", "username", autocomplete="username"),
+                    P(camera_notice),
+                    *(P(A("Edit " + s.source_id, href="/integration?camera=" + s.source_id)) for s in saved_cams),
+                    P(A("Add another camera", href="/integration?new_camera=1")),
+                    Form(hidden(csrf), field("Camera source ID", "source_id", selected.source_id if selected else "", placeholder="tapo-c200", required=True),
+                         Select(*(Option(m, value=m, selected=m == model) for m in ("C200", "C210", "C510W")), name="model", aria_label="Camera model"),
+                         field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", endpoint, placeholder="rtsp://192.168.1.100:554/stream1", required=True),
+                         field("Camera account username", "username", username, autocomplete="username"),
                          field("Camera account password (blank keeps saved credentials)", "password", type="password", autocomplete="new-password"),
                          Button("Save protected camera setup"), method="post", action="/integration/camera")),
                    Section(H2("Camera connection tests"),
@@ -168,7 +185,7 @@ def install_integration(app, settings, store, pipeline):
             store.audit("camera_setup", "saved_protected_references")
         finally:
             pipeline.busy.release()
-        return RedirectResponse("/integration?notice=Camera+setup+saved", status_code=303)
+        return RedirectResponse("/integration?camera=" + sid + "&notice=Camera+setup+saved", status_code=303)
 
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])
     async def camera_test(source_id: str, request):

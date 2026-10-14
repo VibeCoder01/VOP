@@ -168,3 +168,21 @@ clients. `tests/test_phase4_worker.py` verifies both behaviours with the real bu
 camera connection. `python -m pytest -q` passed **200 tests**; the Phase 4 HTTP smoke passed.
 README troubleshooting and this report record the observed limitation. No GPU/model test was
 repeated for this UI correction, and the previous implementation CI result remains historical.
+
+The owner then reported that the camera IP appeared to revert. The form did always render a
+hardcoded example endpoint, despite storing the submitted address in the OS-protected store;
+submitting that reset form could overwrite the saved address. Fixed the form to load its selected
+saved camera's endpoint, username and model, keep passwords empty, and redirect to that camera
+after saving. Added explicit edit links and a separate blank add-camera form with placeholder-only
+example values. Regression coverage saves two different cameras, switches between them, saves
+with an unchanged password, and restarts the app to verify saved field persistence. No real-camera
+capture or GPU benchmark is implied by this form fix; earlier TCP refusal describes the configured
+address at the time of that probe, not confirmation of the owner's intended camera IP.
+
+For this persistence fix, `.\.venv\Scripts\python.exe -m pytest -q` passed **201 tests** and
+`.\.venv\Scripts\python.exe tools\phase4_smoke.py` passed. After refreshing the owned idle
+dashboard, a read-only authenticated GET of its actual C200 edit form matched the protected
+saved endpoint exactly and confirmed an empty password field, without logging protected values
+or connecting to the camera. Changed files: `integration_ui.py`, its regression test, README,
+changelog and this report. Existing stored credentials were preserved; if the example address
+was previously resaved, the owner must correct it once in the now-persistent edit form.
