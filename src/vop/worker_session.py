@@ -19,6 +19,8 @@ vop_root="$HOME/.local/share/vop/phase4"
 test -f "$vop_root/worker.token"
 test -x "$vop_root/venv/bin/python"
 command -v setsid >/dev/null
+exec 9>"$vop_root/session.lock"
+flock -n 9 || exit 1
 if [ -n "$(ss -ltnH 'sport = :8878')" ]; then exit 1; fi
 vop_original=$(systemctl --user is-active llama-mtp.service || true)
 case "$vop_original" in active|inactive) ;; *) exit 1 ;; esac

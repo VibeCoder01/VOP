@@ -30,12 +30,13 @@ Exact local commands:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Windows: **211 passed, 3 skipped** (the Linux-only Bash lifecycle cases). Phase 4 HTTP smoke
+Windows: **211 passed, 4 skipped** (the Linux-only Bash lifecycle cases). Phase 4 HTTP smoke
 passed with restart persistence, disconnect-to-UNKNOWN and real Windows DPAPI. `pip check`
 reported no broken requirements. The release builder passed and includes the launcher.
 Tests use synthetic frames, fake SSH
 processes and fake services, not real cameras or model weights. The Linux-only remote helper
-test executes the actual Bash script against temporary offline commands for Stop, stdin EOF and timeout;
+test executes the actual Bash script against temporary offline commands for Stop, stdin EOF, timeout
+and refusal of an already-owned remote session lock;
 it is skipped on Windows. Real use of the newly added dashboard session controls still requires
 the owner's explicit Start action and pause permission. No new GPU benchmark, labelled dataset
 or camera-accuracy result is claimed for this software change. Browser automation of the local

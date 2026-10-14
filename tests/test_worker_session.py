@@ -74,7 +74,7 @@ def test_session_owns_one_tunnel_and_stops_via_stdin(monkeypatch):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The remote helper executes on Linux; Windows session client is tested separately")
-@pytest.mark.parametrize("control", ["stop\n", "", "timeout"])
+@pytest.mark.parametrize("control", ["stop\n", "", "timeout", "locked"])
 def test_remote_script_restores_previous_service_with_offline_commands(tmp_path, control):
     # Execute the actual helper with fake services and a harmless sleep process; no SSH/GPU/model.
     root = tmp_path / ".local/share/vop/phase4"
@@ -91,6 +91,14 @@ def test_remote_script_restores_previous_service_with_offline_commands(tmp_path,
     ss.write_text("#!/bin/sh\nexit 0\n")
     ss.chmod(0o700)
     env = {**os.environ, "HOME": str(tmp_path), "PATH": str(commands) + os.pathsep + os.environ["PATH"]}
+    if control == "locked":
+        import fcntl
+        with (root / "session.lock").open("w") as owner:
+            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = subprocess.run(["bash", "-c", session_script(15)], input="stop\n", text=True, env=env, capture_output=True, timeout=20)
+            assert result.returncode != 0
+        assert not (tmp_path / "lifecycle").exists()
+        return
     if control == "timeout":
         script = session_script(15).replace("read -r -t 900", "read -r -t 0.2")
         process = subprocess.Popen(["bash", "-c", script], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env)
