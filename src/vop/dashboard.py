@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from fasthtml.components import (A, Aside, Body, Button, Details, Div, Form, H1, H2, Head,
                                 Header, Html, Img, Input, Label, Link, Main, Meta, Nav, Option, P, Pre,
                                 Section, Select, Small, Span, Summary, Table, Tbody, Td, Textarea, Th,
-                                Thead, Title, Tr, Ul, Li)
+                                Thead, Title, Tr, Ul, Li, Script, Noscript)
 from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text, ft_svg
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
@@ -66,9 +66,25 @@ button:disabled,button:disabled:hover{background:#dce3eb;color:#4d5f77;border-co
 .readiness.success{background:#ddf3eb;color:#075c46;border-color:#16886c}.readiness.warning{background:#fff1d4;color:#795000;border-color:#bc7c17}.readiness.info,.notice{background:#e1effc;color:#204f7c;border-color:#347cb8}.readiness.error,.error{background:#fce4e3;color:#922d34;border-color:#bd4149}
 .capture-source{padding:16px 0;border-bottom:1px solid var(--line)}.capture-source .actions{margin-top:10px}.tag{background:#e5e8fa;color:#484a8a;border-color:#b8bee6}summary{color:#225e91}input[type=checkbox]{accent-color:#1765b5}
 section[id]{scroll-margin-top:24px}
+[hidden]{display:none!important}
 .sidebar a.button.secondary,.sidebar button.secondary{background:#e3edf8;color:#174d81;border-color:#b9cee4}
 .sidebar a.button.secondary:hover,.sidebar button.secondary:hover{background:#cbdff3;color:#102e47}
 .chart .unobserved{fill:#fff1d4;stroke:none}.chart-legend{font-size:12px;color:#795000;margin:6px 0 12px}.chart-legend span{display:inline-block;background:#fff1d4;border:1px solid #bc7c17;width:14px;height:10px;margin-right:6px}
+"""
+
+QUESTION_EDITOR_JS = """const form = document.querySelector('[data-question-editor]');
+if (form) {
+  const kind = form.querySelector('[name="kind"]');
+  const update = () => {
+    for (const group of form.querySelectorAll('[data-answer-kind]')) {
+      const active = group.dataset.answerKind === kind.value;
+      group.hidden = !active;
+      for (const input of group.querySelectorAll('input, select, textarea')) input.disabled = !active;
+    }
+  };
+  kind.addEventListener('change', update);
+  update();
+}
 """
 
 
@@ -203,6 +219,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route("/ui/style.css", methods=["GET"])
     def style():
         return Response(CSS, media_type="text/css")
+
+    @app.route("/ui/question-editor.js", methods=["GET"])
+    def question_editor_script():
+        return Response(QUESTION_EDITOR_JS, media_type="application/javascript")
 
     @app.route("/favicon.ico", methods=["GET"])
     def favicon():
@@ -361,27 +381,43 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Unknown question")
         q = record["spec"] if record else QuestionSpec("new_question", "1", "Is the condition visible?", AnswerKind.BINARY)
         policy = record["policy"] if record else QueryPolicy()
+        selected_kind = AnswerKind(request.query_params.get("kind", q.kind.value))
+        binary = selected_kind == AnswerKind.BINARY
+        mock = str(engine.source_answers.get((source_id, q.question_id, q.version), engine.configured.get(q.question_id, ""))) if isinstance(engine, MockInferenceEngine) else ""
         csrf = request.scope["session"]["csrf"]
         return page("Edit question" if record else "New question", request, [Form(hidden(csrf),
             Input(type="hidden", name="expected_version", value=q.version if record else ""),
-            field("Question ID", "question_id", q.question_id if record else "", required=True, maxlength=64, readonly=bool(record)),
+            field("Question ID", "question_id", q.question_id if record else "", required=True, maxlength=64, pattern=r"[A-Za-z0-9_.\-]{1,64}",
+                  title="1–64 ASCII letters, digits, dots, underscores or hyphens; no spaces", aria_describedby="question-id-help", placeholder="human_present", readonly=bool(record)),
+            P("Use 1–64 ASCII letters (A–Z, a–z), digits (0–9), dots (.), underscores (_) or hyphens (-). No spaces. Choose an unused ID for this source; 'new' is reserved for this form. The ID cannot change after saving.", id="question-id-help", cls="muted"),
             field("Question", "text", q.text, required=True, maxlength=4096),
-            Div(Label("Answer kind", _for="kind"), Select(*(Option(k.value, value=k.value, selected=k == q.kind) for k in AnswerKind), name="kind", id="kind"), cls="field"),
-            Div(Label("Choice options — one name | description per line", _for="choices"), Textarea("\n".join(f"{n}|{d}" for n, d in q.choices), name="choices", id="choices"), cls="field"),
-            Div(Label("Ordinal levels — one description per line, lowest first", _for="levels"), Textarea("\n".join(q.levels), name="levels", id="levels"), cls="field"),
-            Div(field("Binary threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01"),
-                field("Maximum observation gap (seconds)", "max_gap_seconds", policy.max_gap_seconds, type="number", min=1, max=86400), cls="pair"),
-            Div(field("Positive confirmations", "positive_confirmations", policy.positive_confirmations, type="number", min=1, max=100),
-                field("Negative confirmations", "negative_confirmations", policy.negative_confirmations, type="number", min=1, max=100), cls="pair"),
-            Div(Label("After an unknown gap", _for="unknown_gap_policy"), Select(Option("Resume the episode after reconfirmation", value="resume", selected=policy.unknown_gap_policy == "resume"),
+            Div(Label("Answer kind", _for="kind"), Select(*(Option(k.value, value=k.value, selected=k == selected_kind) for k in AnswerKind), name="kind", id="kind"), cls="field"),
+            Noscript(P("With JavaScript off, choose a type before entering the question: ", *(A(k.value + " ", href=request.url.path + "?kind=" + k.value) for k in AnswerKind))),
+            Div(field("Binary threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01", disabled=not binary),
+                Div(field("Positive confirmations", "positive_confirmations", policy.positive_confirmations, type="number", min=1, max=100, disabled=not binary),
+                    field("Negative confirmations", "negative_confirmations", policy.negative_confirmations, type="number", min=1, max=100, disabled=not binary), cls="pair"),
+                Div(Label("After an unknown gap", _for="unknown_gap_policy"), Select(Option("Resume the episode after reconfirmation", value="resume", selected=policy.unknown_gap_policy == "resume"),
                 Option("Split into an interrupted episode and a new episode", value="split", selected=policy.unknown_gap_policy == "split"),
-                Option("Require operator review before continuing", value="manual_review", selected=policy.unknown_gap_policy == "manual_review"), id="unknown_gap_policy", name="unknown_gap_policy"), cls="field"),
+                Option("Require operator review before continuing", value="manual_review", selected=policy.unknown_gap_policy == "manual_review"), id="unknown_gap_policy", name="unknown_gap_policy", disabled=not binary), cls="field"),
+                data_answer_kind="binary", hidden=not binary),
+            Div(Label("Choice options — one name | description per line", _for="choices"), Textarea("\n".join(f"{n}|{d}" for n, d in q.choices), name="choices", id="choices", disabled=selected_kind != AnswerKind.CHOICE),
+                P("At least two options, each with a unique nonempty name and a description. Example: cat|A cat is visible", cls="muted"),
+                data_answer_kind="choice", hidden=selected_kind != AnswerKind.CHOICE),
+            Div(Label("Ordinal levels — one description per line, lowest first", _for="levels"), Textarea("\n".join(q.levels), name="levels", id="levels", disabled=selected_kind != AnswerKind.ORDINAL),
+                P("Enter 2–10 nonempty levels in increasing order, for example: Low, Medium, High (on separate lines).", cls="muted"),
+                data_answer_kind="ordinal", hidden=selected_kind != AnswerKind.ORDINAL),
+            field("Maximum observation gap (seconds)", "max_gap_seconds", policy.max_gap_seconds, type="number", min=1, max=86400),
             field("ROI (optional: x, y, width, height in 0–1)", "roi", ",".join(str(v) for v in policy.roi) if policy.roi else ""),
             Label(Input(type="checkbox", name="enabled", checked=record["enabled"] if record else True), " Question enabled"),
-            field("Mock answer preset (true/false, option name, or level number)", "mock_answer", str(engine.source_answers.get((source_id, q.question_id, q.version), engine.configured.get(q.question_id, ""))) if isinstance(engine, MockInferenceEngine) else "") if engine.synthetic else None,
-            P("Each save creates an immutable version. Mock presets are synthetic instructions, not image analysis.", cls="muted"),
-            P("For a manual-review gap, review the history and save a new version to start fresh confirmations.", cls="muted"),
-            Button("Save new version"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor")], view="questions")
+            *(Div(field(label, "mock_answer", mock if k == q.kind else "", id="mock-" + k.value, disabled=k != selected_kind, placeholder=example),
+                  data_answer_kind=k.value, hidden=k != selected_kind) for k, label, example in (
+                    (AnswerKind.BINARY, "Mock answer preset (true or false)", "true"),
+                    (AnswerKind.CHOICE, "Mock answer preset (an option name)", "cat"),
+                    (AnswerKind.ORDINAL, "Mock answer preset (zero-based level number)", "0"))) if isinstance(engine, MockInferenceEngine) else (),
+            P("Each save creates an immutable version." + (" Mock presets are synthetic instructions, not image analysis." if isinstance(engine, MockInferenceEngine) else ""), cls="muted"),
+            Div(P("For a manual-review gap, review the history and save a new version to start fresh confirmations.", cls="muted"), data_answer_kind="binary", hidden=not binary),
+            Button("Save new version"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor", data_question_editor=""),
+            Script(src="/ui/question-editor.js", defer=True)], view="questions")
 
     @app.route("/ui/questions/{source_id}/{question_id}", methods=["POST"])
     async def save_question(source_id: str, question_id: str, request):
@@ -390,16 +426,23 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Unknown source")
         form = await request.form()
         qid = identifier(str(form["question_id"]))
-        if question_id != "new" and qid != question_id:
+        creating = question_id == "new" and not form.get("expected_version")
+        if creating and qid == "new":
+            raise ValueError("Question ID 'new' is reserved for the new-question form. Choose another ID.")
+        if creating and any(r['spec'].question_id == qid for r in store.questions(source_id, include_removed=True)):
+            raise ValueError("Question ID already exists for this source. Choose an unused ID, or edit/restore the existing question.")
+        if not creating and qid != question_id:
             raise ValueError("Question ID cannot change")
         kind = AnswerKind(form["kind"])
         choices = tuple(tuple(line.split("|", 1)) for line in str(form.get("choices", "")).splitlines() if line.strip()) if kind == AnswerKind.CHOICE else ()
         levels = tuple(line.strip() for line in str(form.get("levels", "")).splitlines() if line.strip()) if kind == AnswerKind.ORDINAL else ()
-        q = QuestionSpec(qid, "1", str(form["text"]), kind, choices, levels, float(form["threshold"]))
+        binary = kind == AnswerKind.BINARY
+        q = QuestionSpec(qid, "1", str(form["text"]), kind, choices, levels, float(form.get("threshold", "0.5")) if binary else 0.5)
         if len(q.text) > 4096:
             raise ValueError("Question text exceeds 4096 characters")
         roi_text = str(form.get("roi", "")).strip()
-        policy = QueryPolicy(int(form["positive_confirmations"]), int(form["negative_confirmations"]), float(form["max_gap_seconds"]), str(form["unknown_gap_policy"]),
+        policy = QueryPolicy(int(form.get("positive_confirmations", "2")) if binary else 2, int(form.get("negative_confirmations", "2")) if binary else 2,
+                             float(form["max_gap_seconds"]), str(form.get("unknown_gap_policy", "resume")) if binary else "resume",
                              tuple(float(v) for v in roi_text.split(",")) if roi_text else None)
         mock = str(form.get("mock_answer", "")).strip()
         value = None
@@ -416,7 +459,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 value = float(mock)
                 if not 0 <= value <= len(q.levels) - 1:
                     raise ValueError("Mock ordinal preset is outside the levels")
-        saved = store.edit_question(source_id, q, policy, enabled=form.get("enabled") == "on", expected_version=str(form.get("expected_version")) or None)
+        saved = store.edit_question(source_id, q, policy, enabled=form.get("enabled") == "on", expected_version=str(form.get("expected_version", "")) or None)
         if value is not None:
             store.set_mock_value(source_id, saved.question_id, saved.version, value)
             engine.configure_source_answer(source_id, saved.question_id, saved.version, value)

@@ -205,3 +205,45 @@ Final local full suite: **224 passed, 4 skipped** (Linux-only helper cases). Rel
 `4116bfde1e2ccc4cbe91c56c79064f7251962b449c788e28054e91afb78d6142`.
 An active owner-started session was detected while preparing the dashboard refresh; it was
 left running to its existing lease rather than interrupted for this visual correction.
+
+
+## Answer-kind criteria and Question ID guidance — 14 October 2026
+
+Owner requested relevant criteria only when creating a question, plus visible ID syntax.
+`dashboard.py` now groups binary threshold/confirmation/episode-gap policy, choice options and
+ordinal levels by kind. Common observation-gap, ROI and enabled controls remain visible. Local
+mock presets have type-specific labels; real/remote backends do not show an inapplicable local
+mock preset. Inactive controls render hidden and disabled, and a small same-origin script
+updates them immediately on Answer kind changes without clearing typed drafts. Native type
+links provide a script-disabled fallback before data entry. Server parsing ignores parameters
+that do not apply to the submitted kind and supplies the existing defaults for unused policy
+fields; no inference/replay contract or existing version is rewritten.
+
+Question ID help and input pattern describe 1–64 ASCII letters, digits, dots, underscores or
+hyphens, no spaces, uniqueness within the source, the editor's reserved `new` route, and IDs
+being immutable after creation. Creating with an existing ID is rejected instead of silently
+creating a version of that question. Existing edit-version conflict checks remain in place.
+
+Changed files: `src/vop/dashboard.py`, `src/vop/browser_auth.py`, `tests/test_phase2_controls.py`,
+README, CHANGELOG and this report. CSP permits the authenticated same-origin script asset;
+inline and external scripts remain blocked. There is no frontend build or new dependency.
+Tests cover each rendered answer kind, disabled hidden inputs, browser ID pattern/helper,
+server ID validation, duplicate preservation, and saving choice/ordinal without binary fields
+or with malformed irrelevant fields. A Node VM in-memory control fixture also verified kind
+changes, disabled submission controls and preservation of typed draft values; this is not a
+real-browser visual test.
+
+Commands/results: `.\.venv\Scripts\python.exe -m pytest tests/test_phase2_controls.py -q`
+passed **15 tests**. `.\.venv\Scripts\python.exe tools\phase4_smoke.py` passed actual-loopback
+HTTP, restart/disconnect and real Windows DPAPI; `.\.venv\Scripts\python.exe -m pip check`
+reported no broken requirements. Full-suite/build commands are recorded below when complete.
+No camera capture, model load or GPU inference was run for this form-only change. The model
+revision/measurements above remain unchanged. The existing local-page automation restriction
+still applies, so no new real-browser pass is claimed. Continue supervised Phase 4 form/pilot
+validation; Phase 5 remains unauthorised.
+
+Full command `.\.venv\Scripts\python.exe -m pytest -q`: **235 passed, 4 skipped**
+(Linux-only session-helper cases). `.\.venv\Scripts\python.exe tools\build_release.py`
+passed; ZIP SHA-256: `9fea67301221641f7c8fcf8c21af4c68006be3529cc28454ba30cac90dcc7ec8`.
+An existing owner-started antec session was left to its original lease before the running
+UI was refreshed; no additional GPU/camera test was started.

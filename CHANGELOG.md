@@ -2,6 +2,9 @@
 
 ## Phase 4 practical-use follow-up — 14 October 2026
 
+- Question forms now show only criteria and mock-preset guidance for the selected answer kind.
+  Hidden controls are disabled and ignored by server validation for other kinds. Added visible
+  Question ID syntax, browser pattern checks and duplicate/reserved-ID protection.
 - Fixed sidebar button text/background contrast and made intentional chart breaks visible
   with amber unobserved-interval shading, a legend and timestamp tooltips.
 - Removed extra permission checkboxes from session start, camera preview and worker selection.

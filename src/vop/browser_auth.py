@@ -98,7 +98,7 @@ class BrowserAuth:
             if message["type"] == "http.response.start":
                 message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
                                       (b"x-content-type-options", b"nosniff"),
-                                      (b"content-security-policy", b"default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
         admitted = method == "POST"
         if admitted and not self.admission.acquire(blocking=False):
