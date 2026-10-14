@@ -104,3 +104,70 @@ SHA-256: `4b2774a16cdcab969c160288bed3faeb97a14940a0d8cf9c0f91f35f21bbf716`.
 The idle owned dashboard was restarted with the same DPAPI-protected key and live-source opt-in;
 authenticated `/api/v1/health` returned ready with no sampling/rule errors. No user configuration
 was removed during validation. Actual local browser automation remains blocked as noted above.
+
+
+## Operator actions, dependencies and colour — 14 October 2026
+
+The owner explicitly requested removing permission checkboxes, clearer operation dependencies
+and more colour. This supersedes the earlier checkbox workflow above. Start antec session now
+supplies the stated temporary pause/restore instruction; Test camera connection supplies one
+local preview request; selecting the worker enables dashboard image transmission. The launcher
+uses the explicitly saved worker after restart. Bare API/service and remote-engine defaults
+retain explicit transmission opt-in. Operator authentication, CSRF, endpoint/identity restrictions,
+model-download flags, bounded sessions, retained-evidence settings and immutable provenance
+remain enforced. No workload was paused and no real camera/model was run during this update.
+
+Changed files: `integration_ui.py` removes permission fields and explains Start, Stop, camera
+preview, worker health and key/profile dependencies; `ui_readiness.py` checks local prerequisites
+without contacting cameras or workers. `dashboard.py` shows linked blockers beside disabled
+Capture controls and checks worker health before acquiring a one-shot image. Failed checks
+preserve UNKNOWN semantics and do not create fabricated observations. `release_ui.py` adds
+missing-rule-input/webhook warnings and semantic notification colours. Shared CSS adds blue
+information/actions, teal success, amber warning/unknown, red failure/destructive controls,
+and muted disabled states, with text labels and visible focus/reduced-motion behavior intact.
+`removal.py` styles removal as destructive; `tools/run_dashboard.py` reuses the selected worker
+without another permission flag. README, Phase 4 plan and CHANGELOG describe the owner-authorised
+workflow. No schema, dependency, model revision or Phase 5 scope change was introduced.
+
+`tests/test_phase4_worker.py` covers checkbox-free operator actions, unavailable worker/key,
+disabled sources, empty questions, no acquisition when blocked, and launcher behavior. Its
+normal mock restart case allows five seconds for Windows spawn; the separate hard-deadline
+termination tests keep their own short limits. Initial runs exposed the old checkbox assertions
+and the two-second Windows spawn ceiling; updated targeted coverage passed (52 tests before
+adding the launcher regression). No production timeout was increased.
+
+Validation commands:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe tools\phase4_smoke.py
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe tools\build_release.py
+```
+
+Readiness pages use local facts and the last worker check, not a guarantee of current LAN/GPU
+availability. One-shot dashboard capture performs a fresh worker check; scheduled sampling keeps
+its existing bounded failure/UNKNOWN behavior. SSH login, GPU capacity and real camera password
+validity can only be established by their explicit operations. No real browser visual pass is
+claimed: the prior local-page automation restriction remains, so HTML/form behavior is checked
+through offline HTTP tests. Continue supervised Phase 4 use and validate the new controls with
+the owner; Phase 5 remains unauthorised.
+
+
+Final Windows validation: **222 passed, 4 skipped** (Linux-only remote helper cases). The
+Phase 4 actual-loopback HTTP smoke passed, including restart/disconnection and real DPAPI;
+pip check found no broken requirements. The final health-form/launcher/blocker subset also
+passed: `python -m pytest tests/test_phase4_worker.py -q -k "setup_shows_dependencies or dashboard_launcher or unavailable_worker or disabled_source"`
+(**4 passed, 24 deselected**). Semantic foreground/background contrast was calculated from
+linear sRGB, with action/status text meeting at least 4.5:1. This is a contrast check, not a
+real-browser layout validation. An active owner-started 15-minute antec session was allowed
+to reach its existing expiry before dashboard refresh; no additional GPU test was started.
+
+The release build passed. Archive SHA-256:
+`07ef01ea9b4f83b21de1f93516de69477c89f6ee68799a0107b079fa15e2a851`.
+The owned session's SSH child exited after the original 900-second lease; read-only
+`ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 antec.local systemctl --user is-active llama-mtp.service`
+returned `active`. The idle owned dashboard was then restarted with the same DPAPI-protected
+key and live-source flag. Authenticated `/api/v1/health` returned ready, no sampling/rule errors,
+and selected-worker transmission enabled. This does not establish that the now-stopped d1
+worker is ready; Start/Test remain explicit operator actions.

@@ -152,7 +152,9 @@ or assert an abstention capability that the provider has not demonstrated.
 3. Provide a deliberate connection-test action and one preview with masked regions. Start with
    one camera, one simple binary question and a conservative sampling interval selected from
    measured end-to-end latency. Continuous sampling stays off until explicitly started.
-4. Send the masked/ROI image to antec only after consent. Persist real model provenance and show
+4. Send the masked/ROI image to antec after explicit backend selection and a capture/sampling
+   action. The owner's 14 October usability update removes extra permission checkboxes; the
+   labelled operator action supplies permission. Persist real model provenance and show
    the result/events/metrics. Evidence remains off unless separately enabled by the operator.
 5. Disconnect/reconnect camera and worker separately. Verify UNKNOWN and reconfirmation,
    bounded retries, no fabricated negative closure and no duplicate episode/alert on recovery.

@@ -45,6 +45,7 @@ def test_supervised_real_child_and_restart(request_frame):
         assert infer(engine, request_frame).status == Status.SUCCESS
         engine.process.kill()
         engine.process.join()
+        engine.timeout_seconds = 5  # Restart includes Windows spawn; hard-deadline cases use their own short budget.
         assert infer(engine, request_frame).status == Status.SUCCESS
         assert engine.process.pid != first_pid
     finally:
@@ -174,7 +175,7 @@ def test_gui_protected_camera_retry_profile_restart_and_viewer_denial(app):
         assert client.post("/integration/camera", data=body).status_code == 200
         body["password"] = "corrected-offline-camera-secret"
         assert client.post("/integration/camera", data=body).status_code == 200
-        assert client.post("/integration/cameras/tapo-c200/test", data={"csrf": csrf}).status_code == 400
+        assert client.post("/integration/cameras/not-saved/test", data={"csrf": csrf}).status_code == 400
         with app.state.store.connection() as db:
             strings = " ".join(str(tuple(row)) for table in ("release_settings", "sources", "audit") for row in db.execute("SELECT * FROM " + table))
         assert "offline-camera-test-secret" not in strings and "corrected-offline-camera-secret" not in strings
@@ -184,7 +185,7 @@ def test_gui_protected_camera_retry_profile_restart_and_viewer_denial(app):
         from vop.reliable import configuration
         exported = configuration(app.state.pipeline.settings, app.state.store, app.state.reliable)
         assert any(s["id"] == "tapo-c200" for s in exported["config"]["sources"])
-        engine_body = {"csrf": csrf, "kind": "worker", "engine_id": "liquid-d1-3b", "version": CHECKPOINT_REVISION, "worker_id": "antec-d1", "url": "http://127.0.0.1:8878", "secret_ref": "antec-worker", "transport": "ssh", "worker_token": TOKEN, "remote_consent": "on"}
+        engine_body = {"csrf": csrf, "kind": "worker", "engine_id": "liquid-d1-3b", "version": CHECKPOINT_REVISION, "worker_id": "antec-d1", "url": "http://127.0.0.1:8878", "secret_ref": "antec-worker", "transport": "ssh", "worker_token": TOKEN}
         assert client.post("/integration/engine", data=engine_body).status_code == 200
         assert app.state.pipeline.engine.allow_remote
     restarted = create_app(app.state.pipeline.settings, token=OWNER)
@@ -232,7 +233,7 @@ def test_camera_connection_form_uses_fixture_and_never_transmits_to_engine(app, 
         frame = capture_inline(app.state.pipeline.sources["synthetic-scene"])
         monkeypatch.setattr(SourceAdapters, "capture", lambda self, source: replace(frame, source_id=source.source_id))
         monkeypatch.setattr(app.state.pipeline.engine, "infer", lambda request: (_ for _ in ()).throw(AssertionError("Connection preview must not call inference")))
-        page = client.post("/integration/cameras/tapo-c210/test", data={"csrf": csrf, "capture_consent": "on"})
+        page = client.post("/integration/cameras/tapo-c210/test", data={"csrf": csrf})
         assert page.status_code == 200 and "No inference was requested" in page.text
         assert app.state.store.health()["observation_count"] == 0
         with app.state.store.connection() as db:
@@ -257,7 +258,7 @@ def test_busy_camera_test_renders_browser_guidance_and_keeps_api_json(app):
             app.state.pipeline.busy.release()
 
 
-def test_session_start_requires_explicit_permission_and_real_pilot_profile(app, monkeypatch):
+def test_session_buttons_require_real_pilot_profile_without_permission_checkbox(app, monkeypatch):
     started = []
     stopped = []
     monkeypatch.setattr(app.state.worker_session, "start", lambda minutes: started.append(minutes))
@@ -265,18 +266,86 @@ def test_session_start_requires_explicit_permission_and_real_pilot_profile(app, 
     with TestClient(app) as client:
         csrf = login(client)
         assert client.post("/integration/session/start", data={"csrf": csrf}).status_code == 400
-        assert client.post("/integration/session/start", data={"csrf": csrf, "pause_consent": "on"}).status_code == 400
         assert not started
         body = {"csrf": csrf, "kind": "worker", "engine_id": "liquid-d1-3b", "version": CHECKPOINT_REVISION, "worker_id": "antec-d1", "url": "http://127.0.0.1:8878", "secret_ref": "antec-worker", "transport": "ssh", "worker_token": TOKEN}
         assert client.post("/integration/engine", data=body).status_code == 200
-        assert client.post("/integration/session/start", data={"csrf": csrf, "pause_consent": "on", "minutes": "30"}).status_code == 200
-        assert started == [30] and not app.state.pipeline.engine.allow_remote
+        assert client.post("/integration/session/start", data={"csrf": csrf, "minutes": "30"}).status_code == 200
+        assert started == [30] and app.state.pipeline.engine.allow_remote
         assert client.post("/integration/consent", data={"csrf": csrf, "allow": "on"}).status_code == 200
         assert app.state.pipeline.engine.allow_remote
         assert client.post("/integration/consent", data={"csrf": csrf}).status_code == 200
         assert not app.state.pipeline.engine.allow_remote
         assert client.post("/integration/session/stop", data={"csrf": csrf}).status_code == 200
         assert stopped
+
+
+def test_setup_shows_dependencies_and_has_no_permission_checkboxes(app):
+    with TestClient(app) as client:
+        login(client)
+        page = client.get('/integration').text
+        for name in ('pause_consent', 'capture_consent', 'remote_consent', 'allow'):
+            assert f'name="{name}"' not in page
+        assert 'Select the real antec-d1 SSH backend' in page and 'Needs attention' in page
+        assert re.search(r'<button[^>]*disabled[^>]*>Start antec session', page)
+        assert 'Starting a session does not prove the model is ready' in page
+
+
+def test_disabled_source_explains_capture_dependency_without_acquisition(app, monkeypatch):
+    def must_not_capture(*args):
+        pytest.fail('A blocked operation must not acquire an image')
+    monkeypatch.setattr(app.state.pipeline.capture_adapter, 'capture', must_not_capture)
+    app.state.store.update_source('synthetic-scene', enabled=False, retain_evidence=False, sample_interval_seconds=0)
+    with TestClient(app) as client:
+        csrf = login(client)
+        page = client.get('/').text
+        assert 'Source is disabled' in page and 'Source controls' in page
+        assert re.search(r'<button[^>]*disabled[^>]*>Capture once', page)
+        result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
+        assert 'Capture blocked' in result.text and 'No camera image was acquired' in result.text
+        assert app.state.store.health()['observation_count'] == 0
+
+
+def test_unavailable_worker_is_checked_before_camera_and_health_failure_is_visible(app, monkeypatch):
+    engine = RemoteInferenceEngine(PROFILE, allow_remote=True)
+    app.state.secrets.set(PROFILE['secret_ref'], TOKEN)
+    app.state.pipeline.engine = engine
+    def not_connected():
+        raise ProviderError('worker_unavailable', 'Worker connection failed')
+    monkeypatch.setattr(engine, 'health', not_connected)
+    def must_not_capture(*args):
+        pytest.fail('Worker dependency must be checked before camera acquisition')
+    monkeypatch.setattr(app.state.pipeline.capture_adapter, 'capture', must_not_capture)
+    with TestClient(app) as client:
+        csrf = login(client)
+        result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
+        assert 'Worker check failed (worker_unavailable)' in result.text
+        assert 'No camera image was acquired' in result.text
+        assert app.state.store.health()['observation_count'] == 0
+        assert 'Worker was unavailable at the last check' in client.get('/').text
+
+
+def test_no_questions_or_worker_key_explains_action_dependencies(app, monkeypatch):
+    from vop.ui_readiness import capture_dependencies
+    pipeline, store = app.state.pipeline, app.state.store
+    with store.connection() as db:
+        db.execute('UPDATE query_controls SET enabled=0')
+    messages = str(capture_dependencies(pipeline, 'synthetic-scene'))
+    assert 'No enabled questions' in messages
+    pipeline.engine = RemoteInferenceEngine(PROFILE)
+    assert 'Worker access key is unavailable' in str(capture_dependencies(pipeline, 'synthetic-scene'))
+
+
+def test_dashboard_launcher_reuses_selected_worker_without_extra_permission_flag(app, monkeypatch):
+    import sys
+    from tools import run_dashboard
+    calls = []
+    monkeypatch.setattr(sys, 'argv', ['run_dashboard.py'])
+    monkeypatch.setattr(run_dashboard, 'load_config', lambda path: app.state.pipeline.settings)
+    monkeypatch.setattr(run_dashboard, 'create_app', lambda settings, **kwargs: calls.append(kwargs) or app)
+    monkeypatch.setattr(run_dashboard.uvicorn, 'run', lambda *args, **kwargs: None)
+    run_dashboard.main()
+    assert calls[0]['allow_remote_inference'] is True
+    assert calls[0]['allow_live_sources'] is False
 
 
 def test_capture_page_gives_plain_answer_and_hides_raw_details(app):

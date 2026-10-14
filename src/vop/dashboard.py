@@ -8,17 +8,18 @@ from zoneinfo import ZoneInfo
 from fasthtml.components import (A, Aside, Body, Button, Details, Div, Form, H1, H2, Head,
                                 Header, Html, Img, Input, Label, Link, Main, Meta, Nav, Option, P, Pre,
                                 Section, Select, Small, Span, Summary, Table, Tbody, Td, Textarea, Th,
-                                Thead, Title, Tr)
+                                Thead, Title, Tr, Ul, Li)
 from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
 from vop.browser_auth import BrowserAuth
 from vop.config import identifier
-from vop.contracts import AnswerKind, QuestionSpec, utcnow
+from vop.contracts import AnswerKind, ProviderError, QuestionSpec, utcnow
 from vop.inference.mock import MockInferenceEngine
 from vop.inputs.sources import capture_inline
 from vop.measurements import QueryPolicy, utc, timezone_for
+from vop.ui_readiness import capture_dependencies
 
 CSS = """
 :root{font-family:Segoe UI,Arial,sans-serif;color:#24313e;background:#f4f6f8;font-size:15px;--accent:#157b78;--line:#dce2e7}
@@ -48,6 +49,23 @@ pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#eaf0f3;padding:18
 .chart{width:100%;height:150px;display:block;max-width:700px}.chart line{stroke:#dfe6eb;stroke-width:1}.chart polyline{stroke:var(--accent);stroke-width:2;fill:none}.chart circle{fill:var(--accent)}.chart text{font-size:10px;fill:#637182}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:16px}.section-heading h2{margin:0}
 @keyframes appear{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(max-width:800px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:static;padding:20px}.navigation{display:flex;flex-wrap:wrap;margin:16px 0 0}.sidebar small{display:none}.subtitle{display:none}.workspace{padding:28px 20px}.stats{grid-template-columns:1fr 1fr;gap:20px}.pair{grid-template-columns:1fr}.top{flex-direction:column}}
+:root{--accent:#1765b5;--line:#d4e1ec;background:#f0f5fa}
+.sidebar{background:#102e47}.brand{color:#73e3d0}.navigation a.current{background:#174e6b;color:#baf8ec;border-left:3px solid #61d8c0}.navigation a:hover{background:#1b435f}
+h2{color:#155b79;border-left:4px solid #24a59c;padding-left:12px}th{background:#e0edf7;color:#244e73}tr:nth-child(even) td{background:#f7fafc}tr:hover td{background:#e6f3fa}
+.status{display:inline-block;padding:4px 8px;border-radius:4px;background:#e4eaf1;color:#40556c;letter-spacing:.35px}
+.status.ACTIVE,.status.HEALTHY,.status.success,.status.closed,.status.OBSERVED{background:#d5f1e8;color:#08634d}
+.status.UNKNOWN,.status.PENDING,.status.RECOVERING,.status.interrupted,.status.CONNECTING{background:#fff0cc;color:#805000}
+.status.DISCONNECTED,.status.model_failure,.status.capture_failure,.status.timeout,.status.error{background:#fce0df;color:#9f2f32}
+.status.critical,.status.failed{background:#fce0df;color:#9f2f32}.status.warning,.status.open{background:#fff0cc;color:#805000}.status.info,.status.acknowledged{background:#e0ebfa;color:#22548a}.status.delivered,.status.resolved{background:#d5f1e8;color:#08634d}
+.status.INACTIVE,.status.DISABLED,.status.superseded{background:#e4e9f2;color:#465975}
+.stat{border-top:4px solid #397bb8;padding:12px;background:#e3effa}.stat:nth-child(2){border-color:#148970;background:#ddf3eb}.stat:nth-child(3){border-color:#b47a16;background:#fff1d5}.stat:nth-child(4){border-color:#8063a8;background:#eee8f8}
+.button:hover,button:hover{background:#124e8a}.button.secondary,button.secondary{background:#e3edf8;color:#174d81;border-color:#b9cee4}.button.secondary:hover,button.secondary:hover{background:#d3e5f6}
+.button.danger,button.danger{background:#b63841;color:#fff;border-color:#b63841}.button.danger:hover,button.danger:hover{background:#932c34}
+button:disabled,button:disabled:hover{background:#dce3eb;color:#4d5f77;border-color:#c3cedb;cursor:not-allowed;transform:none;opacity:1}
+.readiness{margin:12px 0;padding:12px 16px;border-left:4px solid;font-size:13px;border-radius:0 5px 5px 0}.readiness p{margin:4px 0 0;color:inherit}.readiness ul{padding-left:20px;margin:6px 0 0}.readiness li{margin:6px 0}.readiness a{text-decoration:underline;text-underline-offset:3px}
+.readiness.success{background:#ddf3eb;color:#075c46;border-color:#16886c}.readiness.warning{background:#fff1d4;color:#795000;border-color:#bc7c17}.readiness.info,.notice{background:#e1effc;color:#204f7c;border-color:#347cb8}.readiness.error,.error{background:#fce4e3;color:#922d34;border-color:#bd4149}
+.capture-source{padding:16px 0;border-bottom:1px solid var(--line)}.capture-source .actions{margin-top:10px}.tag{background:#e5e8fa;color:#484a8a;border-color:#b8bee6}summary{color:#225e91}input[type=checkbox]{accent-color:#1765b5}
+section[id]{scroll-margin-top:24px}
 """
 
 
@@ -65,6 +83,12 @@ def hidden(csrf):
 
 def action(label, path, csrf, *, secondary=False):
     return Form(hidden(csrf), Button(label, type="submit", cls="secondary" if secondary else ""), method="post", action=path, cls="inline")
+
+
+def dependency_panel(problems, *, ready="Local prerequisites met; connection is checked when you run the action."):
+    return Div(StrongText("Needs attention" if problems else "Ready to try"),
+               Ul(*(Li(A(message, href=href)) for message, href in problems)) if problems else P(ready),
+               cls="readiness warning" if problems else "readiness success", role="status")
 
 
 def field(label, name, value="", *, type="text", required=False, **kwargs):
@@ -136,8 +160,17 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 result.append({"source_id": source_id, **record, "summary": summary})
         return result
 
+    def capture_controls(source, csrf, operator):
+        sid = source['source_id']
+        problems = capture_dependencies(pipeline, sid) if operator else []
+        return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
+                   dependency_panel(problems, ready="Capture checks the selected worker before opening the camera. A last successful check cannot guarantee the next connection." if not pipeline.engine.synthetic else "Synthetic/mock backend selected; results do not represent real image understanding.") if operator else P("Capture controls require operator access."),
+                   Div(Form(hidden(csrf), Button("Capture once", disabled=bool(problems)), method="post", action=f"/ui/sources/{sid}/capture") if operator else None,
+                       action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if operator and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
+                       cls="actions"), cls="capture-source")
+
     app.state.render_error = lambda request, message: page("Check the request", request,
-        [Div(message, cls="error", role="alert"), A("Return to workspace", href="/", cls="button secondary")])
+        [Div(message, cls="error", role="alert"), A("Engine and camera setup", href="/integration", cls="button"), A("Return to workspace", href="/", cls="button secondary")])
 
     def table(headers, rows):
         return Div(Table(Thead(Tr(*(Th(h) for h in headers))), Tbody(*rows)), cls="table-wrap")
@@ -219,22 +252,20 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                             Td(badge(d["summary"]["state"])), Td(str(d["summary"]["latest_value"]) if d["summary"]["latest_value"] is not None else "Unknown"),
                             Td(local_time(d["summary"]["last_observed_at_utc"], zone))) for d in data])),
                         Section(Div(H2("Capture controls"), cls="section-heading"),
-                                *(Div(StrongText(s["name"]), Small(" · " + s["kind"] + " · " + s["status"]),
-                                      action("Capture once", f"/ui/sources/{s['source_id']}/capture", csrf) if operator and s["enabled"] and store.questions(s['source_id'], active_only=True) else None,
-                                      action("Run synthetic demo", f"/ui/sources/{s['source_id']}/demo", csrf, secondary=True) if operator and s["kind"] == "synthetic" and isinstance(pipeline.engine, MockInferenceEngine) else None,
-                                      cls="actions") for s in sources))]
+                                *(capture_controls(s, csrf, operator) for s in sources))]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode({"view": view, "source": selected, "timezone": zone}), cls="button secondary"), cls="muted"))
         elif view == "sources":
-            content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Controls"],
+            content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Capture prerequisites", "Controls"],
                 [Tr(Td(StrongText(s["name"]), Small(s["source_id"])), Td(s["kind"]), Td(badge(s["status"])),
                     Td(local_time(s["last_frame_utc"], zone)),
-                    Td(Div(A("Edit source", href=f"/ui/sources/{s['source_id']}", cls="button secondary"), A("Remove…", href=f"/ui/sources/{s['source_id']}/remove", cls="button secondary"), cls="actions") if operator else "Read only")) for s in sources]))]
+                    Td(dependency_panel(capture_dependencies(pipeline, s['source_id'])) if operator else "Operator setup required"),
+                    Td(Div(A("Edit source", href=f"/ui/sources/{s['source_id']}", cls="button secondary"), A("Remove…", href=f"/ui/sources/{s['source_id']}/remove", cls="button danger"), cls="actions") if operator else "Read only")) for s in sources]))]
         elif view == "questions":
             content += [Section(H2("Question versions"), table(["Question", "Kind", "Version", "Enabled", "Policy", "Edit"],
                 [Tr(Td(StrongText(d["spec"].text), Small(d["source_id"] + " / " + d["spec"].question_id)), Td(d["spec"].kind), Td(d["spec"].version),
                     Td("Yes" if d["enabled"] else "No"), Td(f"{d['policy'].positive_confirmations} positive / {d['policy'].negative_confirmations} negative", Small(f"Gap: {d['policy'].max_gap_seconds:g}s · {d['policy'].unknown_gap_policy}")),
-                    Td(Div(A("Edit", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}", cls="button secondary"), A("Remove…", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}/remove", cls="button secondary"), cls="actions") if operator else "Read only")) for d in data])),
+                    Td(Div(A("Edit", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}", cls="button secondary"), A("Remove…", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}/remove", cls="button danger"), cls="actions") if operator else "Read only")) for d in data])),
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
             event_rows = store.events(selected or None)
@@ -380,6 +411,23 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     @app.route("/ui/sources/{source_id}/capture", methods=["POST"])
     async def capture(source_id: str, request):
+        if source_id not in pipeline.sources:
+            raise ValueError("Unknown source")
+        problems = capture_dependencies(pipeline, source_id)
+        if not problems:
+            from vop.inference.remote import RemoteInferenceEngine
+            if isinstance(pipeline.engine, RemoteInferenceEngine):
+                try:
+                    health = await run_in_threadpool(pipeline.engine.health)
+                    if not health.get('ready') or health.get('busy'):
+                        problems.append(("Worker is not ready or is busy. Wait and test worker health again.", "/integration#connection"))
+                except ProviderError as exc:
+                    pipeline.engine.last_health = {"ready": False, "error": exc.code}
+                    problems.append(("Worker check failed (" + exc.code + "). Check its session, tunnel and protected key, then test worker health.", "/integration#connection"))
+                if not problems:
+                    pipeline.engine.allow_remote = True
+        if problems:
+            return page("Capture blocked", request, [dependency_panel(problems), P("No camera image was acquired and no inference was requested."), A("Engine and camera setup", href="/integration", cls="button"), A("Return to overview", href="/", cls="button secondary")], view="sources")
         result = await run_in_threadpool(pipeline.run, source_id)
         summary = result["result"]
         questions = {r["spec"].question_id: r["spec"].text for r in store.questions(source_id)}
@@ -393,13 +441,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     label = ("Human present" if value else "No human detected") if human_question else ("Yes" if value else "No")
                 else:
                     label = str(value)
-            answers.append(Section(H2(questions.get(answer["question_id"], answer["question_id"])), P(label)))
+            answers.append(Section(H2(questions.get(answer["question_id"], answer["question_id"])), P(label, cls="readiness success" if answer['status'] == 'success' else "readiness error")))
         error = summary.get("error") or {}
         guidance = {"remote_consent_required": "Enable image transmission in Engine and camera setup, then capture again.",
                     "worker_unavailable": "The worker is disconnected. Start or check your antec session in Engine and camera setup.",
                     "worker_auth": "The worker access key was rejected. Check its protected setup.",
                     "capture_timeout": "The camera did not respond in time. Check its connection and address."}.get(error.get("code"))
-        content = [P("Capture completed" if summary["status"] == "success" else "Capture did not produce a valid model result", role="status"),
+        content = [P("Capture completed" if summary["status"] == "success" else "Capture did not produce a valid model result", role="status", cls="readiness success" if summary['status'] == 'success' else "readiness error"),
                    *answers, P(guidance, role="alert") if guidance else None,
                    A("Engine and camera setup", href="/integration") if error else None,
                    P(f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds · Engine: {summary['engine_id']}"),

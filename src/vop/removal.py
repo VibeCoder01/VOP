@@ -97,7 +97,7 @@ def install_removal(app, store, pipeline, reliable):
         return app.state.page("Remove " + label, request, [
             P("This removes the item from active configuration and disables its alert rules. Pending webhook deliveries are cancelled. Recorded observations, events, evidence and immutable versions remain."),
             P("Protected camera details are retained. Restore is available on the listing; monitoring and alert rules must be enabled explicitly afterwards."),
-            Form(hidden(request.scope['session']['csrf']), Button("Remove " + label), method="post", action=request.url.path),
+            Form(hidden(request.scope['session']['csrf']), Button("Remove " + label, cls="danger"), method="post", action=request.url.path),
             A("Cancel", href=f"/?view={view}", cls="button secondary")], view=view)
 
     @app.route('/ui/sources/{source_id}/remove', methods=['GET', 'POST'])

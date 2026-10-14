@@ -1,12 +1,13 @@
 """Native release forms reuse the dashboard's authentication, CSRF and layout."""
 import json
 import secrets
+import os
 
 from fasthtml.components import A, Button, Div, Form, H2, Input, Option, P, Pre, Section, Select, Td, Tr
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from vop.dashboard import field, hidden
+from vop.dashboard import field, hidden, badge
 from vop.reliable import configuration, csv_export
 from vop.storage import dumps
 
@@ -36,8 +37,8 @@ def install_release(app, settings, store, pipeline, reliable):
                    Section(H2("Notifications"), app.state.table(["Created / rule", "Condition", "Severity / status", "Delivery", "Operator action"],
                     [Tr(Td(a["created_at_utc"], P(a["rule_id"] + f" · revision {a['rule_revision']}")),
                         Td(a["source_id"] + " / " + a["question_id"], P(a["kind"]), P("MOCK" if a["payload"]["synthetic"] else "Model observation")),
-                        Td(a["severity"], P(a["status"]), P(a["note"])),
-                        Td(*(P(f"{d['channel']}: {d['status']} · {d['attempts']} attempts") for d in a["deliveries"])),
+                        Td(badge(a["severity"]), P(badge(a["status"])), P(a["note"])),
+                        Td(*(P(d['channel'] + ': ', badge(d['status']), f" · {d['attempts']} attempts") for d in a["deliveries"])),
                         Td(Form(hidden(csrf), field("Note", "note", a["note"], maxlength="4096", id="note-" + a["id"]),
                                 Select(*(Option(v, value=v) for v in ("acknowledged", "resolved", "note")), name="action", aria_label="Alert action"),
                                 Button("Save"), method="post", action=f"/release/alerts/{a['id']}") if is_operator else "Read only")) for a in alerts])),
@@ -45,6 +46,7 @@ def install_release(app, settings, store, pipeline, reliable):
                    Section(H2("Rules"), Pre(dumps(rules)), P("Duration uses estimated, bounded sampled intervals; count uses confirmed episode starts. Acknowledgement does not imply the condition ended."))]
         if is_operator:
             content.append(Section(H2("Create or revise a rule"),
+                P("A rule needs a current source and question ID. Restore or add them before saving.", cls="readiness warning") if not any(store.questions(sid) for sid in pipeline.sources) else None,
                 Form(hidden(csrf), field("Rule ID", "id", required=True),
                      Select(*(Option(sid, value=sid) for sid in pipeline.sources), name="source_id", aria_label="Source"),
                      field("Rule question ID", "question_id", required=True),
@@ -53,7 +55,8 @@ def install_release(app, settings, store, pipeline, reliable):
                      field("Count window (seconds)", "window_seconds", "3600", type="number", min="1", max="31536000"),
                      Select(*(Option(s, value=s) for s in ("info", "warning", "critical")), name="severity", aria_label="Severity"),
                      field("Enabled", "enabled", "on", type="checkbox", checked=True), field("Optional webhook (requires server environment configuration)", "webhook", "on", type="checkbox"),
-                     Button("Save rule revision"), method="post", action="/release/rules")))
+                     P("Webhook delivery needs VOP_WEBHOOK_URL and VOP_WEBHOOK_ALLOWED_HOSTS in the server environment. They are not configured; dashboard notifications still work.", cls="readiness warning") if not os.environ.get('VOP_WEBHOOK_URL') or not os.environ.get('VOP_WEBHOOK_ALLOWED_HOSTS') else P("Webhook environment is present; endpoint authentication/reachability is checked at delivery.", cls="readiness info"),
+                     Button("Save rule revision", disabled=not any(store.questions(sid) for sid in pipeline.sources)), method="post", action="/release/rules")))
         content.append(Section(H2("Export measured data"),
             Form(Select(*(Option(k, value=k) for k in ("events", "metrics", "alerts")), name="kind", aria_label="Dataset"),
                  Select(Option("JSON", value="json"), Option("CSV", value="csv"), name="format", aria_label="Format"),
@@ -113,7 +116,7 @@ def install_release(app, settings, store, pipeline, reliable):
         content = [Pre(dumps(result))]
         if mode == "preview":
             content.append(Form(hidden(request.scope["session"]["csrf"]), *(Input(type="hidden", name=k, value=v) for k, v in days.items()),
-                                Button("Apply policy and delete eligible data"), method="post", action="/release/retention/apply"))
+                                Button("Apply policy and delete eligible data", cls="danger"), method="post", action="/release/retention/apply"))
         content.append(A("Return to release tools", href="/release"))
         return app.state.page("Retention " + mode, request, content, view="settings")
 
