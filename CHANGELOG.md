@@ -2,6 +2,8 @@
 
 ## Phase 4 practical-use follow-up — 14 October 2026
 
+- Fixed sidebar button text/background contrast and made intentional chart breaks visible
+  with amber unobserved-interval shading, a legend and timestamp tooltips.
 - Removed extra permission checkboxes from session start, camera preview and worker selection.
   Labelled operator actions now supply permission; the launcher reuses the selected worker.
 - Added linked prerequisite warnings and disabled actions for known missing setup, plus worker

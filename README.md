@@ -69,6 +69,10 @@ choice dwell and ordinal SVG trends. UTC instants remain intact; timezone labels
 and distinguish repeated DST hours. Date filters are local-calendar inclusive dates converted
 to UTC intervals; clipping does not restart an already active episode. UNKNOWN intervals break
 chart lines. No observations/eligible interval displays **No data**, not a fabricated zero.
+Amber chart bands mark those unobserved gaps; points on either side stay disconnected. Hover
+over a point or band for timestamps and interval details. Horizontal positions show sample
+order with equal spacing, rather than elapsed time. Sidebar buttons use dark text on pale
+backgrounds, including hover, so the navigation controls retain readable contrast.
 Durations interpolate only bounded intervals with successful endpoints; they do not prove
 continuous visual truth. Rates from tiny samples are not forecasts. Ordinal levels are not
 physical measurement units or a universally calibrated confidence.
