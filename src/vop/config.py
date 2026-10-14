@@ -80,6 +80,8 @@ def _load_config(path: str | Path) -> Settings:
     timeouts = [data.get("capture_timeout_seconds", 10), data.get("inference_timeout_seconds", 30)]
     if any(isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t) or not 0 < t <= 300 for t in timeouts):
         raise ValueError("Timeouts must be finite numbers in (0, 300]")
+    if not isinstance(data.get("sources"), list):
+        raise ValueError("Sources must be a list")
     sources = []
     for raw in data["sources"]:
         keys(raw, {"id", "name", "kind", "settings", "questions", "enabled", "retain_evidence", "sample_interval_seconds"})
@@ -121,6 +123,8 @@ def _load_config(path: str | Path) -> Settings:
             hosts = options.get("allowed_hosts")
             if not isinstance(hosts, list) or not hosts or any(not isinstance(h, str) or not h or any(c in h for c in "/@* ") for h in hosts):
                 raise ValueError("Camera requires explicit literal allowed_hosts")
+        if not isinstance(raw.get("questions"), list):
+            raise ValueError("Questions must be a list")
         questions = []
         for q in raw["questions"]:
             keys(q, {"id", "version", "text", "kind", "choices", "levels", "threshold"})
@@ -133,15 +137,15 @@ def _load_config(path: str | Path) -> Settings:
             if len(spec.text) > 4096:
                 raise ValueError("Question text exceeds 4096 characters")
             questions.append(spec)
-        if not 1 <= len(questions) <= 32 or len({q.question_id for q in questions}) != len(questions):
-            raise ValueError("Source requires 1–32 distinct questions")
+        if len(questions) > 32 or len({q.question_id for q in questions}) != len(questions):
+            raise ValueError("Source allows 0–32 distinct questions")
         evidence = raw.get("retain_evidence", False)
         interval = raw.get("sample_interval_seconds", 0)
         if type(evidence) is not bool or isinstance(interval, bool) or not isinstance(interval, (int, float)) or not math.isfinite(interval) or not (interval == 0 or 1 <= interval <= 3600):
             raise ValueError("Evidence must be boolean; sampling is disabled (0) or 1–3600 seconds")
         sources.append(SourceSpec(source_id, name, kind, options, tuple(questions), enabled, evidence, interval))
-    if not sources or len(sources) > 32 or len({s.source_id for s in sources}) != len(sources):
-        raise ValueError("Configuration requires 1–32 distinct sources")
+    if len(sources) > 32 or len({s.source_id for s in sources}) != len(sources):
+        raise ValueError("Configuration allows 0–32 distinct sources")
     zone = data.get("timezone", "Europe/London")
     ZoneInfo(zone)
     return Settings((path.parent / data["database"]).resolve(), tuple(sources), engine_id, dict(engine.get("answers", {})), *timeouts, zone, engine)

@@ -50,7 +50,8 @@ def restore_cameras(store, settings, pipeline):
     for row in rows:
         source = camera_source(json.loads(row[0]))
         store.configure(replace(settings, sources=(source,)))
-        pipeline.sources[source.source_id] = source
+        target = pipeline.removed_sources if store.is_removed(source.source_id) else pipeline.sources
+        target[source.source_id] = source
 
 
 def install_integration(app, settings, store, pipeline):
@@ -69,7 +70,7 @@ def install_integration(app, settings, store, pipeline):
         csrf = request.scope["session"].setdefault("csrf", random_secrets.token_urlsafe(24))
         current = pipeline.engine_profile
         worker = current if current["kind"] == "worker" else {}
-        cams = [s for s in pipeline.sources.values() if s.kind == "rtsp"]
+        cams = [s for s in list(pipeline.sources.values()) if s.kind == "rtsp"]
         saved_cams = [s for s in cams if s.settings.get("endpoint_secret_ref")]
         selected_id = request.query_params.get("camera")
         selected = next((s for s in saved_cams if s.source_id == selected_id), None) if selected_id else (saved_cams[0] if saved_cams and "new_camera" not in request.query_params else None)
@@ -218,6 +219,8 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError("Use a literal private LAN camera IP, RTSP port 554, /stream1 or /stream2, without credentials") from None
         record = {"source_id": sid, "model": str(form["model"]), "endpoint_ref": sid + "-endpoint", "credentials_ref": sid + "-credentials", "allowed_hosts": [parsed.hostname]}
         source = camera_source(record)
+        if store.is_removed(sid):
+            raise ValueError("Restore this source on Sources before editing its camera setup")
         if sid in pipeline.sources and pipeline.sources[sid].kind != "rtsp":
             raise ValueError("Source ID already belongs to another input")
         if sid not in pipeline.sources and len(pipeline.sources) >= 32:

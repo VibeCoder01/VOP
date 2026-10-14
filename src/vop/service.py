@@ -103,6 +103,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_release(app, settings, store, pipeline, reliable)
     from vop.integration_ui import install_integration
     install_integration(app, settings, store, pipeline)
+    from vop.removal import install_removal
+    install_removal(app, store, pipeline, reliable)
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
@@ -167,7 +169,7 @@ def create_app(settings: Settings, *, token: str | None = None,
     def metrics(request: Request):
         source_id = request.query_params.get("source_id")
         values = []
-        for sid in pipeline.sources:
+        for sid in list(pipeline.sources):
             if source_id and source_id != sid:
                 continue
             for record in store.questions(sid):

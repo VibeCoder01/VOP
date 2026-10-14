@@ -131,6 +131,8 @@ class Store:
     def configure(self, settings: Settings) -> None:
         with self.connection() as connection:
             for source in settings.sources:
+                if connection.execute("SELECT 1 FROM release_settings WHERE id=?", (self.removal_key(source.source_id),)).fetchone():
+                    continue
                 configuration = dumps(source.public())
                 existing = connection.execute("SELECT configuration FROM sources WHERE id=?", (source.source_id,)).fetchone()
                 if existing:
@@ -145,6 +147,8 @@ class Store:
                 connection.execute("INSERT OR IGNORE INTO source_controls VALUES(?,?,?,?)",
                                    (source.source_id, source.enabled, source.retain_evidence, source.sample_interval_seconds))
                 for question in source.questions:
+                    if connection.execute("SELECT 1 FROM release_settings WHERE id=?", (self.removal_key(source.source_id, question.question_id),)).fetchone():
+                        continue
                     spec = dumps(asdict(question))
                     key = (source.source_id, question.question_id, question.version)
                     saved = connection.execute("SELECT specification FROM question_versions WHERE source_id=? AND question_id=? AND version=?", key).fetchone()
@@ -186,12 +190,22 @@ class Store:
             connection.execute("UPDATE sources SET status=CASE WHEN ?=0 THEN 'DISABLED' WHEN status='DISABLED' THEN 'CONNECTING' ELSE status END WHERE id=?", (enabled, source_id))
             connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (utcnow().isoformat(), "source_controls", "updated"))
 
-    def questions(self, source_id: str, *, active_only: bool = False) -> list[dict]:
+    @staticmethod
+    def removal_key(source_id, question_id=None):
+        return f"removed_source:{source_id}" if question_id is None else f"removed_question:{source_id}:{question_id}"
+
+    def is_removed(self, source_id, question_id=None):
+        with self.connection() as db:
+            return db.execute("SELECT 1 FROM release_settings WHERE id=?", (self.removal_key(source_id, question_id),)).fetchone() is not None
+
+    def questions(self, source_id: str, *, active_only: bool = False, include_removed: bool = False) -> list[dict]:
         with self.connection() as connection:
             rows = connection.execute("SELECT v.specification,c.enabled,p.policy_json FROM query_controls c JOIN question_versions v ON v.source_id=c.source_id AND v.question_id=c.question_id AND v.version=c.current_version JOIN query_policies p ON p.source_id=v.source_id AND p.question_id=v.question_id AND p.version=v.version WHERE c.source_id=? AND (?=0 OR c.enabled=1) ORDER BY c.rowid", (source_id, active_only)).fetchall()
         result = []
         for row in rows:
             body = json.loads(row["specification"])
+            if not include_removed and self.is_removed(source_id, body["question_id"]):
+                continue
             body["kind"] = AnswerKind(body["kind"])
             body["choices"] = tuple(tuple(v) for v in body.get("choices", []))
             body["levels"] = tuple(body.get("levels", []))
@@ -200,9 +214,11 @@ class Store:
 
     def edit_question(self, source_id: str, question: QuestionSpec, policy: QueryPolicy, *, enabled: bool = True,
                       expected_version: str | None = None) -> QuestionSpec:
+        if self.is_removed(source_id) or self.is_removed(source_id, question.question_id):
+            raise ValueError("Restore this removed item before editing it")
         with self.connection() as connection:
             current = connection.execute("SELECT current_version FROM query_controls WHERE source_id=? AND question_id=?", (source_id, question.question_id)).fetchone()
-            if current is None and connection.execute("SELECT count(*) FROM query_controls WHERE source_id=?", (source_id,)).fetchone()[0] >= 32:
+            if current is None and len(self.questions(source_id)) >= 32:
                 raise ValueError("A source may have at most 32 questions")
             if expected_version is not None and (current is None or current[0] != expected_version):
                 raise ValueError("Question changed in another request; reload before editing")

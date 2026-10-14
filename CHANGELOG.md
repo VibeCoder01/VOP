@@ -2,6 +2,9 @@
 
 ## Phase 4 practical-use follow-up — 14 October 2026
 
+- Added confirmed, recoverable removal of sources and questions, persistent across restart,
+  with disabled Restore controls. Immutable history remains; dependent rules are disabled and
+  queued webhook retries cancelled. Empty configurations export and reload correctly.
 - Added a double-click Windows launcher with browser opening and a DPAPI-protected reusable
   operator key. Existing manual launcher behaviour remains available.
 - Added explicitly authorised, bounded antec session controls with an SSH tunnel and restoration

@@ -65,3 +65,42 @@ were readable in main/thread/spawn probes and capture resumed after a dashboard 
 C210/C510W, challenging labelled scenes, reduced-precision task accuracy and a live/GPU soak
 remain pending. Recommendation: continue supervised Phase 4 pilot use and validate the new
 manual session controls; do not infer Phase 5 or permanent GPU scheduling approval.
+
+
+## Recoverable source and question removal — 14 October 2026
+
+The owner requested removable Sources and Questions. Both listings now offer Remove… with a
+confirmation page, plus Removed sources/questions → Restore. Configuration removal persists in
+existing schema-3 release settings; immutable question versions, observations, events, evidence
+and protected camera values are retained. Sources leave the active pipeline; questions leave
+its current question list. Removed IDs must be restored before reuse. Restore leaves monitoring
+disabled, and source restore clears sampling and evidence retention. Dependent rules receive a
+new disabled revision; pending/retrying webhook deliveries are cancelled without rewriting the
+original alert payload or delivery attempt counts. Existing delivered notifications cannot be recalled.
+
+Changes: `src/vop/removal.py` implements the forms and coordinated capture/rule locking;
+`storage.py`, `pipeline.py`, `integration_ui.py`, `sampling.py`, `reliable.py`, `service.py` and
+`dashboard.py` preserve removal across startup and omit removed items from capture/current
+configuration. `config.py` supports empty source/question lists. Full database backups retain
+recovery records, including sources omitted from the exported current configuration. README
+and CHANGELOG explain removal, restoration and retained data. No schema migration or dependency
+was added. Offline regression coverage is in `tests/test_removal.py`.
+
+Validation commands are the same full pytest, Phase 4 smoke and pip-check commands shown above;
+removal-specific command: `.\.venv\Scripts\python.exe -m pytest tests/test_removal.py -q`
+(**6 passed**). Checks cover confirmation-only GET, CSRF/viewer denial, occupied capture slots,
+immutable history, alert cancellation, protected camera setup, restart, empty configuration and
+actual backup/restore recovery. The Phase 4 HTTP smoke passed; pip check found no broken
+requirements. Final Windows full suite: **217 passed, 4 skipped** (Linux-only helper cases).
+
+No real camera, GPU/model inference or service interruption test was run for removal. The pinned
+model revision and historical measurements above remain unchanged. Removal is recoverable,
+not permanent data erasure; protected credentials and retained evidence require their existing
+separate management/deletion workflows. Continue supervised Phase 4 testing; Phase 5 remains
+unauthorised.
+
+The release builder (`.\.venv\Scripts\python.exe tools\build_release.py`) passed. Updated archive
+SHA-256: `4b2774a16cdcab969c160288bed3faeb97a14940a0d8cf9c0f91f35f21bbf716`.
+The idle owned dashboard was restarted with the same DPAPI-protected key and live-source opt-in;
+authenticated `/api/v1/health` returned ready with no sampling/rule errors. No user configuration
+was removed during validation. Actual local browser automation remains blocked as noted above.
