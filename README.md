@@ -31,6 +31,15 @@ Try **Run synthetic demo** to record six rapid, explicitly mocked samples and a 
 Use **Capture once** to inspect the privacy-masked frame, optional ROI outline, native fields and
 provenance. **Questions → Edit** creates a new immutable version; old observations/events keep
 their original version. Binary, choice and ordinal questions validate their respective criteria.
+The question editor switches criteria when **Answer kind** changes: binary threshold and
+episode-confirmation settings, named choice options, or ordered ordinal levels. Irrelevant
+controls are hidden and disabled; observation gap, ROI and enabled state apply to every type.
+The synthetic preset, when using the local mock backend, also describes the selected type.
+Question IDs accept 1–64 ASCII letters, digits, dots, underscores or hyphens, with no spaces.
+Choose an unused ID within that source; `new` is reserved for the editor route. IDs become
+read-only after creation. Browser validation and server validation enforce these rules.
+Type switching uses a small authenticated same-origin script with no external library or inline
+code. With scripts disabled, use the type links before entering a question.
 The mock preset is a user-selected synthetic answer, not computer vision. Its per-source/version
 override survives restart. Unconfigured mock questions return unsupported instead of fabricated
 answers. The source and model interfaces remain independent; Phase 4 worker setup is described below.
