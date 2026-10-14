@@ -43,6 +43,18 @@ The overview shows sampling status; use **Refresh view** to refresh the native H
 inference retains the Phase 1 soft deadline and can occupy the slot until process restart;
 hard real-model isolation remains later work, not an unattended-production claim.
 
+**Sources / Questions → Remove…** opens a confirmation page. Confirming removes the item from
+active configuration, stops its monitoring, disables dependent alert rules and cancels pending
+webhook retries. Removal survives restart. Existing observations, events, evidence and immutable
+versions remain; retained evidence is still subject to the existing evidence deletion tools.
+Protected camera details are retained so setup can be recovered. Use **Removed sources/questions
+→ Restore** on the corresponding listing to recover an item. Restore leaves that source or
+question disabled; source restore also stops sampling and switches evidence retention off.
+Alert rules remain disabled until explicitly edited. Restore a removed source before its questions.
+Removing every source or question is supported. Configuration exports include current items only;
+full database backups preserve removal records, history and recovery information. Removal is
+recoverable configuration removal, not permanent erasure of history or protected credentials.
+
 Temporal states are **UNKNOWN**, **INACTIVE**, **PENDING**, **ACTIVE**, **RECOVERING** (binary), or
 **OBSERVED** (valid choice/ordinal). Binary activation/recovery use configurable confirmation
 counts (default 2/2). Episodes start at the activation-confirmation timestamp and close only

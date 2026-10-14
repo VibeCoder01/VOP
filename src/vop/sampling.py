@@ -27,10 +27,10 @@ class Sampler:
 
     def tick(self, now=None):
         now = monotonic() if now is None else now
-        for source_id in self.pipeline.sources:
+        for source_id in list(self.pipeline.sources):
             control = self.pipeline.store.source_control(source_id)
             interval = control["sample_interval_seconds"]
-            if not control["enabled"] or interval == 0:
+            if not control["enabled"] or interval == 0 or not self.pipeline.store.questions(source_id, active_only=True):
                 self.deadlines.pop(source_id, None)
                 continue
             if now < self.deadlines.get(source_id, 0):

@@ -123,7 +123,11 @@ class Reliable:
         now = utc(now) if now else utcnow()
         for rule in self.rules():
             sid, qid = rule["source_id"], rule["question_id"]
-            question = next(r for r in self.store.questions(sid) if r["spec"].question_id == qid)
+            if sid not in self.pipeline.sources:
+                continue
+            question = next((r for r in self.store.questions(sid) if r["spec"].question_id == qid), None)
+            if question is None:
+                continue
             q = question["spec"]
             summary = self.store.summary(sid, qid, q.version, kind=q.kind, as_of=now)
             source = self.store.source_control(sid)
@@ -277,7 +281,7 @@ class Reliable:
                     row["provenance"] = {k: obs["run"][k] for k in ("engine_id", "engine_version", "synthetic")}
         elif kind == "metrics":
             rows = []
-            for sid in self.pipeline.sources:
+            for sid in list(self.pipeline.sources):
                 if source_id and source_id != sid:
                     continue
                 for record in self.store.questions(sid):
@@ -351,7 +355,7 @@ def csv_export(body):
 def configuration(settings, store, reliable):
     sources = []
     policies = []
-    for source in reliable.pipeline.sources.values():
+    for source in list(reliable.pipeline.sources.values()):
         questions = []
         for record in store.questions(source.source_id):
             q = record["spec"]
@@ -364,7 +368,7 @@ def configuration(settings, store, reliable):
     return {"schema_version": 1, "config": {"schema_version": 1, "database": "data/vop.sqlite3", "timezone": settings.timezone_name,
              "engine": getattr(reliable.pipeline, "engine_profile", None) or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}, "sources": sources,
              "capture_timeout_seconds": settings.capture_timeout_seconds, "inference_timeout_seconds": settings.inference_timeout_seconds},
-            "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in {(p['source_id'], p['question_id'], p['version']) for p in policies}], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules()]}
+            "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in {(p['source_id'], p['question_id'], p['version']) for p in policies}], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules() if any(p['source_id'] == r['source_id'] and p['question_id'] == r['question_id'] for p in policies)]}
 
 
 def backup(store, config, destination):

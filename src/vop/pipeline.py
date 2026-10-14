@@ -5,8 +5,8 @@ import json
 import math
 from threading import Lock
 
-from vop.config import Settings
-from vop.contracts import FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow, result as make_result
+from vop.config import Settings, SourceSpec
+from vop.contracts import AnswerKind, QuestionSpec, FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow, result as make_result
 from vop.preprocessing import preprocess
 from vop.inputs.sources import FrameSource, SourceAdapters
 from vop.storage import Store
@@ -16,7 +16,21 @@ class Pipeline:
     def __init__(self, settings: Settings, engine: InferenceEngine, store: Store, capture: FrameSource | None = None):
         self.settings, self.engine, self.store = settings, engine, store
         self.capture_adapter = capture or SourceAdapters(timeout_seconds=settings.capture_timeout_seconds)
-        self.sources = {s.source_id: s for s in settings.sources}
+        self.sources = {s.source_id: s for s in settings.sources if not store.is_removed(s.source_id)}
+        self.removed_sources = {s.source_id: s for s in settings.sources if store.is_removed(s.source_id)}
+        with store.connection() as db:
+            for row in db.execute("SELECT value_json FROM release_settings WHERE id LIKE 'retained_source:%'"):
+                body = json.loads(row[0])
+                questions = []
+                for q in body['questions']:
+                    q['kind'] = AnswerKind(q['kind'])
+                    q['choices'] = tuple(tuple(v) for v in q.get('choices', []))
+                    q['levels'] = tuple(q.get('levels', []))
+                    questions.append(QuestionSpec(**q))
+                body['questions'] = tuple(questions)
+                source = SourceSpec(**body)
+                target = self.removed_sources if store.is_removed(source.source_id) else self.sources
+                target.setdefault(source.source_id, source)
         self.busy = Lock()
         self.skipped = 0
         self.latest_preview = None  # One privacy-masked, downscaled preview; never an unbounded cache.
@@ -32,14 +46,14 @@ class Pipeline:
                        retain_evidence=control["retain_evidence"], sample_interval_seconds=control["sample_interval_seconds"])
 
     def run(self, source_id: str, frame=None) -> dict:
-        source = self.source(source_id)
-        if not source.questions:
-            raise ProviderError("no_active_questions", "Enable at least one question before capturing")
         if not self.busy.acquire(blocking=False):
             self.skipped += 1
             self.store.audit("capture_skipped", "overload")
             raise ProviderError("overloaded", "An inference is in flight; this request was not queued")
         try:
+            source = self.source(source_id)
+            if not source.questions:
+                raise ProviderError("no_active_questions", "Enable at least one question before capturing")
             if frame is None:
                 try:
                     frame = self.capture_adapter.capture(source)

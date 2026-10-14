@@ -124,7 +124,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
         result = []
-        for source_id in pipeline.sources:
+        for source_id in list(pipeline.sources):
             if source_filter and source_filter != source_id:
                 continue
             for record in store.questions(source_id):
@@ -220,7 +220,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                             Td(local_time(d["summary"]["last_observed_at_utc"], zone))) for d in data])),
                         Section(Div(H2("Capture controls"), cls="section-heading"),
                                 *(Div(StrongText(s["name"]), Small(" · " + s["kind"] + " · " + s["status"]),
-                                      action("Capture once", f"/ui/sources/{s['source_id']}/capture", csrf) if operator and s["enabled"] else None,
+                                      action("Capture once", f"/ui/sources/{s['source_id']}/capture", csrf) if operator and s["enabled"] and store.questions(s['source_id'], active_only=True) else None,
                                       action("Run synthetic demo", f"/ui/sources/{s['source_id']}/demo", csrf, secondary=True) if operator and s["kind"] == "synthetic" and isinstance(pipeline.engine, MockInferenceEngine) else None,
                                       cls="actions") for s in sources))]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
@@ -229,12 +229,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Controls"],
                 [Tr(Td(StrongText(s["name"]), Small(s["source_id"])), Td(s["kind"]), Td(badge(s["status"])),
                     Td(local_time(s["last_frame_utc"], zone)),
-                    Td(A("Edit source", href=f"/ui/sources/{s['source_id']}", cls="button secondary") if operator else "Read only")) for s in sources]))]
+                    Td(Div(A("Edit source", href=f"/ui/sources/{s['source_id']}", cls="button secondary"), A("Remove…", href=f"/ui/sources/{s['source_id']}/remove", cls="button secondary"), cls="actions") if operator else "Read only")) for s in sources]))]
         elif view == "questions":
             content += [Section(H2("Question versions"), table(["Question", "Kind", "Version", "Enabled", "Policy", "Edit"],
                 [Tr(Td(StrongText(d["spec"].text), Small(d["source_id"] + " / " + d["spec"].question_id)), Td(d["spec"].kind), Td(d["spec"].version),
                     Td("Yes" if d["enabled"] else "No"), Td(f"{d['policy'].positive_confirmations} positive / {d['policy'].negative_confirmations} negative", Small(f"Gap: {d['policy'].max_gap_seconds:g}s · {d['policy'].unknown_gap_policy}")),
-                    Td(A("Edit", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}", cls="button secondary") if operator else "Read only")) for d in data])),
+                    Td(Div(A("Edit", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}", cls="button secondary"), A("Remove…", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}/remove", cls="button secondary"), cls="actions") if operator else "Read only")) for d in data])),
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
             event_rows = store.events(selected or None)
@@ -271,6 +271,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(str(o["answer"].get("value")))),
                     Td(local_time(o["captured_at_utc"], zone)),
                     Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
+        if operator and view in ("sources", "questions"):
+            from vop.removal import removed_controls
+            content.append(removed_controls(store, pipeline, csrf, view))
         return page(view.title(), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
 
     @app.route("/ui/sources/{source_id}", methods=["GET"])
