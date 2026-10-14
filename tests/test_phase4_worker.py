@@ -257,6 +257,38 @@ def test_busy_camera_test_renders_browser_guidance_and_keeps_api_json(app):
             app.state.pipeline.busy.release()
 
 
+def test_session_start_requires_explicit_permission_and_real_pilot_profile(app, monkeypatch):
+    started = []
+    stopped = []
+    monkeypatch.setattr(app.state.worker_session, "start", lambda minutes: started.append(minutes))
+    monkeypatch.setattr(app.state.worker_session, "stop", lambda: stopped.append(True))
+    with TestClient(app) as client:
+        csrf = login(client)
+        assert client.post("/integration/session/start", data={"csrf": csrf}).status_code == 400
+        assert client.post("/integration/session/start", data={"csrf": csrf, "pause_consent": "on"}).status_code == 400
+        assert not started
+        body = {"csrf": csrf, "kind": "worker", "engine_id": "liquid-d1-3b", "version": CHECKPOINT_REVISION, "worker_id": "antec-d1", "url": "http://127.0.0.1:8878", "secret_ref": "antec-worker", "transport": "ssh", "worker_token": TOKEN}
+        assert client.post("/integration/engine", data=body).status_code == 200
+        assert client.post("/integration/session/start", data={"csrf": csrf, "pause_consent": "on", "minutes": "30"}).status_code == 200
+        assert started == [30] and not app.state.pipeline.engine.allow_remote
+        assert client.post("/integration/consent", data={"csrf": csrf, "allow": "on"}).status_code == 200
+        assert app.state.pipeline.engine.allow_remote
+        assert client.post("/integration/consent", data={"csrf": csrf}).status_code == 200
+        assert not app.state.pipeline.engine.allow_remote
+        assert client.post("/integration/session/stop", data={"csrf": csrf}).status_code == 200
+        assert stopped
+
+
+def test_capture_page_gives_plain_answer_and_hides_raw_details(app):
+    with TestClient(app) as client:
+        csrf = login(client)
+        page = client.post("/ui/sources/synthetic-scene/capture", data={"csrf": csrf})
+        assert page.status_code == 200 and "Capture completed" in page.text
+        assert "Is a red square visible?" in page.text and "Technical details" in page.text
+        assert "Capture again" in page.text and "Inference time:" in page.text
+        assert re.search(r'<details>\s*<summary>Technical details</summary>', page.text)
+
+
 @pytest.mark.skipif(__import__('os').name != 'nt', reason="Windows DPAPI hardware/OS-specific")
 def test_actual_windows_dpapi_round_trip_without_plaintext(tmp_path):
     store = SecretStore(tmp_path)

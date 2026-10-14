@@ -379,7 +379,29 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     async def capture(source_id: str, request):
         result = await run_in_threadpool(pipeline.run, source_id)
         summary = result["result"]
-        content = [P("Capture result: " + summary["status"]), Pre(json.dumps(summary, indent=2)),
+        questions = {r["spec"].question_id: r["spec"].text for r in store.questions(source_id)}
+        answers = []
+        for answer in summary["answers"]:
+            value = answer["value"]
+            label = "Unknown — no valid answer"
+            if answer["status"] == "success":
+                if type(value) is bool:
+                    human_question = questions.get(answer["question_id"]) == "Is there a human in the picture?"
+                    label = ("Human present" if value else "No human detected") if human_question else ("Yes" if value else "No")
+                else:
+                    label = str(value)
+            answers.append(Section(H2(questions.get(answer["question_id"], answer["question_id"])), P(label)))
+        error = summary.get("error") or {}
+        guidance = {"remote_consent_required": "Enable image transmission in Engine and camera setup, then capture again.",
+                    "worker_unavailable": "The worker is disconnected. Start or check your antec session in Engine and camera setup.",
+                    "worker_auth": "The worker access key was rejected. Check its protected setup.",
+                    "capture_timeout": "The camera did not respond in time. Check its connection and address."}.get(error.get("code"))
+        content = [P("Capture completed" if summary["status"] == "success" else "Capture did not produce a valid model result", role="status"),
+                   *answers, P(guidance, role="alert") if guidance else None,
+                   A("Engine and camera setup", href="/integration") if error else None,
+                   P(f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds · Engine: {summary['engine_id']}"),
+                   Details(Summary("Technical details"), Pre(json.dumps(summary, indent=2))),
+                   action("Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
                    A("Return to overview", href="/", cls="button secondary")]
         if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, summary["frame_id"]):
             content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; inspect recorded engine provenance",

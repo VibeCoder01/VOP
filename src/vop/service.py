@@ -53,6 +53,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     capture = capture or SourceAdapters(allow_live_sources=allow_live_sources, timeout_seconds=settings.capture_timeout_seconds)
     pipeline = Pipeline(settings, engine, store, capture)
     pipeline.engine_profile = active_profile
+    from vop.worker_session import WorkerSession
+    app_session = WorkerSession()
     from vop.integration_ui import restore_cameras
     restore_cameras(store, settings, pipeline)
     store.replay_all()
@@ -66,6 +68,7 @@ def create_app(settings: Settings, *, token: str | None = None,
         finally:
             sampler.stop()
             reliable.stop()
+            await run_in_threadpool(app_session.stop)
 
     async def provider_error(req, exc):
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
@@ -92,6 +95,7 @@ def create_app(settings: Settings, *, token: str | None = None,
                    lifespan=lifespan,
                    exception_handlers={ProviderError: provider_error, ValueError: bad_request, sqlite3.Error: database_error})
     app.state.pipeline, app.state.store = pipeline, store
+    app.state.worker_session = app_session
     app.state.sampler = sampler
     app.state.reliable = reliable
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)

@@ -18,7 +18,7 @@ def main():
         stage = Path(folder)
         subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--wheel-dir", str(stage), str(root)], check=True)
         wheel = next(stage.glob("*.whl"))
-        paths = ["requirements-offline.txt", "README.md", "SRS-v0.2.md", "CODEX_PHASE_3.md", "CODEX_PHASE_4_PLAN.md", "CHANGELOG.md", "sample-config/phase1.json", "fixtures/scene.png",
+        paths = ["requirements-offline.txt", "README.md", "Start VOP.cmd", "SRS-v0.2.md", "CODEX_PHASE_3.md", "CODEX_PHASE_4_PLAN.md", "CHANGELOG.md", "sample-config/phase1.json", "fixtures/scene.png",
                  "tools/run_dashboard.py", "tools/run_worker.py", "tools/process_cleanup.py", "tools/release.py", "tools/dependency_audit.py", "tools/phase1_smoke.py", "tools/phase2_smoke.py", "tools/phase3_smoke.py", "tools/phase4_smoke.py", "install/windows.ps1", "install/README.md"]
         archive = out / f"vop-{version}-windows-dev.zip"
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:

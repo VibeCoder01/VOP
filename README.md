@@ -187,6 +187,42 @@ environment is not the current development release or a production security reco
 
 ## Phase 4: GPU worker and protected camera setup
 
+### Daily use
+
+On Windows, double-click **Start VOP.cmd** in the VOP folder. It opens the browser and starts
+the local app with camera support. Keep its terminal window open. The launcher stores its
+operator access key using Windows DPAPI and reuses it on later launches; the key is still
+printed for sign-in. If a local app already occupies the port, the launcher opens that page
+without starting a second server. An existing unreadable key is never silently replaced.
+The command-line launcher remains available with its previous behaviour.
+
+In **Engine and camera setup**, select the verified antec SSH backend, then:
+
+1. Choose a **15, 30 or 60 minute** session, tick the explicit pause-and-restore permission,
+   and press **Start antec session**. This opens the SSH tunnel and temporarily pauses the
+   existing `llama-mtp.service` if it was active. No images are sent by this action.
+2. After a few seconds, press **Test worker identity and health**. It must show a ready real
+   worker on CUDA before relying on its results. A requested session alone is not proof of readiness.
+3. In **Image transmission permission**, tick the checkbox and **Save image permission**.
+   This is separate from starting the worker and resets when the app restarts.
+4. Enable the camera in Sources. Keep its interval at **0** for manual captures and leave
+   evidence off. Use **Capture once**, then **Capture again** on the readable result screen.
+
+**Stop session and restore workload** ends an app-owned session early. The remote helper also
+ends it when its bounded lease expires or the SSH input closes; the app requests cleanup on
+shutdown. Only a workload active before the session is restarted. This is a foreground,
+owner-started pilot session, with no persistent service or automatic startup installation.
+The controls currently target the already-verified `antec.local` installation and its pinned
+worker paths. Another deployment can still use its own manually configured worker/tunnel.
+If port 8878 already belongs to a tunnel, VOP refuses to take it over: test that existing
+connection instead. SSH must already have trusted host keys and working noninteractive login
+for the current Windows user; VOP does not bypass host verification or collect SSH passwords.
+
+Worker health and capture results are shown in plain language. Expand **Connection details**
+or **Technical details** for native provenance and raw scores. A failed inference stays Unknown;
+it is never displayed as an absent person. Session controls do not change sampling, evidence,
+camera credentials or image-transmission permission.
+
 Use **Engine and camera setup** in the sidebar. Operator access and CSRF are required; viewers
 cannot see credential forms or invoke connection tests. Live capture and remote transmission
 are independent opt-ins. Saving credentials never starts capture/sampling. Saved remote profiles

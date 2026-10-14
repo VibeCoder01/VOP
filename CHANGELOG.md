@@ -1,5 +1,14 @@
 # Specification change log
 
+## Phase 4 practical-use follow-up — 14 October 2026
+
+- Added a double-click Windows launcher with browser opening and a DPAPI-protected reusable
+  operator key. Existing manual launcher behaviour remains available.
+- Added explicitly authorised, bounded antec session controls with an SSH tunnel and restoration
+  of the previous llama workload, plus a separate current-worker image permission form.
+- Replaced raw-first health and capture pages with readable status/answers, repeat capture and
+  expandable native details. These remain Phase 4 pilot conveniences, without unattended deployment.
+
 ## Phase 4 browser error follow-up — 14 October 2026
 
 - Fixed protected camera forms reopening with a hardcoded example endpoint. Saved camera
