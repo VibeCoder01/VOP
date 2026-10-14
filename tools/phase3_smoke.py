@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from process_cleanup import stop_process
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
@@ -42,8 +43,7 @@ def main():
                     if proc.poll() is not None:
                         raise RuntimeError("Service startup failed")
                     time.sleep(0.05)
-            proc.terminate()
-            proc.wait(timeout=5)
+            stop_process(proc)
             raise RuntimeError("Service startup timed out")
         proc = start(config)
         browser = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -81,8 +81,7 @@ def main():
                 assert exc.code == 403
             count = api("/api/v1/health")["observation_count"]
         finally:
-            proc.terminate()
-            proc.wait(timeout=10)
+            stop_process(proc)
         subprocess.run([sys.executable, str(root / "tools/release.py"), "backup", "--config", str(config), "--output", str(folder / "backup")], cwd=root, check=True, stdout=subprocess.DEVNULL)
         subprocess.run([sys.executable, str(root / "tools/release.py"), "restore", "--input", str(folder / "backup"), "--output", str(folder / "restored")], cwd=root, check=True, stdout=subprocess.DEVNULL)
         proc = start(folder / "restored" / "config.json")
@@ -92,8 +91,7 @@ def main():
             assert len(restored) == 1 and restored[0]["id"] == aid and restored[0]["status"] == "acknowledged"
             print(json.dumps({"result": "PASS", "input": "synthetic", "model": "explicit mock", "alert_idempotency_restart": "passed", "acknowledgement": "persisted", "exports": ["CSV", "JSON"], "viewer_config_denial": 403, "retention_preview": "passed", "backup_restore_observations": count, "outbound_delivery": "not_configured", "cameras": "not_connected"}))
         finally:
-            proc.terminate()
-            proc.wait(timeout=10)
+            stop_process(proc)
 
 
 if __name__ == "__main__":

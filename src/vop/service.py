@@ -27,7 +27,7 @@ from vop.reliable import Reliable
 
 def create_app(settings: Settings, *, token: str | None = None,
                engine: InferenceEngine | None = None, capture=None, allow_live_sources: bool = False,
-               viewer_token: str | None = None):
+               viewer_token: str | None = None, allow_remote_inference: bool = False):
     token = token if token is not None else os.environ.get("VOP_API_TOKEN", "")
     if not isinstance(token, str) or len(token) < 32 or len(token) > 256 or not token.isascii() or any(c.isspace() for c in token):
         raise ValueError("Set VOP_API_TOKEN to a 32–256 character ASCII secret without whitespace")
@@ -36,12 +36,27 @@ def create_app(settings: Settings, *, token: str | None = None,
         raise ValueError("Viewer key must be a distinct 32–256 character ASCII secret")
     store = Store(settings.database)
     store.configure(settings)
-    engine = engine or MockInferenceEngine(settings.mock_answers, settings.engine_id)
+    saved_profile = None
+    with store.connection() as db:
+        row = db.execute("SELECT value_json FROM release_settings WHERE id='engine_profile'").fetchone()
+        saved_profile = json.loads(row[0]) if row else None
+    active_profile = saved_profile or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}
+    if engine is None:
+        if active_profile["kind"] == "worker":
+            from vop.inference.remote import RemoteInferenceEngine
+            engine = RemoteInferenceEngine(active_profile, allow_remote=allow_remote_inference)
+        else:
+            engine = MockInferenceEngine(active_profile["answers"], active_profile["id"])
     if isinstance(engine, MockInferenceEngine):
         for source_id, qid, version, value in store.mock_values():
             engine.configure_source_answer(source_id, qid, version, value)
     capture = capture or SourceAdapters(allow_live_sources=allow_live_sources, timeout_seconds=settings.capture_timeout_seconds)
     pipeline = Pipeline(settings, engine, store, capture)
+    pipeline.engine_profile = active_profile
+    from vop.worker_session import WorkerSession
+    app_session = WorkerSession()
+    from vop.integration_ui import restore_cameras
+    restore_cameras(store, settings, pipeline)
     store.replay_all()
     sampler = Sampler(pipeline)
     reliable = Reliable(store, settings, pipeline)
@@ -53,9 +68,15 @@ def create_app(settings: Settings, *, token: str | None = None,
         finally:
             sampler.stop()
             reliable.stop()
+            await run_in_threadpool(app_session.stop)
 
     async def provider_error(req, exc):
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
+        if "text/html" in req.headers.get("accept", "") and hasattr(app.state, "render_error"):
+            from fasthtml.core import to_xml
+            from starlette.responses import HTMLResponse
+            message = "Another capture or inference is running. Wait for it to finish, then return to setup and retry." if exc.code == "overloaded" else exc.message
+            return HTMLResponse(to_xml(app.state.render_error(req, message)), status_code=code)
         return JSONResponse({"error": exc.code}, status_code=code)
 
     async def bad_request(req, exc):
@@ -74,11 +95,14 @@ def create_app(settings: Settings, *, token: str | None = None,
                    lifespan=lifespan,
                    exception_handlers={ProviderError: provider_error, ValueError: bad_request, sqlite3.Error: database_error})
     app.state.pipeline, app.state.store = pipeline, store
+    app.state.worker_session = app_session
     app.state.sampler = sampler
     app.state.reliable = reliable
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
     from vop.release_ui import install_release
     install_release(app, settings, store, pipeline, reliable)
+    from vop.integration_ui import install_integration
+    install_integration(app, settings, store, pipeline)
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
@@ -86,8 +110,10 @@ def create_app(settings: Settings, *, token: str | None = None,
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,
                              "rules_error": reliable.last_error,
-                             "engine": {"id": engine.engine_id, "version": engine.engine_version,
-                                        "synthetic": engine.synthetic, "capabilities": list(engine.capabilities())}})
+                             "engine": {"id": pipeline.engine.engine_id, "version": pipeline.engine.engine_version,
+                                        "synthetic": pipeline.engine.synthetic, "capabilities": list(pipeline.engine.capabilities()),
+                                        "worker_health": getattr(pipeline.engine, "last_health", None),
+                                        "remote_consent": getattr(pipeline.engine, "allow_remote", False)}})
 
     @app.route("/api/v1/sources", methods=["GET"])
     def sources():

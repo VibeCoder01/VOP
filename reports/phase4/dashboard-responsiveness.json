@@ -1,0 +1,48 @@
+{
+  "scope": "actual owner dashboard sign-in page during separate synthetic six-client worker overload on same laptop",
+  "input": "no cameras/model request",
+  "samples": [
+    {
+      "status": 200,
+      "seconds": 0.008665599998494145
+    },
+    {
+      "status": 200,
+      "seconds": 0.018798100001731655
+    },
+    {
+      "status": 200,
+      "seconds": 0.0032482999995409045
+    },
+    {
+      "status": 200,
+      "seconds": 0.013291900000695023
+    },
+    {
+      "status": 200,
+      "seconds": 0.016366500000003725
+    },
+    {
+      "status": 200,
+      "seconds": 0.002822500000547734
+    },
+    {
+      "status": 200,
+      "seconds": 0.028055799999492592
+    },
+    {
+      "status": 200,
+      "seconds": 0.016867500000444124
+    },
+    {
+      "status": 200,
+      "seconds": 0.015759399999296875
+    },
+    {
+      "status": 200,
+      "seconds": 0.00417609999931301
+    }
+  ],
+  "max_seconds": 0.028055799999492592,
+  "result": "PASS"
+}

@@ -115,10 +115,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href="/?" + urlencode({"view": key}), cls="current" if key == view else "") for key, label in navigation), cls="navigation"),
                                    A("Alerts and release tools", href="/release", cls="button secondary"),
+                                   A("Engine and camera setup", href="/integration", cls="button secondary"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P("Review sampled conditions and their evidence.")),
-                                         Span("MOCK · NO VISION" if engine.synthetic else engine.engine_id, cls="tag"), cls="top"),
+                                         Span("MOCK · NO VISION" if pipeline.engine.synthetic else pipeline.engine.engine_id, cls="tag"), cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell")))
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
@@ -220,7 +221,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         Section(Div(H2("Capture controls"), cls="section-heading"),
                                 *(Div(StrongText(s["name"]), Small(" · " + s["kind"] + " · " + s["status"]),
                                       action("Capture once", f"/ui/sources/{s['source_id']}/capture", csrf) if operator and s["enabled"] else None,
-                                      action("Run synthetic demo", f"/ui/sources/{s['source_id']}/demo", csrf, secondary=True) if operator and s["kind"] == "synthetic" and engine.synthetic else None,
+                                      action("Run synthetic demo", f"/ui/sources/{s['source_id']}/demo", csrf, secondary=True) if operator and s["kind"] == "synthetic" and isinstance(pipeline.engine, MockInferenceEngine) else None,
                                       cls="actions") for s in sources))]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode({"view": view, "source": selected, "timezone": zone}), cls="button secondary"), cls="muted"))
@@ -263,7 +264,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                 action("Rebuild events from stored observations", "/ui/replay", csrf, secondary=True) if operator else None,
                                 P("Rebuilding preserves raw observations, immutable question versions and stable event IDs.", cls="muted")),
                         Section(H2("Evidence policy"), P("Retention is off by default. Enable it per source; retained frames are privacy-masked and restricted to operators.")),
-                        Section(H2("Source and engine placement"), P("Capture and inference use independent contracts. This build runs locally; remote workers and GPU configuration remain separate later work."))]
+                        Section(H2("Source and engine placement"), P("Capture and inference use independent contracts."), A("Configure engine and cameras", href="/integration", cls="button secondary"))]
         if view in ("overview", "sources"):
             observations = store.observations(selected or None, limit=20)
             content.append(Section(H2("Recent observations"), table(["Question", "Result", "Captured", "Provenance"],
@@ -303,6 +304,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     @app.route("/ui/questions/{source_id}/{question_id}", methods=["GET"])
     def question_editor(source_id: str, question_id: str, request):
+        engine = pipeline.engine
         if request.scope.get("auth_role") != "operator":
             return Response("Operator permission required", status_code=403)
         if source_id not in pipeline.sources:
@@ -336,6 +338,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     @app.route("/ui/questions/{source_id}/{question_id}", methods=["POST"])
     async def save_question(source_id: str, question_id: str, request):
+        engine = pipeline.engine
         if source_id not in pipeline.sources:
             raise ValueError("Unknown source")
         form = await request.form()
@@ -376,15 +379,38 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     async def capture(source_id: str, request):
         result = await run_in_threadpool(pipeline.run, source_id)
         summary = result["result"]
-        content = [P("Capture result: " + summary["status"]), Pre(json.dumps(summary, indent=2)),
+        questions = {r["spec"].question_id: r["spec"].text for r in store.questions(source_id)}
+        answers = []
+        for answer in summary["answers"]:
+            value = answer["value"]
+            label = "Unknown — no valid answer"
+            if answer["status"] == "success":
+                if type(value) is bool:
+                    human_question = questions.get(answer["question_id"]) == "Is there a human in the picture?"
+                    label = ("Human present" if value else "No human detected") if human_question else ("Yes" if value else "No")
+                else:
+                    label = str(value)
+            answers.append(Section(H2(questions.get(answer["question_id"], answer["question_id"])), P(label)))
+        error = summary.get("error") or {}
+        guidance = {"remote_consent_required": "Enable image transmission in Engine and camera setup, then capture again.",
+                    "worker_unavailable": "The worker is disconnected. Start or check your antec session in Engine and camera setup.",
+                    "worker_auth": "The worker access key was rejected. Check its protected setup.",
+                    "capture_timeout": "The camera did not respond in time. Check its connection and address."}.get(error.get("code"))
+        content = [P("Capture completed" if summary["status"] == "success" else "Capture did not produce a valid model result", role="status"),
+                   *answers, P(guidance, role="alert") if guidance else None,
+                   A("Engine and camera setup", href="/integration") if error else None,
+                   P(f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds · Engine: {summary['engine_id']}"),
+                   Details(Summary("Technical details"), Pre(json.dumps(summary, indent=2))),
+                   action("Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
                    A("Return to overview", href="/", cls="button secondary")]
         if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, summary["frame_id"]):
-            content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; mock answers are not computer vision",
+            content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; inspect recorded engine provenance",
                                              tuple(r["policy"].roi for r in store.questions(source_id))))
         return page("Capture inspection", request, content, view="sources")
 
     @app.route("/ui/sources/{source_id}/demo", methods=["POST"])
     async def demo(source_id: str, request):
+        engine = pipeline.engine
         if source_id not in pipeline.sources or pipeline.sources[source_id].kind != "synthetic" or not isinstance(engine, MockInferenceEngine):
             raise ValueError("Demo is available only for synthetic mock sources")
         source = pipeline.source(source_id)

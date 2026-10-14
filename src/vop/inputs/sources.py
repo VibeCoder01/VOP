@@ -22,7 +22,11 @@ class FrameSource(Protocol):
 
 
 def camera_endpoint(source: SourceSpec) -> str:
-    endpoint = os.environ.get(source.settings["endpoint_env"], "")
+    if source.settings.get("endpoint_secret_ref"):
+        from vop.secrets import SecretStore
+        endpoint = SecretStore().get(source.settings["endpoint_secret_ref"])
+    else:
+        endpoint = os.environ.get(source.settings["endpoint_env"], "")
     try:
         parsed = urlsplit(endpoint)
         allowed_schemes = ("rtsp", "rtsps") if source.kind == "rtsp" else ("http", "https")
@@ -65,6 +69,13 @@ def capture_inline(source: SourceSpec, timeout: float = 10) -> FrameEnvelope:
         return adapter.from_bytes(payload, source.source_id)
     if source.kind in ("usb", "rtsp"):
         locator = source.settings["device"] if source.kind == "usb" else camera_endpoint(source)
+        if source.kind == "rtsp" and source.settings.get("secret_ref"):
+            from vop.secrets import SecretStore
+            from urllib.parse import quote, urlunsplit
+            credentials = SecretStore().camera(source.settings["secret_ref"])
+            parsed = urlsplit(locator)
+            authority = quote(credentials["username"], safe="") + ":" + quote(credentials["password"], safe="") + "@" + parsed.netloc
+            locator = urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, ""))
         try:
             import cv2
         except ImportError as exc:

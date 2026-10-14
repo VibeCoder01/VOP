@@ -351,7 +351,7 @@ def csv_export(body):
 def configuration(settings, store, reliable):
     sources = []
     policies = []
-    for source in settings.sources:
+    for source in reliable.pipeline.sources.values():
         questions = []
         for record in store.questions(source.source_id):
             q = record["spec"]
@@ -362,7 +362,7 @@ def configuration(settings, store, reliable):
         sources.append({"id": source.source_id, "name": source.name, "kind": source.kind, "settings": source.settings,
                         "questions": questions, **store.source_control(source.source_id)})
     return {"schema_version": 1, "config": {"schema_version": 1, "database": "data/vop.sqlite3", "timezone": settings.timezone_name,
-             "engine": {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}, "sources": sources,
+             "engine": getattr(reliable.pipeline, "engine_profile", None) or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}, "sources": sources,
              "capture_timeout_seconds": settings.capture_timeout_seconds, "inference_timeout_seconds": settings.inference_timeout_seconds},
             "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in {(p['source_id'], p['question_id'], p['version']) for p in policies}], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules()]}
 

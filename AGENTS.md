@@ -1,15 +1,15 @@
 # Repository instructions for Codex
 
 The version-controlled source of truth is `SRS-v0.2.md`. Phase 0 is merged. The product owner
-authorised **Phase 3 reliable release** after accepting Phase 2 on 13 October 2026.
-`CODEX_PHASE_3.md` records its scope and exit criteria; Phase 4+ remains unauthorised. Phase-specific restrictions below apply to the
+authorised **Phase 4 GPU worker and live-camera pilot** on 13 October 2026.
+`CODEX_PHASE_4_PLAN.md` records its scope and exit criteria; Phase 5+ remains unauthorised. Phase-specific restrictions below apply to the
 named phase, not to all future work.
 
 ## Working rules
 
 - Read `CODEX_PHASE_0.md` and the relevant SRS subsections before implementing Phase 0. Keep changes minimal and traceable to its acceptance IDs.
 - Preserve separation between input acquisition, decision/inference, temporal measurement, and UI. In Phase 0, implement only the minimum typed frame/inference interfaces and a CLI proof of concept.
-- **Deployment neutrality is mandatory from Phase 0.** The Dell CPU is a benchmark target, **not** the required location of all future models. Preserve an inference request/response interface that could be implemented by a local CPU model, a local GPU model, or an authenticated remote worker (for example on `antec`). The caller must not need to know the hardware, import the model implementation, or require a common filesystem. Do not implement remote transport yet.
+- **Deployment neutrality is mandatory from Phase 0.** The Dell CPU is a benchmark target, **not** the required location of all future models. Preserve an inference request/response interface that could be implemented by a local CPU model, a local GPU model, or an authenticated remote worker (for example on `antec`). The caller must not need to know the hardware, import the model implementation, or require a common filesystem. Remote transport was excluded from Phase 0 and is now authorised within the Phase 4 contract.
 - Keep source location independent of inference location: a camera can be captured on one machine and evaluated by another. Model/backend selection must not be conflated with camera/source IDs. Do not assume providers return comparable confidence scores or that fallback to another model is automatically safe.
 
 - **Never fabricate a model result, benchmark, successful camera connection, passing test or deployment.** Label synthetic/mock results clearly. If the real model fails to run, record an honest feasibility outcome and leave the mock-based test suite working.
@@ -26,4 +26,4 @@ named phase, not to all future work.
 Provide changed files, exact commands/results, skipped hardware tests, any actual model
 revision/versions/measurements, open limitations, and a recommendation for the next phase.
 Phase 0 measurements remain historical evidence; do not invent a new model or camera run.
-Stop after Phase 3; Phase 4 requires explicit new authorisation. Do not auto-merge PRs.
+Stop after Phase 4; Phase 5 requires explicit new authorisation. Do not auto-merge PRs.

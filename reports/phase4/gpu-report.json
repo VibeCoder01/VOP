@@ -1,0 +1,1424 @@
+{
+  "created_at_utc": "2026-10-13T22:38:44.963194+00:00",
+  "model_revision": "051bcc464b01b9f92942b364d9586b0ef5912432",
+  "device_requested": "cuda:0",
+  "precision": "bfloat16",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "accelerate": "1.15.0",
+  "transformers": "5.19.0",
+  "outcome": "passed",
+  "cases": [
+    {
+      "questions": 1,
+      "first_seconds": 1.779609356992296,
+      "warm_median_seconds": 0.031063586997333914,
+      "runs": [
+        {
+          "seconds": 1.779609356992296,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.176752+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 1779.4806900055846,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                }
+              },
+              "usage": {
+                "input_tokens": 120,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 120,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.03252566100854892,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.209362+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 32.431977000669576,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                }
+              },
+              "usage": {
+                "input_tokens": 120,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 120,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.031055860992637463,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.240475+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 30.981392992543988,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                }
+              },
+              "usage": {
+                "input_tokens": 120,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 120,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.031063586997333914,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.271595+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 30.97781700489577,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                }
+              },
+              "usage": {
+                "input_tokens": 120,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 120,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        }
+      ]
+    },
+    {
+      "questions": 3,
+      "first_seconds": 0.07978800300043076,
+      "warm_median_seconds": 0.03870972100412473,
+      "runs": [
+        {
+          "seconds": 0.07978800300043076,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.351671+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "score": 0.9830850867332734,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 79.64837198960595,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                }
+              },
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 179,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.03955616999883205,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.391300+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "score": 0.9830850867332734,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 39.44719799619634,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                }
+              },
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 179,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.03870972100412473,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.430078+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "score": 0.9830850867332734,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 38.60751600586809,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                }
+              },
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 179,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.0386436869885074,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.468783+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "score": 0.9830850867332734,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 38.545392992091365,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9830850867332734,
+                  "probabilities": {
+                    "white": 0.9830850867332734,
+                    "black": 0.01691491326672651
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                }
+              },
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 179,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        }
+      ]
+    },
+    {
+      "questions": 5,
+      "first_seconds": 0.04604611999820918,
+      "warm_median_seconds": 0.04584075200546067,
+      "runs": [
+        {
+          "seconds": 0.04604611999820918,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.515191+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "score": 0.9840936082881853,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "blue_circle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "score": 0.9940889311437562,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "green_triangle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": false,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                },
+                "score": 0.01590639171181471,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 45.90560098586138,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "blue_circle": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "green_triangle": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                }
+              },
+              "usage": {
+                "input_tokens": 215,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 215,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.046234476001700386,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.561508+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "score": 0.9840936082881853,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "blue_circle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "score": 0.9940889311437562,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "green_triangle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": false,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                },
+                "score": 0.01590639171181471,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 46.122041007038206,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "blue_circle": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "green_triangle": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                }
+              },
+              "usage": {
+                "input_tokens": 215,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 215,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.04584075200546067,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.607421+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "score": 0.9840936082881853,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "blue_circle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "score": 0.9940889311437562,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "green_triangle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": false,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                },
+                "score": 0.01590639171181471,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 45.733267994364724,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "blue_circle": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "green_triangle": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                }
+              },
+              "usage": {
+                "input_tokens": 215,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 215,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        },
+        {
+          "seconds": 0.04580194999289233,
+          "result": {
+            "status": "success",
+            "engine_id": "liquid-d1-3b",
+            "engine_version": "051bcc464b01b9f92942b364d9586b0ef5912432",
+            "source_id": "file-image",
+            "frame_id": "d93bcb6f-b9fe-4208-95f6-cb343c5d4493",
+            "captured_at_utc": "2026-10-13T22:38:47.397123+00:00",
+            "processed_at_utc": "2026-10-13T22:38:49.653288+00:00",
+            "answers": [
+              {
+                "question_id": "red_square",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "score": 0.9924227587321393,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "background",
+                "question_version": "1",
+                "kind": "choice",
+                "status": "success",
+                "value": "white",
+                "raw_provider_fields": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "score": 0.9840936082881853,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "brightness",
+                "question_version": "1",
+                "kind": "ordinal",
+                "status": "success",
+                "value": 1.8412321291673066,
+                "raw_provider_fields": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "score": 0.8550527699875972,
+                "score_semantics": "Liquid confidence: maximum option probability",
+                "threshold_used": null,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "blue_circle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": true,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "score": 0.9940889311437562,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              },
+              {
+                "question_id": "green_triangle",
+                "question_version": "1",
+                "kind": "binary",
+                "status": "success",
+                "value": false,
+                "raw_provider_fields": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                },
+                "score": 0.01590639171181471,
+                "score_semantics": "Liquid noul: model score for yes",
+                "threshold_used": 0.5,
+                "calibrated": false,
+                "error": null
+              }
+            ],
+            "elapsed_ms": 45.68758299865294,
+            "provider_raw": {
+              "answers": {
+                "red_square": {
+                  "type": "noul",
+                  "noul": 0.9924227587321393
+                },
+                "background": {
+                  "type": "choice",
+                  "choice": "white",
+                  "confidence": 0.9840936082881853,
+                  "probabilities": {
+                    "white": 0.9840936082881853,
+                    "black": 0.01590639171181471
+                  }
+                },
+                "brightness": {
+                  "type": "score",
+                  "score": 1.8412321291673066,
+                  "confidence": 0.8550527699875972,
+                  "probabilities": {
+                    "0": 0.013820640820290766,
+                    "1": 0.1311265891921122,
+                    "2": 0.8550527699875972
+                  },
+                  "legend": {
+                    "0": "Dark",
+                    "1": "Medium",
+                    "2": "Bright"
+                  }
+                },
+                "blue_circle": {
+                  "type": "noul",
+                  "noul": 0.9940889311437562
+                },
+                "green_triangle": {
+                  "type": "noul",
+                  "noul": 0.01590639171181471
+                }
+              },
+              "usage": {
+                "input_tokens": 215,
+                "output_tokens": 0
+              }
+            },
+            "usage": {
+              "input_tokens": 215,
+              "output_tokens": 0,
+              "runtime": {
+                "device": "cuda:0",
+                "precision": "bfloat16"
+              }
+            },
+            "error": null,
+            "synthetic": false
+          }
+        }
+      ]
+    }
+  ],
+  "peak_host_rss_bytes": 6079926272,
+  "peak_child_swap_bytes": 0,
+  "gpu_name": "NVIDIA GeForce RTX 5060 Ti",
+  "gpu_capability": [
+    12,
+    0
+  ],
+  "free_vram_before_bytes": 16475947008,
+  "total_vram_bytes": 16619667456,
+  "load_seconds": 2.294729911998729,
+  "parameter_devices": [
+    "cuda:0"
+  ],
+  "floating_parameter_dtypes": [
+    "torch.bfloat16"
+  ],
+  "peak_vram_allocated_bytes": 6299108864,
+  "peak_vram_reserved_bytes": 6314524672
+}

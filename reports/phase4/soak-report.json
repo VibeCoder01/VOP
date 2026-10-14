@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "duration_requested_seconds": 3600.0,
+  "input": "synthetic",
+  "peak_worker_tree_rss_bytes": 98041856,
+  "max_observed_queue_depth": 0,
+  "health_failures": 0,
+  "worker_reported_skips": 119539,
+  "duration_actual_seconds": 3600.093999999999,
+  "success": 43959,
+  "overloaded": 119552,
+  "errors": 0
+}

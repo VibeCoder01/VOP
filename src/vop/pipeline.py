@@ -67,7 +67,8 @@ class Pipeline:
                 outcomes = []
                 masks = source.settings.get("privacy_masks", [])
                 for roi, group in groups.items():
-                    input_frame = preprocess(frame, masks, roi) if masks or roi else frame
+                    # Strip original metadata for every backend before optional remote transmission.
+                    input_frame = preprocess(frame, masks, roi)
                     group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
                     group_result = infer(self.engine, group_request)
                     if (group_result.frame_id != frame.frame_id or group_result.source_id != source_id

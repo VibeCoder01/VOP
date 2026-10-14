@@ -1,0 +1,50 @@
+{
+  "comparison": "historical CPU FP32 vs Phase4 BF16 on the same synthetic fixture",
+  "fixture_sha256": "d00897c187b79246860701e3b958ebbbb7d1452b83b215d3fc73fdc8df2a8cdd",
+  "cpu_fixture_sha256": "d00897c187b79246860701e3b958ebbbb7d1452b83b215d3fc73fdc8df2a8cdd",
+  "cases": [
+    {
+      "questions": 1,
+      "cpu_fp32_values": {
+        "red_square": true
+      },
+      "gpu_bf16_values": {
+        "red_square": true
+      },
+      "matching_discrete_answers": true
+    },
+    {
+      "questions": 3,
+      "cpu_fp32_values": {
+        "red_square": true,
+        "background": "white",
+        "brightness": 1.8361759520575593
+      },
+      "gpu_bf16_values": {
+        "red_square": true,
+        "background": "white",
+        "brightness": 1.8412321291673066
+      },
+      "matching_discrete_answers": true
+    },
+    {
+      "questions": 5,
+      "cpu_fp32_values": {
+        "red_square": true,
+        "background": "white",
+        "brightness": 1.8361754448175995,
+        "blue_circle": true,
+        "green_triangle": false
+      },
+      "gpu_bf16_values": {
+        "red_square": true,
+        "background": "white",
+        "brightness": 1.8412321291673066,
+        "blue_circle": true,
+        "green_triangle": false
+      },
+      "matching_discrete_answers": true
+    }
+  ],
+  "accuracy_claim": "none; labelled camera workload remains pending"
+}
