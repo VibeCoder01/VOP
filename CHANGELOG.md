@@ -2,6 +2,10 @@
 
 ## Phase 4 practical-use follow-up — 14 October 2026
 
+- Removed extra permission checkboxes from session start, camera preview and worker selection.
+  Labelled operator actions now supply permission; the launcher reuses the selected worker.
+- Added linked prerequisite warnings and disabled actions for known missing setup, plus worker
+  preflight before one-shot camera acquisition. Added app-wide semantic status/action colours.
 - Added confirmed, recoverable removal of sources and questions, persistent across restart,
   with disabled Restore controls. Immutable history remains; dependent rules are disabled and
   queued webhook retries cancelled. Empty configurations export and reload correctly.

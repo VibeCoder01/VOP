@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description="Start the local VOP browser dashboard")
     parser.add_argument("config", nargs="?", type=Path, default=root / "sample-config" / "phase1.json")
     parser.add_argument("--allow-live-sources", action="store_true")
-    parser.add_argument("--allow-remote-inference", action="store_true")
+    parser.add_argument("--allow-remote-inference", action="store_true", help="Compatibility flag; the dashboard already uses its explicitly selected worker")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--remember-access-key", action="store_true", help="Reuse a Windows DPAPI-protected operator key")
     parser.add_argument("--open-browser", action="store_true")
@@ -56,7 +56,7 @@ def main():
     print("Local operator access key (shown intentionally for browser sign-in):")
     print(token, flush=True)
     print("Mock inference by default. Saved sampling resumes; live sources require the opt-in flag. Press Ctrl+C to stop.", flush=True)
-    app = create_app(load_config(path), token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=args.allow_remote_inference)
+    app = create_app(load_config(path), token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=True)
     if args.open_browser:
         opener = Timer(1, webbrowser.open, args=(f"http://127.0.0.1:{args.port}/",))
         opener.daemon = True

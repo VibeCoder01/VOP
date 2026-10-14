@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 
 from vop.config import SourceSpec, identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec
-from vop.dashboard import field, hidden, evidence_image
+from vop.dashboard import field, hidden, evidence_image, dependency_panel
 from vop.inference.liquid_d1 import CHECKPOINT_REVISION
 from vop.inference.mock import MockInferenceEngine
 from vop.inference.remote import RemoteInferenceEngine, profile
@@ -19,6 +19,13 @@ from vop.inputs.sources import SourceAdapters
 from vop.preprocessing import preprocess
 from vop.secrets import SecretStore, reference
 from vop.storage import dumps
+from vop.ui_readiness import camera_dependencies, worker_dependencies
+
+
+def antec_profile(engine):
+    return (isinstance(engine, RemoteInferenceEngine) and engine.config["worker_id"] == "antec-d1"
+            and engine.config["transport"] == "ssh" and engine.config["url"] == "http://127.0.0.1:8878"
+            and engine.engine_id == "liquid-d1-3b" and engine.engine_version == CHECKPOINT_REVISION and not engine.synthetic)
 
 
 def worker_health_content(health):
@@ -27,7 +34,18 @@ def worker_health_content(health):
         message = "Worker ready — " + ("synthetic mock" if health.get("synthetic") else str(runtime.get("gpu_name") or runtime.get("device") or "model loaded"))
     else:
         message = "Worker unavailable. Start an antec session below, or check your existing worker and tunnel."
-    return [P(message, role="status"), P("Device: " + str(runtime.get("device", "not connected")) + " · Precision: " + str(runtime.get("precision") or "not reported")),
+    error = health.get('error') or ''
+    code = error.get('code', '') if isinstance(error, dict) else str(error)
+    guidance = {"gpu_capacity": "GPU memory is insufficient. Check antec's existing workload and retry the timed session.",
+                "host_capacity": "The worker has insufficient free RAM for this model.",
+                "secret_unavailable": "Save the worker access key in backend setup.",
+                "worker_auth": "The worker rejected its key. Correct the saved worker access key.",
+                "worker_identity": "The running worker does not match the selected identity/model. Correct the profile or worker.",
+                "clock_skew": "Synchronise the laptop and worker clocks before retrying.",
+                "worker_unavailable": "Start the worker and SSH tunnel, then test health again."}.get(code)
+    return [P(message, role="status", cls="readiness success" if health.get("ready") else "readiness error"),
+            P(guidance, cls="readiness warning") if guidance else None,
+            P("Device: " + str(runtime.get("device", "not connected")) + " · Precision: " + str(runtime.get("precision") or "not reported")),
             P(("Processing another image" if health.get("busy") else "No image is currently being processed") if health.get("ready") else "Processing status is unavailable"),
             Details(Summary("Connection details"), Pre(dumps(health)))]
 
@@ -90,19 +108,26 @@ def install_integration(app, settings, store, pipeline):
         if session["active"]:
             from zoneinfo import ZoneInfo
             session_message = "Session requested until " + session["expires_at"].astimezone(ZoneInfo(settings.timezone_name)).strftime("%H:%M %Z") + ". Test worker health to confirm it is ready."
+        elif session.get("ended"):
+            session_message = "The last app-managed session ended. Start another session and test worker health before capture."
+        session_problems = worker_dependencies(pipeline.engine)
+        if not antec_profile(pipeline.engine):
+            session_problems.append(("Select the real antec-d1 SSH backend at http://127.0.0.1:8878 first.", "#backend-setup"))
+        import os, shutil
+        if not shutil.which("ssh.exe" if os.name == "nt" else "ssh"):
+            session_problems.append(("SSH is missing. Install OpenSSH or Git for Windows before starting an antec session.", "#connection"))
+        cached_health = getattr(pipeline.engine, "last_health", None)
         content = [Section(H2("Selected inference backend"), P("Engine: " + pipeline.engine.engine_id), Details(Summary("Saved backend details"), Pre(dumps(current))),
-                    P("Remote consent is active for this process." if getattr(pipeline.engine, "allow_remote", False) else "Remote image transmission is not enabled. Mock/local configuration is explicit."),
+                    P("Captures use this selected worker. Images are privacy-masked before transmission." if isinstance(pipeline.engine, RemoteInferenceEngine) else "Mock selected — synthetic answers only; no image understanding.", cls="readiness info"),
                     P("Worker profiles use a local loopback endpoint reached directly or through an SSH tunnel. Camera location and model location are independent.")),
-                   Section(H2("Antec connection"), P(session_message, role="status"),
-                    P("Start a timed GPU session and its SSH tunnel. The previous llama workload is restored at the end, on Stop, or when the connection closes. Camera capture and image transmission stay separate controls."),
+                   Section(H2("Antec connection"), P(session_message, role="status", cls="readiness info" if session["active"] else "readiness warning"),
+                    P("Start temporarily pauses antec's llama workload, starts a timed GPU session and SSH tunnel, then restores the workload at the end, on Stop, or when the connection closes."),
+                    dependency_panel(session_problems, ready="Backend and local key are set. Start checks the tunnel port and trusted SSH login; model/GPU readiness is confirmed by Test worker health."),
                     Form(hidden(csrf), Select(*(Option(str(m) + " minutes", value=str(m)) for m in (15, 30, 60)), name="minutes", aria_label="Session duration"),
-                         field("I authorise temporarily pausing antec's llama workload and restoring it when this session ends", "pause_consent", "on", type="checkbox"),
-                         Button("Start antec session", disabled=session["active"]), method="post", action="/integration/session/start"),
-                    Form(hidden(csrf), Button("Stop session and restore workload", disabled=not session["active"]), method="post", action="/integration/session/stop")),
-                   Section(H2("Image transmission permission"),
-                    P("Allowed for this app session" if getattr(pipeline.engine, "allow_remote", False) else "Off — camera images cannot reach the worker yet", role="status"),
-                    Form(hidden(csrf), field("Allow preprocessed camera images to the currently selected worker", "allow", "on", type="checkbox", checked=getattr(pipeline.engine, "allow_remote", False)),
-                         Button("Save image permission"), method="post", action="/integration/consent")),
+                         Button("Start antec session", disabled=session["active"] or bool(session_problems)), method="post", action="/integration/session/start"),
+                    P("Stop is available only while this app owns an active session.", cls="muted"),
+                    Form(hidden(csrf), Button("Stop session and restore workload", disabled=not session["active"], cls="danger"), method="post", action="/integration/session/stop"),
+                    *(worker_health_content(cached_health) if cached_health else [P("Worker connection has not been checked in this app session. Starting a session does not prove the model is ready.", cls="readiness warning")]), id="connection"),
                    Section(H2("Choose backend"), Form(hidden(csrf),
                     Select(Option("Local mock — no vision", value="mock", selected=current["kind"] == "mock"), Option("Authenticated worker", value="worker", selected=current["kind"] == "worker"), name="kind", aria_label="Backend"),
                     field("Engine ID", "engine_id", worker.get("id", "liquid-d1-3b"), required=True),
@@ -113,9 +138,10 @@ def install_integration(app, settings, store, pipeline):
                     field("Worker secret reference", "secret_ref", worker.get("secret_ref", "antec-worker")),
                     field("Worker access key (blank keeps saved key)", "worker_token", type="password", autocomplete="new-password"),
                     field("Worker is synthetic (only for mock-worker tests)", "synthetic", "on", type="checkbox", checked=worker.get("synthetic", False)),
-                    field("I authorise sending preprocessed images to this selected worker for this process", "remote_consent", "on", type="checkbox"),
-                    Button("Save and select backend"), method="post", action="/integration/engine")),
-                   Form(hidden(csrf), Button("Test worker identity and health (no images)"), method="post", action="/integration/health"),
+                    P("Selecting a worker enables image transmission to it. Starting a session or capturing remains a separate action."),
+                    Button("Save and select backend"), method="post", action="/integration/engine"), id="backend-setup"),
+                   Form(hidden(csrf), dependency_panel(worker_dependencies(pipeline.engine)) if worker_dependencies(pipeline.engine) else None,
+                        Button("Test worker identity and health (no images)", disabled=bool(worker_dependencies(pipeline.engine))), method="post", action="/integration/health"),
                    Section(H2("Protected Tapo setup"), P("Credentials are protected locally and never saved in the configuration or audit. Saving does not connect or start sampling. A blank password preserves the existing camera credentials. Retry setup and connection tests as needed."),
                     P("Use a different source ID for each camera, such as tapo-c200 and tapo-c210. Reusing an ID updates that camera's setup."),
                     P(camera_notice),
@@ -126,22 +152,22 @@ def install_integration(app, settings, store, pipeline):
                          field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", endpoint, placeholder="rtsp://192.168.1.100:554/stream1", required=True),
                          field("Camera account username", "username", username, autocomplete="username"),
                          field("Camera account password (blank keeps saved credentials)", "password", type="password", autocomplete="new-password"),
-                         Button("Save protected camera setup"), method="post", action="/integration/camera")),
+                         Button("Save protected camera setup"), method="post", action="/integration/camera"), id="camera-setup"),
                    Section(H2("Camera connection tests"),
                          *(Form(hidden(csrf), P(s.name + " · " + s.source_id),
-                                field("I authorise one local camera capture; no image is sent to a model", "capture_consent", "on", type="checkbox", id="consent-" + s.source_id),
-                                Button("Test camera connection"), method="post", action=f"/integration/cameras/{s.source_id}/test") for s in cams),
-                         P("For normal inference, enable the source in Sources and explicitly allow live capture at startup. Remote inference additionally requires the separate consent above. Saved sampling does not bypass these checks."))]
+                                dependency_panel(camera_dependencies(s), ready="Test captures one local preview; it does not use a worker or retain evidence. Camera reachability and password validity are checked on Test."),
+                                Button("Test camera connection", disabled=bool(camera_dependencies(s))), method="post", action=f"/integration/cameras/{s.source_id}/test") for s in cams),
+                         P("Connection tests work while a source is disabled. For inference, enable the source and at least one question in Sources / Questions. Use Start VOP.cmd to launch with live capture enabled."))]
         return app.state.page("Engine and camera setup", request, content, view="settings", notice=request.query_params.get("notice"))
 
     @app.route("/integration/session/start", methods=["POST"])
     async def session_start(request):
         form = await request.form()
-        if "pause_consent" not in form:
-            raise ValueError("Tick the pause-and-restore permission before starting a session")
         engine = pipeline.engine
-        if not isinstance(engine, RemoteInferenceEngine) or engine.config["worker_id"] != "antec-d1" or engine.config["transport"] != "ssh" or engine.config["url"] != "http://127.0.0.1:8878" or engine.engine_id != "liquid-d1-3b" or engine.engine_version != CHECKPOINT_REVISION or engine.synthetic:
+        if not antec_profile(engine):
             raise ValueError("Select the real antec-d1 SSH backend at http://127.0.0.1:8878 before starting its session")
+        if worker_dependencies(engine):
+            raise ValueError("Save a readable worker access key in backend setup before starting antec")
         await run_in_threadpool(app.state.worker_session.start, int(form.get("minutes", "15")))
         store.audit("worker_session", "start_requested")
         return RedirectResponse("/integration?notice=Antec+session+starting.+Test+worker+health+in+a+few+seconds.", status_code=303)
@@ -178,7 +204,7 @@ def install_integration(app, settings, store, pipeline):
                 if not 32 <= len(key) <= 256 or not key.isascii() or any(c.isspace() for c in key):
                     raise ValueError("Worker key must be 32–256 ASCII characters without whitespace")
                 await run_in_threadpool(secrets.set, value["secret_ref"], key)
-            engine = RemoteInferenceEngine(value, allow_remote="remote_consent" in form, secrets=secrets)
+            engine = RemoteInferenceEngine(value, allow_remote=True, secrets=secrets)
         else:
             raise ValueError("Unknown engine kind")
         busy()
@@ -201,6 +227,7 @@ def install_integration(app, settings, store, pipeline):
                 health = await run_in_threadpool(pipeline.engine.health)
             except ProviderError as exc:
                 health = {"ready": False, "error": exc.code, "message": exc.message}
+                pipeline.engine.last_health = health
         else:
             health = {"ready": True, "device": "mock", "synthetic": True, "engine_id": pipeline.engine.engine_id}
         store.audit("engine_health", "ready" if health.get("ready") else "unavailable")
@@ -249,9 +276,8 @@ def install_integration(app, settings, store, pipeline):
 
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])
     async def camera_test(source_id: str, request):
-        form = await request.form()
-        if "capture_consent" not in form or source_id not in pipeline.sources or pipeline.sources[source_id].kind != "rtsp":
-            raise ValueError("Explicit camera capture consent is required")
+        if source_id not in pipeline.sources or pipeline.sources[source_id].kind != "rtsp":
+            raise ValueError("Choose a saved camera before testing its connection")
         busy()
         try:
             source = pipeline.sources[source_id]
@@ -259,11 +285,11 @@ def install_integration(app, settings, store, pipeline):
                 frame = await run_in_threadpool(SourceAdapters(allow_live_sources=True, timeout_seconds=settings.capture_timeout_seconds).capture, source)
                 masked = await run_in_threadpool(preprocess, frame, source.settings.get("privacy_masks", []), preview=True)
                 pipeline.latest_preview = (source_id, frame.frame_id, masked.payload)
-                content = [P(f"Capture succeeded: {frame.width} × {frame.height}. No inference was requested; evidence was not retained."), evidence_image(f"/ui/preview/{source_id}/{frame.frame_id}", "Privacy-masked connection preview")]
+                content = [P(f"Capture succeeded: {frame.width} × {frame.height}. No inference was requested; evidence was not retained.", cls="readiness success"), evidence_image(f"/ui/preview/{source_id}/{frame.frame_id}", "Privacy-masked connection preview")]
                 diagnostic = {"source_id": source_id, "status": "capture_success", "width": frame.width, "height": frame.height, "captured_at_utc": frame.captured_at_utc.isoformat()}
                 store.audit("camera_connection_test", dumps(diagnostic))
             except ProviderError as exc:
-                content = [P("Capture failed: " + exc.code), P("Check the camera account, LAN address and availability. You can save corrected credentials and retry.")]
+                content = [P("Capture failed: " + exc.code, cls="readiness error"), P("Check the camera account, LAN address and availability. You can save corrected credentials and retry.")]
                 diagnostic = {"source_id": source_id, "status": exc.code}
                 store.audit("camera_connection_test", dumps(diagnostic))
             with store.connection() as db:

@@ -210,14 +210,12 @@ The command-line launcher remains available with its previous behaviour.
 
 In **Engine and camera setup**, select the verified antec SSH backend, then:
 
-1. Choose a **15, 30 or 60 minute** session, tick the explicit pause-and-restore permission,
-   and press **Start antec session**. This opens the SSH tunnel and temporarily pauses the
+1. Choose a **15, 30 or 60 minute** session and press **Start antec session**. The button
+   opens the SSH tunnel and temporarily pauses the
    existing `llama-mtp.service` if it was active. No images are sent by this action.
 2. After a few seconds, press **Test worker identity and health**. It must show a ready real
    worker on CUDA before relying on its results. A requested session alone is not proof of readiness.
-3. In **Image transmission permission**, tick the checkbox and **Save image permission**.
-   This is separate from starting the worker and resets when the app restarts.
-4. Enable the camera in Sources. Keep its interval at **0** for manual captures and leave
+3. Enable the camera and at least one question in Sources / Questions. Keep its interval at **0** for manual captures and leave
    evidence off. Use **Capture once**, then **Capture again** on the readable result screen.
 
 **Stop session and restore workload** ends an app-owned session early. The remote helper also
@@ -233,13 +231,31 @@ for the current Windows user; VOP does not bypass host verification or collect S
 Worker health and capture results are shown in plain language. Expand **Connection details**
 or **Technical details** for native provenance and raw scores. A failed inference stays Unknown;
 it is never displayed as an absent person. Session controls do not change sampling, evidence,
-camera credentials or image-transmission permission.
+camera credentials. No permission checkboxes are required: selecting a worker enables its use
+by the dashboard; **Start** requests the stated temporary workload pause, and **Test camera
+connection** requests one local preview. Saving camera credentials still does not start capture.
 
 Use **Engine and camera setup** in the sidebar. Operator access and CSRF are required; viewers
 cannot see credential forms or invoke connection tests. Live capture and remote transmission
-are independent opt-ins. Saving credentials never starts capture/sampling. Saved remote profiles
-restart with transmission consent **off**, unless `--allow-remote-inference` is deliberately set.
+are independent settings. Saving credentials never starts capture/sampling. The dashboard launcher
+uses the saved selected worker after restart, without requiring permission to be ticked again.
+The lower-level API/service and remote-engine constructors retain their explicit transmission
+opt-in; the dashboard's worker selection/capture action supplies it. Authentication, CSRF,
+endpoint restrictions, evidence retention controls and model-download opt-ins remain enforced.
 Local mock stays available and clearly labelled; there is no automatic mock/CPU fallback.
+
+**Needs attention** panels beside actions link to missing setup. Known failures disable Capture
+or Start rather than hiding the control: a disabled source, no enabled questions, missing camera
+dependency/address/account, unreadable worker key or previously unavailable worker. A one-shot
+dashboard capture checks worker health before acquiring an image. A last successful health check
+does not guarantee continued availability; GET pages show local prerequisites and cached results
+without connecting to cameras or workers. Test health again after starting/fixing a worker to
+clear a failed check. Camera preview tests work independently of source enabled state and worker
+readiness. For scheduled sampling, the existing bounded error/UNKNOWN behavior remains in place.
+
+Colour reinforces text throughout the app: blue actions/information, teal ready/success, amber
+missing prerequisites/unknown states, red failures/removal, and muted disabled states. Disabled
+buttons keep their explanatory text nearby; colour is not the only status cue.
 
 For Tapo **C200, C210 and C510W**, register a distinct source ID (for example `tapo-c200`), model,
 literal private LAN RTSP address such as `rtsp://192.168.1.100:554/stream1`, and the dedicated
@@ -277,7 +293,7 @@ For regular authorised live evaluation, start the dashboard with:
 
 Then enable the configured source in **Sources**. Leave its interval at 0 for manual captures,
 or explicitly choose a measured sample interval. Select the authenticated worker profile and
-check its separate image-transmission consent when ready. Privacy masks and ROI are applied
+test its health when ready. Privacy masks and ROI are applied
 on the capture host before any remote request. Evidence remains off unless separately enabled.
 
 The first remote transport uses SSH forwarding to an antec **loopback** worker. For the verified
