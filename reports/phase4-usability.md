@@ -33,6 +33,15 @@ Exact local commands:
 Windows: **211 passed, 4 skipped** (the Linux-only Bash lifecycle cases). Phase 4 HTTP smoke
 passed with restart persistence, disconnect-to-UNKNOWN and real Windows DPAPI. `pip check`
 reported no broken requirements. The release builder passed and includes the launcher.
+Both jobs passed in [the observed Windows/Ubuntu CI run](https://github.com/VibeCoder01/VOP/actions/runs/38635304638)
+for implementation commit `6e177c0`, including the Linux-only lock/lifecycle checks. The rebuilt
+wheel was reinstalled into the separate temporary Windows installation and its bundled Phase 4
+smoke passed. Archive SHA-256: `15d2e05dcf64ee6902ea1d63caac37c6169d3aeb13d5656753adad57aaf01b35`.
+Read-only `bash -n` validation on antec passed for the helper, and `command -v` confirmed Bash,
+setsid, flock, ss and systemctl exist. SSH login with BatchMode and strict host verification also
+passed using the running dashboard's environment. These checks did not pause services or run
+inference. The refreshed dashboard reused the actual protected operator key across processes;
+no new laptop reboot or real-browser opening test was performed for the launcher.
 Tests use synthetic frames, fake SSH
 processes and fake services, not real cameras or model weights. The Linux-only remote helper
 test executes the actual Bash script against temporary offline commands for Stop, stdin EOF, timeout
