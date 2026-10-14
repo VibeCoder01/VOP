@@ -9,7 +9,7 @@ from fasthtml.components import (A, Aside, Body, Button, Details, Div, Form, H1,
                                 Header, Html, Img, Input, Label, Link, Main, Meta, Nav, Option, P, Pre,
                                 Section, Select, Small, Span, Summary, Table, Tbody, Td, Textarea, Th,
                                 Thead, Title, Tr, Ul, Li)
-from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text
+from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text, ft_svg
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
@@ -66,6 +66,9 @@ button:disabled,button:disabled:hover{background:#dce3eb;color:#4d5f77;border-co
 .readiness.success{background:#ddf3eb;color:#075c46;border-color:#16886c}.readiness.warning{background:#fff1d4;color:#795000;border-color:#bc7c17}.readiness.info,.notice{background:#e1effc;color:#204f7c;border-color:#347cb8}.readiness.error,.error{background:#fce4e3;color:#922d34;border-color:#bd4149}
 .capture-source{padding:16px 0;border-bottom:1px solid var(--line)}.capture-source .actions{margin-top:10px}.tag{background:#e5e8fa;color:#484a8a;border-color:#b8bee6}summary{color:#225e91}input[type=checkbox]{accent-color:#1765b5}
 section[id]{scroll-margin-top:24px}
+.sidebar a.button.secondary,.sidebar button.secondary{background:#e3edf8;color:#174d81;border-color:#b9cee4}
+.sidebar a.button.secondary:hover,.sidebar button.secondary:hover{background:#cbdff3;color:#102e47}
+.chart .unobserved{fill:#fff1d4;stroke:none}.chart-legend{font-size:12px;color:#795000;margin:6px 0 12px}.chart-legend span{display:inline-block;background:#fff1d4;border:1px solid #bc7c17;width:14px;height:10px;margin-right:6px}
 """
 
 
@@ -101,9 +104,16 @@ def chart(points, label):
     if not numeric:
         return P("No numeric observations in this view.", cls="muted")
     maximum = max(1, max(numeric))
-    segments, current = [], []
+    segments, current, gaps, dots = [], [], [], []
     for i, point in enumerate(points):
         value = point["value"]
+        x = 18 + i * 640 / max(1, len(points) - 1)
+        stamp = point.get("local_label") or point.get("at_utc") or f"Sample {i + 1}"
+        if i and (point.get("gap_before") or not isinstance(value, (int, float)) or not isinstance(points[i-1]['value'], (int, float))):
+            previous_x = 18 + (i - 1) * 640 / max(1, len(points) - 1)
+            previous_stamp = points[i-1].get('local_label') or points[i-1].get('at_utc') or f"Sample {i}"
+            gaps.append(ft_svg('rect', Title(f"Unobserved interval: {previous_stamp} to {stamp}. No continuous observation is inferred."),
+                             x=previous_x, y=14, width=x-previous_x, height=116, cls="unobserved"))
         if point.get("gap_before") and current:
             segments.append(current)
             current = []
@@ -112,14 +122,17 @@ def chart(points, label):
                 segments.append(current)
             current = []
         else:
-            current.append((18 + i * 640 / max(1, len(points) - 1), 125 - float(value) * 105 / maximum))
+            y = 125 - float(value) * 105 / maximum
+            current.append((x, y))
+            dots.append(ft_svg('circle', Title(f"{stamp} · value {value}"), cx=x, cy=y, r=2.5))
     if current:
         segments.append(current)
-    return Svg(*(Line(x1=18, y1=y, x2=658, y2=y) for y in (20, 72, 125)),
+    return Div(Svg(*gaps, *(Line(x1=18, y1=y, x2=658, y2=y) for y in (20, 72, 125)),
                Text(f"{maximum:g}", x=2, y=20), Text("0", x=2, y=125),
                *(Polyline(points=" ".join(f"{x:.2f},{y:.2f}" for x, y in segment)) for segment in segments),
-               *(Circle(cx=x, cy=y, r=2.5) for segment in segments for x, y in segment),
-               viewBox="0 0 680 150", role="img", aria_label=label + "; gaps are not connected", cls="chart")
+               *dots,
+               viewBox="0 0 680 150", role="img", aria_label=label + "; amber bands mark unobserved gaps; gaps are not connected", cls="chart"),
+               P(Span(aria_hidden="true") if gaps else None, "Amber shading: unobserved interval — points are intentionally not joined." if gaps else "Solid lines join successful samples within the allowed observation gap.", cls="chart-legend" if gaps else "muted"))
 
 
 def evidence_image(url, label, rois=()):
@@ -288,7 +301,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     P("Episode rate: " + (f"{summary['episodes_per_hour']:.3f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval") + f" · Unobserved time: {summary['unknown_seconds']:.1f}s", cls="muted") if q.kind == "binary" else None,
                     P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". Values are ordered levels, not physical units.", cls="muted") if q.kind == "ordinal" else None,
                     Details(Summary("Daily episode counts / choice dwell"), Pre(json.dumps({"daily_counts": summary["daily_episode_counts"], "choice_dwell_seconds": summary["choice_dwell_seconds"]}, indent=2))),
-                    Small("Chart: latest 60 samples; unknown intervals break the line. Times shown in " + zone)))
+                    Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {d['policy'].max_gap_seconds:g}s break the line. Hover over points for timestamps in " + zone)))
         else:
             content += [Section(H2("Processing and access"), P("One inference slot; no queued frames. Live capture and model loading require explicit operator setup."),
                                 P("Current browser role: " + ("operator" if operator else "viewer")),

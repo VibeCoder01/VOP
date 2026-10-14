@@ -171,3 +171,37 @@ returned `active`. The idle owned dashboard was then restarted with the same DPA
 key and live-source flag. Authenticated `/api/v1/health` returned ready, no sampling/rule errors,
 and selected-worker transmission enabled. This does not establish that the now-stopped d1
 worker is ready; Start/Test remain explicit operator actions.
+
+
+## Sidebar contrast and chart-gap clarity — 14 October 2026
+
+The owner supplied screenshots of pale sidebar button text and a disconnected final chart
+point. The contrast defect came from older high-specificity sidebar rules keeping pale text
+when the newer shared secondary-button style supplied a pale background. Scoped sidebar
+normal/hover rules now set both background and dark foreground explicitly for links and buttons.
+
+Chart breaks are intentional: the existing replay policy marks intervals unobserved after
+failed/missing observations or gaps exceeding max_gap_seconds. They must not be joined as
+continuous observations. The chart now shades these intervals amber, includes an inline legend,
+and adds native SVG timestamp/value and gap-interval tooltips. It explicitly identifies the
+horizontal axis as equally spaced sample order. Raw observations, state replay, durations,
+coverage and all model outputs are unchanged.
+
+Changed files: `src/vop/dashboard.py`, `tests/test_phase2_browser_storage.py`, README, CHANGELOG
+and this report. No dependency or schema change. Offline checks cover normal/hover sidebar
+text contrast (at least 4.5:1), contiguous numeric samples, isolated samples after long gaps,
+null/error intervals, visible shading and tooltip timestamps. The targeted command
+`.\.venv\Scripts\python.exe -m pytest tests/test_phase2_browser_storage.py -q` passed
+**11 tests**. Full validation command: `.\.venv\Scripts\python.exe -m pytest -q`.
+
+No new camera, GPU or model test is required for this presentation-only fix. Model revision and
+historical measurements above remain unchanged. Browser automation of the local user page
+remains restricted; no new real-browser layout pass is claimed. The screenshot establishes the
+sidebar issue; offline rendered markup and colour contrast checks validate the correction.
+Continue the supervised Phase 4 pilot; Phase 5 remains unauthorised.
+
+Final local full suite: **224 passed, 4 skipped** (Linux-only helper cases). Release command
+`.\.venv\Scripts\python.exe tools\build_release.py` passed; ZIP SHA-256:
+`4116bfde1e2ccc4cbe91c56c79064f7251962b449c788e28054e91afb78d6142`.
+An active owner-started session was detected while preparing the dashboard refresh; it was
+left running to its existing lease rather than interrupted for this visual correction.

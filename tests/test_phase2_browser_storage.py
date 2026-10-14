@@ -166,3 +166,36 @@ def test_viewer_can_logout_and_cookie_tampering_denied(settings):
         assert client.get("/api/v1/health").status_code == 401
         client.cookies.set("vop_session", "tampered-role-operator")
         assert client.get("/api/v1/health").status_code == 401
+
+
+def test_chart_marks_gaps_without_joining_unknown_intervals():
+    from fasthtml.core import to_xml
+    from bs4 import BeautifulSoup
+    from vop.dashboard import chart
+    points = [{'value': 0, 'local_label': '20:00'}, {'value': 1, 'local_label': '20:01'},
+              {'value': 1, 'local_label': '20:02'}, {'value': 0, 'local_label': '20:20', 'gap_before': True},
+              {'value': None, 'local_label': '20:21'}, {'value': 1, 'local_label': '20:22'}]
+    html = to_xml(chart(points, 'Synthetic gap example'))
+    soup = BeautifulSoup(html, 'html.parser')
+    lines = soup.select('polyline')
+    assert len(lines) == 3
+    assert [len(line['points'].split()) for line in lines] == [3, 1, 1]
+    assert len(soup.select('circle')) == 5 and len(soup.select('rect.unobserved')) == 3
+    assert soup.select('circle')[-1].find('title').text == '20:22 · value 1'
+    assert 'points are intentionally not joined' in html
+    contiguous = BeautifulSoup(to_xml(chart(points[:3], 'Contiguous samples')), 'html.parser')
+    assert not contiguous.select('rect.unobserved') and len(contiguous.select('polyline')) == 1
+
+
+def test_sidebar_button_colours_have_readable_contrast():
+    from vop.dashboard import CSS
+    def luminance(value):
+        rgb = [int(value[i:i+2], 16) / 255 for i in (1, 3, 5)]
+        return sum(weight * (x / 12.92 if x <= .04045 else ((x + .055) / 1.055)**2.4)
+                   for x, weight in zip(rgb, (.2126, .7152, .0722)))
+    for state in ('', ':hover'):
+        selector = f'.sidebar a.button.secondary{state},.sidebar button.secondary{state}'
+        declarations = re.findall(re.escape(selector) + r'\{([^}]+)\}', CSS)[-1]
+        colours = dict(item.split(':', 1) for item in declarations.split(';') if ':' in item)
+        dark, light = sorted(luminance(colours[key]) for key in ('background', 'color'))
+        assert (light + .05) / (dark + .05) >= 4.5
