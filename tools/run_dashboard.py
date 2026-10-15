@@ -29,23 +29,103 @@ def remembered_key(vault, candidate):
         return candidate
 
 
+def owned_dashboard(process, port):
+    """Match this installation, Python runtime, Windows account and requested port."""
+    try:
+        if process.username() != psutil.Process().username():
+            return False
+        runtimes = {Path(sys.executable).resolve(), Path(sys._base_executable).resolve()}
+        if Path(process.exe()).resolve() not in runtimes:
+            return False
+        command = process.cmdline()
+        if len(command) < 2:
+            return False
+        script = Path(command[1])
+        if not script.is_absolute(): script = Path(process.cwd()) / script
+        if script.resolve() != Path(__file__).resolve():
+            return False
+        selected_port = 8765
+        for index, argument in enumerate(command[2:], 2):
+            if argument == '--port': selected_port = int(command[index + 1])
+            elif argument.startswith('--port='): selected_port = int(argument.split('=', 1)[1])
+        return selected_port == port
+    except (psutil.Error, OSError, ValueError, IndexError):
+        return False
+
+
 def trusted_listener(port):
     try:
-        account = psutil.Process().username()
-        for entry in psutil.net_connections(kind='tcp'):
-            if entry.status != psutil.CONN_LISTEN or entry.laddr.ip != '127.0.0.1' or entry.laddr.port != port or not entry.pid:
-                continue
-            process = psutil.Process(entry.pid)
-            if process.username() != account:
-                return False
-            for argument in process.cmdline():
-                if argument.endswith('run_dashboard.py'):
-                    path = Path(argument)
-                    if not path.is_absolute(): path = Path(process.cwd()) / path
-                    return path.resolve() == Path(__file__).resolve()
-        return False
+        return any(entry.status == psutil.CONN_LISTEN and entry.laddr.ip == '127.0.0.1'
+                   and entry.laddr.port == port and entry.pid and owned_dashboard(psutil.Process(entry.pid), port)
+                   for entry in psutil.net_connections(kind='tcp'))
     except (psutil.Error, OSError):
         return False
+
+
+def stop_existing(port, token, *, graceful_seconds=90):
+    ancestors = {os.getpid(), *(parent.pid for parent in psutil.Process().parents())}
+    targets = [process for process in psutil.process_iter() if process.pid not in ancestors and owned_dashboard(process, port)]
+    if trusted_listener(port):
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=35)
+        try:
+            connection.request('POST', '/api/v1/shutdown', headers={'Authorization': 'Bearer ' + token})
+            response = connection.getresponse()
+            response.read(4096)
+            graceful = response.status == 202
+            if not graceful:
+                # Older VOP versions have no lifecycle endpoint; close their owned session first.
+                connection.request('POST', '/integration/session/stop', headers={'Authorization': 'Bearer ' + token})
+                connection.getresponse().read(4096)
+        except (OSError, http.client.HTTPException):
+            graceful = False
+        finally:
+            connection.close()
+        if graceful:
+            psutil.wait_procs(targets, timeout=graceful_seconds)
+    for process in targets:
+        if not process.is_running() or not owned_dashboard(process, port):
+            continue
+        try:
+            descendants = process.children(recursive=True)
+            for child in [*reversed(descendants), process]:
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            _, alive = psutil.wait_procs([process, *descendants], timeout=5)
+            for child in alive:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            psutil.wait_procs(alive, timeout=5)
+        except psutil.NoSuchProcess:
+            pass
+    try:
+        with socket.socket() as listener:
+            if os.name != 'nt':
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', port))
+    except OSError:
+        raise RuntimeError('The VOP port is still in use. An unrelated process was left running. Close it or choose another port.') from None
+
+
+def managed_run(app, port):
+    server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=port, access_log=False, log_level='warning'))
+    requested = []
+
+    def shutdown(mode):
+        if requested:
+            return
+        requested.append(mode)
+        app.state.pipeline.stopping = True
+        app.state.sampler.stop_event.set()
+        app.state.reliable.stop_event.set()
+        server.should_exit = True
+
+    app.state.shutdown_request = shutdown
+    server.run()
+    return requested == ['restart']
 
 
 def open_workspace(port, token):
@@ -91,6 +171,7 @@ def main():
     parser.add_argument("--open-browser", action="store_true")
     parser.add_argument('--show-access-key', action='store_true', help='Advanced: display the API/operator key for manual clients')
     parser.add_argument('--manual-worker', action='store_true', help='Disable automatic on-demand Antec recovery')
+    parser.add_argument('--restart-existing', action='store_true', help='Stop this installation’s existing VOP server before starting')
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("Port must be 1–65535")
@@ -104,7 +185,14 @@ def main():
             token = remembered_key(SecretStore(), token)
         except Exception:
             parser.exit(1, 'VOP could not unlock its saved Windows settings. Close VOP, sign in with the same Windows account and try Start VOP again. No keys were replaced.\n')
-    if args.open_browser:
+    settings = load_config(path)
+    if args.restart_existing:
+        print('Stopping previous VOP instances. Waiting for current work to finish…', flush=True)
+        try:
+            stop_existing(args.port, token)
+        except (RuntimeError, psutil.Error) as exc:
+            parser.exit(1, str(exc) + '\n')
+    elif args.open_browser:
         try:
             with socket.create_connection(('127.0.0.1', args.port), timeout=.5):
                 pass
@@ -121,12 +209,15 @@ def main():
         print('Advanced operator/API key:')
         print(token, flush=True)
     print('Open Start VOP for automatic sign-in. Saved setup is reused; Antec connects when needed. Press Ctrl+C to stop.', flush=True)
-    app = create_app(load_config(path), token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=True, auto_recover=not args.manual_worker)
+    app = create_app(settings, token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=True, auto_recover=not args.manual_worker)
     if args.open_browser:
         opener = Timer(1, open_when_ready, args=(args.port, token))
         opener.daemon = True
         opener.start()
-    uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False, log_level="warning")
+    if managed_run(app, args.port):
+        # A new interpreter reloads code as well as configuration. Retain browser sessions.
+        os.environ['VOP_API_TOKEN'] = token
+        os.execv(sys.executable, [sys.executable, *(argument for argument in sys.argv if argument != '--open-browser')])
 
 
 if __name__ == "__main__":

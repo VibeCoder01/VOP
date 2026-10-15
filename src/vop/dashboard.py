@@ -29,7 +29,7 @@ CSS = """
 .shell{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}.sidebar{padding:32px 18px;background:#ececf0;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:auto}
 .brand{font-size:28px;letter-spacing:-1.6px;font-weight:700;padding:0 12px;color:#1d1d1f}.subtitle{font-size:11px;color:var(--muted);padding:7px 12px;letter-spacing:.4px}
 .navigation{display:grid;gap:4px;margin:34px 0 auto}.navigation a{padding:11px 14px;border-radius:9px;font-weight:500;transition:background 150ms,color 150ms}.navigation a:hover{background:#e0e0e5}.navigation a.current{background:#dbeaff;color:#0055b3}.sidebar small{font-size:11px;line-height:1.7;margin:28px 12px 12px;color:var(--muted)}.sidebar small p{font-size:11px;margin:0}.sidebar form{margin:0 10px}
-.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}
+.sidebar .restart-control{margin:0 10px 10px}.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}
 h1{font-size:34px;letter-spacing:-1.2px;line-height:1.15;margin:0;font-weight:650}h2{font-size:21px;letter-spacing:-.5px;margin:0 0 16px;line-height:1.3;font-weight:600}h3{font-size:16px;margin:22px 0 10px}p{line-height:1.6;margin:8px 0;color:var(--muted)}small,.muted{color:var(--muted);font-size:12px}section{margin:28px 0 36px}section[id]{scroll-margin-top:24px}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border:1px solid transparent;border-radius:9px;background:var(--accent);color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms,box-shadow 150ms,transform 150ms;line-height:1.3}.button:hover,button:hover{background:#0055b3}.button:active,button:active{transform:scale(.98)}.button.secondary,button.secondary{background:white;color:#0055b3;border-color:#d3d3d9}.button.secondary:hover,button.secondary:hover{background:#f0f5ff;border-color:#a8bfdf}.button.danger,button.danger{background:white;color:#a1252c;border-color:#e4c4c7}.button.danger:hover,button.danger:hover{background:#fff0f1}button:disabled,button:disabled:hover{background:#e8e8ed;color:#6a6a70;border-color:#d8d8df;cursor:not-allowed;transform:none}button[aria-busy=true]{background:#455d78;cursor:progress}.text-link{color:#0055b3;font-size:13px;font-weight:600}.text-link:hover{text-decoration:underline}.back{display:inline-block;color:#0055b3;margin-bottom:24px;font-size:13px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #72aaff;outline-offset:3px}
@@ -82,6 +82,12 @@ def hidden(csrf):
 
 def action(label, path, csrf, *, secondary=False):
     return Form(hidden(csrf), Button(label, type="submit", cls="secondary" if secondary else ""), method="post", action=path, cls="inline")
+
+
+def restart_control(csrf):
+    return Form(hidden(csrf), Button('Restart VOP', type='submit', cls='secondary'),
+                P('Saved settings and monitoring will be restored.', cls='muted', role='status', hidden=True),
+                method='post', action='/ui/restart', data_vop_restart='', cls='restart-control')
 
 
 def dependency_panel(problems, *, ready="Local prerequisites met; connection is checked when you run the action."):
@@ -201,11 +207,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
                                          if role != "viewer" or key not in ("cameras", "engines")), cls="navigation", aria_label="Main"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
+                                   restart_control(csrf) if role == 'operator' and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
-                         Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None))
+                         Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
+                         Script(src='/ui/restart.js', defer=True) if role == 'operator' and app.state.shutdown_request else None))
 
     def recorded_label(source_id, answer):
         if answer.get("status") != "success":
@@ -415,6 +423,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                 P("Current browser role: " + ("operator" if operator else "viewer")),
                                 action("Rebuild events from stored observations", "/ui/replay", csrf, secondary=True) if operator else None,
                                 P("Rebuilding preserves raw observations, immutable question versions and stable event IDs.", cls="muted")),
+                        Section(H2('Restart VOP'), P('Finish the current observation, close the worker session and start VOP again. Saved settings and monitoring are restored.'),
+                                restart_control(csrf) if app.state.shutdown_request and operator else P('Open Start VOP to enable restart controls.')) if operator else None,
                         Section(H2("Evidence policy"), P("Retention is off by default. Enable it per source; retained frames are privacy-masked and restricted to operators.")),
                         Section(H2("Setup"), Div(A("Cameras", href="/cameras", cls="button secondary"), A("Engines", href="/engines", cls="button secondary"),
                                                 A("Other inputs", href="/?view=sources", cls="button secondary"), A("Alerts and release tools", href="/release", cls="button secondary"), cls="actions"))]

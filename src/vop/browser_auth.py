@@ -100,7 +100,7 @@ class BrowserAuth:
                                       (b"x-content-type-options", b"nosniff"),
                                       (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
-        admitted = method == "POST" and path != '/api/v1/browser-ticket'
+        admitted = method == "POST" and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart')
         if admitted and not self.admission.acquire(blocking=False):
             self.pipeline.skipped += 1
             await run_in_threadpool(self.store.audit, "capture_skipped", "overload")

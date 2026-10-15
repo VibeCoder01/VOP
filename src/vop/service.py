@@ -66,8 +66,14 @@ def create_app(settings: Settings, *, token: str | None = None,
         try:
             yield
         finally:
-            sampler.stop()
-            reliable.stop()
+            sampler.stop_event.set()
+            reliable.stop_event.set()
+            await run_in_threadpool(sampler.stop)
+            await run_in_threadpool(reliable.stop)
+            # Finish background writes before closing the worker or starting a new process.
+            for worker in (sampler, reliable):
+                if worker.thread:
+                    await run_in_threadpool(worker.thread.join)
             await run_in_threadpool(app_session.stop)
 
     async def provider_error(req, exc):
@@ -98,6 +104,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     app.state.worker_session = app_session
     app.state.sampler = sampler
     app.state.reliable = reliable
+    from vop.lifecycle import install_lifecycle
+    install_lifecycle(app, store)
     from vop.operator_workflow import AutoWorker, install_local_login
     pipeline.auto_worker = AutoWorker(pipeline, app_session, store) if auto_recover else None
     install_local_login(app, store)
@@ -116,7 +124,7 @@ def create_app(settings: Settings, *, token: str | None = None,
         from vop.ui_readiness import camera_dependencies
         camera_setup = {sid: {"ready": not camera_dependencies(source)}
                         for sid, source in pipeline.sources.items() if source.kind in ("rtsp", "snapshot")}
-        return JSONResponse({"status": "ready", "application": "vop", "automatic_recovery": bool(pipeline.auto_worker), **store.health(), "in_flight": pipeline.busy.locked(),
+        return JSONResponse({"status": "ready", "application": "vop", "instance_id": app.state.instance_id, "automatic_recovery": bool(pipeline.auto_worker), **store.health(), "in_flight": pipeline.busy.locked(),
                              "camera_setup": camera_setup,
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,

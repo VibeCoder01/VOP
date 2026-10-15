@@ -344,7 +344,7 @@ def test_dashboard_launcher_reuses_selected_worker_without_extra_permission_flag
     monkeypatch.setattr(sys, 'argv', ['run_dashboard.py'])
     monkeypatch.setattr(run_dashboard, 'load_config', lambda path: app.state.pipeline.settings)
     monkeypatch.setattr(run_dashboard, 'create_app', lambda settings, **kwargs: calls.append(kwargs) or app)
-    monkeypatch.setattr(run_dashboard.uvicorn, 'run', lambda *args, **kwargs: None)
+    monkeypatch.setattr(run_dashboard, 'managed_run', lambda *args, **kwargs: False)
     run_dashboard.main()
     assert calls[0]['allow_remote_inference'] is True
     assert calls[0]['allow_live_sources'] is False

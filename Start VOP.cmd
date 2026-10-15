@@ -6,5 +6,5 @@ if not exist ".venv\Scripts\python.exe" (
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" tools\run_dashboard.py --allow-live-sources --remember-access-key --open-browser
+".venv\Scripts\python.exe" tools\run_dashboard.py --allow-live-sources --remember-access-key --open-browser --restart-existing
 if errorlevel 1 pause

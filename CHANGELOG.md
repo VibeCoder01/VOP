@@ -1,5 +1,16 @@
 # Specification change log
 
+## Full launcher restart and browser restart — 15 October 2026
+
+- Make Start VOP stop existing owned servers on its port, close their worker sessions and
+  launch a fresh server. Bound stale-process cleanup to the same installation, Python runtime,
+  account and port; exclude the current launcher and its ancestors.
+- Add operator-only Restart VOP controls in the sidebar and Settings, with CSRF/origin checks
+  and automatic browser reconnection. Reload the interpreter and retain the access key.
+- Stop new sampling, drain existing HTTP/background work, close the owned worker session,
+  then restart. Retain persisted monitoring settings and resume them on startup.
+- Add offline lifecycle regression tests and a real-loopback disposable restart smoke check.
+
 ## Metric explanations and camera names — 15 October 2026
 
 - Add native hover explanations and accessible labels to measurement terms, overview counts

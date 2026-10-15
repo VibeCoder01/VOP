@@ -16,6 +16,20 @@ Recorded answers use the level names from their original question version.
 
 Double-click **Start VOP.cmd**. It opens your signed-in workspace using a short-lived, single-use
 local launch link; you do not copy any keys. Keep its terminal window open while using VOP.
+Start VOP now stops previous VOP servers from this installation on the same port before it
+starts a fresh server. It asks responsive servers to finish their work and close their owned
+worker sessions; after a bounded wait it clears stale processes and their children. Other
+applications, other installations, other Windows accounts and other ports are left alone.
+If another application owns the port, the launcher explains the conflict and stops.
+
+Use **Restart VOP** in the sidebar or **Settings → Restart VOP** to restart from the browser.
+The workspace reconnects automatically when JavaScript is enabled. The current observation
+finishes before shutdown; background sampling stops before worker cleanup. Saved camera
+details, names, questions, backend, login key and monitoring choices are retained. Monitoring
+resumes when the new server starts. This restart reloads application code as well as settings.
+If restart cannot complete, open **Start VOP** to clear stale instances. Advanced servers
+started outside `tools/run_dashboard.py` do not expose an enabled restart control.
+
 Saved cameras, questions and the selected backend are reused. Click **Observe now** for a result.
 Use **Start monitoring** for repeated observations (10 seconds by default, or your saved custom
 interval) and **Pause monitoring** to stop them. Pause leaves manual observations available;
