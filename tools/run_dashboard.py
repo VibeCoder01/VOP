@@ -62,6 +62,21 @@ def trusted_listener(port):
         return False
 
 
+def wait_for_exit(processes, seconds):
+    deadline = time.monotonic() + seconds
+    while True:
+        alive = []
+        for process in processes:
+            try:
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                    alive.append(process)
+            except psutil.NoSuchProcess:
+                pass
+        if not alive or time.monotonic() >= deadline:
+            return
+        time.sleep(.1)
+
+
 def stop_existing(port, token, *, graceful_seconds=90):
     ancestors = {os.getpid(), *(parent.pid for parent in psutil.Process().parents())}
     targets = [process for process in psutil.process_iter() if process.pid not in ancestors and owned_dashboard(process, port)]
@@ -81,7 +96,8 @@ def stop_existing(port, token, *, graceful_seconds=90):
         finally:
             connection.close()
         if graceful:
-            psutil.wait_procs(targets, timeout=graceful_seconds)
+            # Linux zombies have exited; only their original parent can reap them.
+            wait_for_exit(targets, graceful_seconds)
     for process in targets:
         if not process.is_running() or not owned_dashboard(process, port):
             continue

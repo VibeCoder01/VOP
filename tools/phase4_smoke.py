@@ -46,7 +46,7 @@ def main():
             # Avoid littering the user's secret store: use a disposable LOCALAPPDATA in both processes.
             vault = SecretStore(folder/"VOP/secrets")
             vault.set(secret_ref,key)
-            env = {**os.environ,"LOCALAPPDATA":str(folder),"VOP_API_TOKEN":owner}
+            env = {**os.environ,"LOCALAPPDATA":str(folder),"VOP_SECRET_DIR":str(vault.root),"VOP_API_TOKEN":owner}
             command = [sys.executable,"-m","vop","serve","--config",str(config),"--port",str(dashboard_port),"--allow-remote-inference"]
         else:
             # This is explicitly an offline fixture, not a production plaintext-secret fallback.

@@ -2,6 +2,11 @@
 
 ## Full launcher restart and browser restart — 15 October 2026
 
+- Correct the Windows vault location so direct and packaged-Codex launches share protected
+  settings. Recover missing values from legacy AppData/LocalCache without deleting originals
+  or replacing shared-vault values. Preserve readable camera fields when another field fails.
+- Fix Linux restart waiting on already-exited zombie processes; add a regression check.
+
 - Make Start VOP stop existing owned servers on its port, close their worker sessions and
   launch a fresh server. Bound stale-process cleanup to the same installation, Python runtime,
   account and port; exclude the current launcher and its ancestors.

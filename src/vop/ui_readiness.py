@@ -21,7 +21,7 @@ def camera_dependencies(source):
         except ProviderError as exc:
             message = ("The saved camera address does not match its allowed address. Edit the camera address and save it again."
                        if exc.code == "endpoint_denied" else
-                       "VOP could not unlock the saved camera details. Close the VOP terminal and reopen Start VOP under the same Windows account. Your saved details have not been deleted.")
+                       "Saved camera details are unavailable. Open camera setup to check the address and camera account. Any readable saved details are kept.")
             problems.append((message, "/cameras/" + source.source_id + "/edit" if source.settings.get("endpoint_secret_ref") else "/cameras"))
     if source.kind == "file" and not Path(source.settings["path"]).is_file():
         problems.append(("The configured image file is missing. Correct its path in the source configuration.", "/?view=sources"))

@@ -119,3 +119,9 @@ def test_unknown_port_owner_is_not_stopped(monkeypatch):
     monkeypatch.setattr(run_dashboard.socket, 'socket', Socket)
     with pytest.raises(RuntimeError, match='unrelated process was left running'):
         run_dashboard.stop_existing(9876, OWNER)
+
+
+def test_linux_zombie_is_already_exited(monkeypatch):
+    process = SimpleNamespace(is_running=lambda: True, status=lambda: run_dashboard.psutil.STATUS_ZOMBIE)
+    monkeypatch.setattr(run_dashboard.time, 'sleep', lambda _: pytest.fail('An exited zombie must not delay restart'))
+    run_dashboard.wait_for_exit([process], 90)

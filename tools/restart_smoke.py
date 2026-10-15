@@ -26,7 +26,7 @@ def main():
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         token = secrets.token_urlsafe(32)
-        env = {**os.environ, 'VOP_API_TOKEN': token, 'LOCALAPPDATA': str(folder),
+        env = {**os.environ, 'VOP_API_TOKEN': token, 'LOCALAPPDATA': str(folder), 'VOP_SECRET_DIR': str(folder / 'VOP/secrets'),
                'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1'}
         command = [sys.executable, str(root / 'tools/run_dashboard.py'), str(path), '--port', str(port), '--manual-worker']
         processes = []

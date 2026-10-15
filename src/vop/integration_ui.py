@@ -155,12 +155,18 @@ def install_integration(app, settings, store, pipeline):
         if selected and selected.kind != 'rtsp':
             return RedirectResponse('/cameras/' + source_id + '/rename', status_code=303)
         endpoint, username, warning = '', '', None
+        missing = []
         if selected:
             try:
                 endpoint = secrets.get(selected.settings['endpoint_secret_ref'])
+            except ProviderError:
+                missing.append('camera address')
+            try:
                 username = secrets.camera(selected.settings['secret_ref'])['username']
             except ProviderError:
-                warning = P('VOP could not unlock the saved details. Close VOP and reopen Start VOP before you replace them.', cls='readiness warning')
+                missing.append('camera account')
+            if missing:
+                warning = P('Saved ' + ' and '.join(missing) + ' could not be read. Check those fields and save the corrected details. Any readable saved details are kept.', cls='readiness warning')
         model = 'C200'
         if selected:
             with store.connection() as db:
@@ -172,7 +178,7 @@ def install_integration(app, settings, store, pipeline):
                  Div(field('Camera name', 'name', selected.name if selected else '', placeholder='For example, Front door', maxlength=128),
                      P('Use a name you recognise. Leave it empty for the model name.', cls='muted'), H2('Connection'),
                      Div(Label('Camera model', _for='camera-model'), Select(*(Option(m, value=m, selected=m == model) for m in ('C200', 'C210', 'C510W')), name='model', id='camera-model'), cls='field'),
-                     field('Camera address', 'endpoint', endpoint, placeholder='rtsp://192.168.1.100:554/stream1', required=True),
+                     field('Camera address', 'endpoint', endpoint, placeholder='rtsp://CAMERA-IP:554/stream1', required=True),
                      P('Use the camera LAN address. Use /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
                      field('Camera username', 'username', username, autocomplete='username', required=not selected),
                      field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected),

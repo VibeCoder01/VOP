@@ -30,7 +30,7 @@ print('PASS')
     assert result.stdout.strip() == "PASS"
 
 
-@pytest.mark.parametrize("code,expected", [("endpoint_denied", "allowed address"), ("secret_unavailable", "could not unlock")])
+@pytest.mark.parametrize("code,expected", [("endpoint_denied", "allowed address"), ("secret_unavailable", "unavailable")])
 def test_camera_address_failure_is_distinct_from_vault_failure(monkeypatch, code, expected):
     def fail(source):
         raise ProviderError(code, "private details must not appear")

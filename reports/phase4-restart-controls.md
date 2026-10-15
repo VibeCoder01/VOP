@@ -65,3 +65,44 @@ through endpoint/real-process checks, not a new visual browser automation run.
 
 Recommendation: use Start VOP for a clean launch and the web Restart VOP control for normal
 maintenance in the existing Phase 4 pilot. Phase 5 remains unauthorised.
+
+## Corrections after initial PR #19 checks
+
+The original Ubuntu CI run passed unit tests and Phase 1–4 smoke checks but failed the new
+restart smoke: its replacement launcher waited for an exited Linux zombie that only the
+smoke parent could reap. Treat zombies as exited when waiting for graceful shutdown.
+The matrix cancelled Windows after that Ubuntu failure. The initial PR is not ready to merge
+until the corrected Windows and Ubuntu jobs complete.
+
+A direct Windows launch also exposed AppData virtualization: the normal and packaged-Codex
+launches could use different encrypted files despite the same account and apparent AppData
+path. The camera records survived, but the direct launch could not find their matching files.
+Use `%USERPROFILE%/.vop/secrets` outside redirected AppData. On first read of a missing value,
+validate and copy the newest legacy encrypted file from AppData or Codex LocalCache. Keep
+originals and use an atomic no-replace publish, so migration cannot overwrite a concurrent
+new save. An explicit `VOP_SECRET_DIR` isolates smoke tests and disables migration there.
+Partial camera edits preserve readable fields and use an address placeholder without a
+misleading example IP. Missing-value guidance links to setup rather than repeating restart.
+
+Additional changed files: `src/vop/secrets.py`, `src/vop/ui_readiness.py`,
+`src/vop/integration_ui.py`, `tests/test_secret_migration.py`,
+`tests/test_protected_settings.py`, `tools/phase4_smoke.py` and the existing restart files.
+
+Correction validation on Windows:
+
+- `.\.venv\Scripts\python.exe -m pytest -q`: 298 passed, 4 skipped in 54.80 s.
+- Focused migration/lifecycle/camera checks: 46 passed in 11.64 s before the additional
+  shared-root invariance regression was included in the full suite.
+- `.\.venv\Scripts\python.exe tools\restart_smoke.py`: PASS; 3 observations and key retained.
+- `.\.venv\Scripts\python.exe tools\phase4_smoke.py`: PASS with isolated disposable vault;
+  mock worker, no cameras or model weights.
+- `git diff --check`: passed.
+
+Recovered all three actual saved camera profiles to the shared encrypted vault. The saved
+addresses matched their existing allowed-address policies; no camera addresses or passwords
+were changed and original encrypted files remain. The app was restarted with the corrected
+launcher. Authenticated health and camera-setup readiness were checked without camera capture
+or model inference. Camera setup readiness proves protected values can be read, not that a
+camera is reachable. This corrects the initial same-context-only restart validation gap.
+CI for the correction will be checked on both platforms before recommending merge. The earlier
+release archive/hash above is historical and predates this correction.

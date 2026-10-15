@@ -393,7 +393,14 @@ camera IP in Tapo Device Settings → Device Info and its dedicated account in A
 address, camera availability and RTSP setup before changing passwords.
 
 Windows credential/key values are encrypted with user-bound DPAPI under
-`%LOCALAPPDATA%/VOP/secrets`. Configuration, SQLite and exports contain references, not secret
+`%USERPROFILE%/.vop/secrets`. This location is shared by direct Windows launches and launches
+from packaged Codex; AppData redirection previously made them see different saved details.
+Missing values are recovered automatically from the previous AppData or Codex LocalCache
+vault, validating the most recently saved encrypted file before copying it. Originals are retained, and an
+existing value in the shared vault is never overwritten by migration. If the newest old value
+cannot be unlocked, VOP reports the problem instead of silently substituting an older value.
+`VOP_SECRET_DIR` is an advanced absolute-path override; smoke tests use it for disposable
+storage and disable legacy migration there. Configuration, SQLite and exports contain references, not secret
 values. RTSP credentials are resolved and inserted into the locator only within the capture child;
 native diagnostics are suppressed. Linux camera secret setup requires an unlocked OS Secret
 Service (`secret-tool`), rather than falling back to plaintext. After restoring/moving configuration,

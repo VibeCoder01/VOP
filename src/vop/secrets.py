@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 
 from vop.contracts import ProviderError
 
@@ -37,7 +38,38 @@ def reference(value):
 
 class SecretStore:
     def __init__(self, root=None):
-        self.root = Path(root) if root else Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share")) / "VOP" / "secrets"
+        override = os.environ.get('VOP_SECRET_DIR') if root is None else None
+        self.migrate_legacy = root is None and not override and os.name == 'nt'
+        if override and not Path(override).is_absolute():
+            raise ValueError('VOP_SECRET_DIR must be an absolute path')
+        self.root = Path(root or override) if root or override else (
+            Path.home() / '.vop' / 'secrets' if os.name == 'nt' else
+            Path(os.environ.get('LOCALAPPDATA', Path.home() / '.local/share')) / 'VOP' / 'secrets')
+
+    def _write_blob(self, path, data, *, replace=True):
+        self.root.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self.root, prefix=path.stem + '-', suffix='.tmp', delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(data)
+            if replace:
+                temporary.replace(path)
+            else:
+                try:
+                    os.link(temporary, path)
+                except FileExistsError:
+                    pass
+        finally:
+            if temporary:
+                temporary.unlink(missing_ok=True)
+
+    def _legacy_path(self, name):
+        roots = [Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'VOP/secrets']
+        packages = Path.home() / 'AppData/Local/Packages'
+        roots.extend(package / 'LocalCache/Local/VOP/secrets' for package in packages.glob('OpenAI.Codex_*'))
+        paths = [root / (name + '.dpapi') for root in roots if (root / (name + '.dpapi')).is_file()]
+        return max(paths, key=lambda path: path.stat().st_mtime_ns) if paths else None
 
     def _crypt(self, data, decrypt=False):
         buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
@@ -56,11 +88,8 @@ class SecretStore:
         if not isinstance(value, str) or not value or len(value.encode()) > 8192:
             raise ValueError("Secret must contain 1–8192 UTF-8 bytes")
         if os.name == "nt":
-            self.root.mkdir(parents=True, exist_ok=True)
             path = self.root / (name + ".dpapi")
-            temporary = path.with_suffix(".tmp")
-            temporary.write_bytes(self._crypt(value.encode()))
-            temporary.replace(path)
+            self._write_blob(path, self._crypt(value.encode()))
         else:
             try:
                 subprocess.run(["secret-tool", "store", "--label=VOP " + name, "application", "vop", "reference", name], input=value.encode(), check=True, timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -71,7 +100,18 @@ class SecretStore:
         name = reference(name)
         try:
             if os.name == "nt":
-                return self._crypt((self.root / (name + ".dpapi")).read_bytes(), True).decode()
+                path = self.root / (name + '.dpapi')
+                if not path.exists() and self.migrate_legacy:
+                    legacy = self._legacy_path(name)
+                    if legacy:
+                        data = legacy.read_bytes()
+                        self._crypt(data, True).decode()
+                        # Copy validated encrypted bytes only. Keep all originals and never
+                        # replace a value already saved in the shared, non-redirected vault.
+                        self._write_blob(path, data, replace=False)
+                        log.info('Recovered a protected setting from legacy storage; value was not logged')
+                        return self._crypt(path.read_bytes(), True).decode()
+                return self._crypt(path.read_bytes(), True).decode()
             result = subprocess.run(["secret-tool", "lookup", "application", "vop", "reference", name], check=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             if not result.stdout.strip():
                 raise OSError()
