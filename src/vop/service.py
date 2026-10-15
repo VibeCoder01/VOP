@@ -111,7 +111,11 @@ def create_app(settings: Settings, *, token: str | None = None,
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
+        from vop.ui_readiness import camera_dependencies
+        camera_setup = {sid: {"ready": not camera_dependencies(source)}
+                        for sid, source in pipeline.sources.items() if source.kind in ("rtsp", "snapshot")}
         return JSONResponse({"status": "ready", "application": "vop", "automatic_recovery": bool(pipeline.auto_worker), **store.health(), "in_flight": pipeline.busy.locked(),
+                             "camera_setup": camera_setup,
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,
                              "rules_error": reliable.last_error,
