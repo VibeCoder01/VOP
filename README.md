@@ -21,15 +21,22 @@ authorised temporarily pausing the existing workload for these on-demand session
 restored on session end, Stop or disconnect. Configured sampling can request a new timed session
 when it next needs inference. Stop sampling or close VOP when you no longer want it using the GPU.
 
-Add a camera once using its address and camera account, then **Save camera and check connection**.
-A new camera gets an automatic ID, is enabled for observations, and its preview is checked in
-that action; sampling and evidence retention remain off. Questions also get automatic IDs when
-left blank. If no real backend was selected yet, **Use Antec AI** selects the verified preset
-once without asking for worker IDs or keys. There is no automatic model substitution.
+Use **Cameras → Add camera** to save its address and camera account. Saving does not open the
+camera or start observations. Open that camera, then **Test camera** to receive one preview.
+Use **Observe** to run questions against it. Camera IDs are generated; new cameras start paused,
+with sampling and evidence retention off. Question IDs are also generated when left blank.
+
+Use **Engines → Add engine** to save an inference profile. The Antec connection is filled in;
+connection details remain in an expandable section. **Save engine** stores the profile only.
+**Use engine** selects it for all observations. You can keep several named profiles and edit
+them independently. Editing the selected profile does not change the running engine until
+you select **Use engine** again. Replacing a saved key also leaves the active key unchanged
+until selection. **Check connection** tests the selected engine without a camera image.
+There is no automatic model substitution. Engine selection and camera configuration are independent.
 
 Failures show a short explanation and **Retry automatically**, with detailed codes expandable.
-Manual backend/session controls and credentials remain under **Advanced connection settings**;
-question ID, timing, ROI and confirmation options are also advanced. A saved paused source stays
+Manual session controls remain on the selected engine page; connection fields are in its editor.
+Question ID, timing, ROI and confirmation options are also advanced. A saved paused source stays
 paused. Camera addresses/passwords and the question itself still require your one-time input.
 
 If saved camera details appear unavailable after a restart, they may still be intact. Close
@@ -283,11 +290,10 @@ Worker health and capture results are shown in plain language. Expand **Connecti
 or **Technical details** for native provenance and raw scores. A failed inference stays Unknown;
 it is never displayed as an absent person. Session controls do not change sampling, evidence,
 camera credentials. No permission checkboxes are required: selecting a worker enables its use
-by the dashboard; **Start** requests the stated temporary workload pause, and **Test camera
-connection** requests one local preview. The normal save-and-check camera action also requests
-a preview; it does not infer, retain evidence or start scheduled sampling.
+by the dashboard; **Start session** requests the stated temporary workload pause, and **Test camera**
+requests one local preview. Camera save, camera test and observation are separate actions.
 
-Use **Engine and camera setup** in the sidebar. Operator access and CSRF are required; viewers
+Use the separate **Cameras** and **Engines** pages in the sidebar. Operator access and CSRF are required; viewers
 cannot see credential forms or invoke connection tests. Live capture and remote transmission
 are independent settings. Saving/checking a camera never starts scheduled sampling. The dashboard launcher
 uses the saved selected worker after restart, without requiring permission to be ticked again.
@@ -315,14 +321,14 @@ camera account username/password from the Tapo app. Do not put credentials in th
 The GUI accepts stream1/stream2 on port 554; the existing generic adapter also retains explicit
 operator configuration. The new source is disabled with sampling/evidence off and binary query
 **“Is there a human in the picture?”**. Correct credentials can be saved repeatedly; a blank
-password preserves the existing account. Consent and **Test camera connection** acquire one
+password preserves the existing account. **Test camera** receives one
 local frame, show a privacy-masked memory-only preview and store diagnostic metadata; no model
 request is made by that connection test. Capture failure never asserts “no human”.
 
 The setup page reopens the saved camera's address, username and model; passwords stay blank.
-Use **Edit tapo-c200** / **Edit tapo-c210** to choose an existing camera, or **Add another camera**
-for an empty new-camera form. Save-and-check opens its connection result; the edit link returns
-to that camera. The sample IP is a
+Use **Cameras → Open camera → Edit camera** to change a saved camera, or **Add camera**
+for an empty form. Save returns to that camera's page; **Test camera** opens the connection result.
+The sample IP is a
 placeholder only and is never submitted as a default address.
 
 If a connection test reports that another capture is running, wait for that request to finish

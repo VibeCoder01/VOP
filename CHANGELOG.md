@@ -1,5 +1,15 @@
 # Specification change log
 
+## Separate camera and engine workspaces — 15 October 2026
+
+- Separate Cameras and Engines lists, detail pages and editors; Observe runs observations.
+- Save named engine profiles independently from selecting one. Editing a profile or its key
+  leaves the active engine unchanged until Use engine. Preserve camera setup on engine changes.
+- Separate camera save, connection test and observation. Retain protected credentials and
+  legacy integration routes; saving a camera does not connect or enable monitoring.
+- Replace layered colour overrides with a restrained light interface, clear navigation,
+  readable controls, concise instructions, accessible focus and reduced-motion support.
+
 ## Protected-settings diagnostics — 15 October 2026
 - Distinguish an invalid camera address from unavailable protected credentials.
 - Bind Windows DPAPI ctypes signatures once for concurrent readers and log failure categories

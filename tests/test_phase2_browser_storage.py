@@ -43,7 +43,7 @@ def csrf(client, route="/login"):
 def login(client, key=OWNER):
     value = csrf(client)
     response = client.post("/login", data={"csrf": value, "access_key": key})
-    assert response.status_code == 200 and "Overview" in response.text
+    assert response.status_code == 200 and "Observe" in response.text
     return csrf(client, "/")
 
 
@@ -193,9 +193,10 @@ def test_sidebar_button_colours_have_readable_contrast():
         rgb = [int(value[i:i+2], 16) / 255 for i in (1, 3, 5)]
         return sum(weight * (x / 12.92 if x <= .04045 else ((x + .055) / 1.055)**2.4)
                    for x, weight in zip(rgb, (.2126, .7152, .0722)))
+    colours = {}
     for state in ('', ':hover'):
-        selector = f'.sidebar a.button.secondary{state},.sidebar button.secondary{state}'
+        selector = '.button.secondary,button.secondary' if not state else '.button.secondary:hover,button.secondary:hover'
         declarations = re.findall(re.escape(selector) + r'\{([^}]+)\}', CSS)[-1]
-        colours = dict(item.split(':', 1) for item in declarations.split(';') if ':' in item)
-        dark, light = sorted(luminance(colours[key]) for key in ('background', 'color'))
+        colours.update(item.split(':', 1) for item in declarations.split(';') if ':' in item)
+        dark, light = sorted(luminance('#ffffff' if colours[key] == 'white' else colours[key]) for key in ('background', 'color'))
         assert (light + .05) / (dark + .05) >= 4.5

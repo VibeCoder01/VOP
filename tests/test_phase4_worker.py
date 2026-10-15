@@ -285,9 +285,11 @@ def test_setup_shows_dependencies_and_has_no_permission_checkboxes(app):
         page = client.get('/integration').text
         for name in ('pause_consent', 'capture_consent', 'remote_consent', 'allow'):
             assert f'name="{name}"' not in page
-        assert 'Select the real antec-d1 SSH backend' in page and 'Needs attention' in page
-        assert re.search(r'<button[^>]*disabled[^>]*>Start antec session', page)
-        assert 'Starting a session does not prove the model is ready' in page
+        assert 'Open Cameras' in page and 'Open Engines' in page
+        assert 'Start antec session' not in page
+        assert 'Worker access key' not in page
+        engine = client.get('/engines/current').text
+        assert 'Check connection' in engine and 'Demo answers are synthetic' in engine
 
 
 def test_disabled_source_explains_capture_dependency_without_acquisition(app, monkeypatch):
@@ -301,7 +303,7 @@ def test_disabled_source_explains_capture_dependency_without_acquisition(app, mo
         assert 'Source is disabled' in page and 'Source controls' in page
         assert re.search(r'<button[^>]*disabled[^>]*>Capture once', page)
         result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
-        assert 'Capture blocked' in result.text and 'No camera image was acquired' in result.text
+        assert 'Cannot observe' in result.text and 'No camera image was acquired' in result.text
         assert app.state.store.health()['observation_count'] == 0
 
 
@@ -352,7 +354,7 @@ def test_capture_page_gives_plain_answer_and_hides_raw_details(app):
     with TestClient(app) as client:
         csrf = login(client)
         page = client.post("/ui/sources/synthetic-scene/capture", data={"csrf": csrf})
-        assert page.status_code == 200 and "Capture completed" in page.text
+        assert page.status_code == 200 and "Observation complete" in page.text
         assert "Is a red square visible?" in page.text and "Technical details" in page.text
         assert "Capture again" in page.text and "Inference time:" in page.text
         assert re.search(r'<details>\s*<summary>Technical details</summary>', page.text)

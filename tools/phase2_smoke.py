@@ -61,7 +61,7 @@ def main():
                 with browser.open(req, timeout=10) as response:
                     return response.status, response.read().decode("utf-8")
             form("/login", {"csrf": csrf("/login"), "access_key": token})
-            assert "Overview" in html("/")
+            assert "Observe" in html("/")
             form("/ui/sources/synthetic-scene/demo", {"csrf": csrf()})
             events = api("/api/v1/events")["events"]
             assert len(events) == 1 and events[0]["status"] == "closed"

@@ -12,7 +12,7 @@ from vop.secrets import SecretStore
 def camera_dependencies(source):
     problems = []
     if source.kind in ("rtsp", "usb") and find_spec("cv2") is None:
-        problems.append(("OpenCV is missing. Install the camera extra: python -m pip install '.[camera]'", "/integration#camera-setup"))
+        problems.append(("OpenCV is missing. Install the camera extra: python -m pip install '.[camera]'", "/cameras"))
     if source.kind in ("rtsp", "snapshot"):
         try:
             camera_endpoint(source)
@@ -22,7 +22,7 @@ def camera_dependencies(source):
             message = ("The saved camera address does not match its allowed address. Edit the camera address and save it again."
                        if exc.code == "endpoint_denied" else
                        "VOP could not unlock the saved camera details. Close the VOP terminal and reopen Start VOP under the same Windows account. Your saved details have not been deleted.")
-            problems.append((message, "/integration?camera=" + source.source_id if source.settings.get("endpoint_secret_ref") else "/integration#camera-setup"))
+            problems.append((message, "/cameras/" + source.source_id + "/edit" if source.settings.get("endpoint_secret_ref") else "/cameras"))
     if source.kind == "file" and not Path(source.settings["path"]).is_file():
         problems.append(("The configured image file is missing. Correct its path in the source configuration.", "/?view=sources"))
     return problems
@@ -36,7 +36,7 @@ def worker_dependencies(engine):
         if not 32 <= len(key) <= 256 or not key.isascii() or any(c.isspace() for c in key):
             raise ProviderError("secret_unavailable", "Invalid worker key")
     except ProviderError:
-        return [("Worker access key is unavailable. Save the protected key in backend setup.", "/integration#backend-setup")]
+        return [("Worker access key is unavailable. Save the protected key in backend setup.", "/engines")]
     return []
 
 
@@ -51,7 +51,7 @@ def capture_dependencies(pipeline, source_id):
     if any(q['spec'].kind not in pipeline.engine.capabilities() for q in questions):
         problems.append(("The selected backend does not support an enabled question type. Change the question or choose a compatible backend.", "/?view=questions&source=" + source_id))
     if source.kind not in ("synthetic", "file") and not getattr(pipeline.capture_adapter, "allow_live_sources", True):
-        problems.append(("Live capture is off. Restart using Start VOP.cmd, or add --allow-live-sources to the launcher command.", "/integration#camera-setup"))
+        problems.append(("Camera access is off. Close VOP and reopen Start VOP.", "/cameras"))
     problems.extend(camera_dependencies(source))
     automatic = getattr(pipeline, 'auto_worker', None)
     from vop.operator_workflow import is_antec
@@ -64,7 +64,7 @@ def capture_dependencies(pipeline, source_id):
     else:
         health = getattr(pipeline.engine, "last_health", None)
         if not automatic and health is not None and not health.get("ready"):
-            problems.append(("Worker was unavailable at the last check. Start/check the worker and SSH tunnel, then test worker health again.", "/integration#connection"))
+            problems.append(("Worker was unavailable at the last check. Start/check the worker and SSH tunnel, then test worker health again.", "/engines"))
     if pipeline.busy.locked():
         problems.append(("Another capture is running. Wait for it to finish, then refresh this page.", "/"))
     return problems

@@ -11,6 +11,11 @@ This covers on-demand recovery and the existing foreground app's configured samp
 autostart, permanent services or Phase 5 deployment. Normal desktop use reuses saved setup,
 automates local sign-in and hides manual controls under advanced settings.
 
+15 October interface update: the owner requested distinct camera and engine creation, editing
+and use pages. Named engine profiles use the existing protected-worker contract and settings
+store. Saving a profile does not select it; Use engine is explicit. This is Phase 4 operator
+workflow work, not a new model installation or Phase 5 deployment.
+
 ## Outcome
 
 A local browser dashboard can evaluate captured images using the explicitly selected backend:
