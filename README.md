@@ -35,6 +35,9 @@ until selection. **Check connection** tests the selected engine without a camera
 There is no automatic model substitution. Engine selection and camera configuration are independent.
 
 Failures show a short explanation and **Retry automatically**, with detailed codes expandable.
+If a camera times out before it supplies an image, inference is not run. The result remains
+Unknown and shows a camera recovery link. Open that camera and select **Test camera** to check
+its connection before you try Observe again. A missing inference time is not a zero-second run.
 Manual session controls remain on the selected engine page; connection fields are in its editor.
 Question ID, timing, ROI and confirmation options are also advanced. A saved paused source stays
 paused. Camera addresses/passwords and the question itself still require your one-time input.

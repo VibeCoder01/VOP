@@ -550,10 +550,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     "worker_unavailable": "The engine is not connected. Open Engines and check its connection.",
                     "worker_auth": "The worker access key was rejected. Check its protected setup.",
                     "capture_timeout": "The camera did not respond in time. Check its connection and address."}.get(error.get("code"))
+        if error and not guidance:
+            from vop.operator_workflow import recovery_message
+            guidance = recovery_message(error.get('code'))
+        timing = (f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds"
+                  if summary['elapsed_ms'] is not None else "Inference was not run. No image was available.")
         content = [P("Observation complete" if summary["status"] == "success" else "No valid answer", role="status", cls="readiness success" if summary['status'] == 'success' else "readiness error"),
                    *answers, P(guidance, role="alert") if guidance else None,
                    A("Open camera" if camera_error else "Open Engines", href=("/cameras/" + source_id if pipeline.sources[source_id].kind in ("rtsp", "usb") else "/ui/sources/" + source_id) if camera_error else "/engines", cls="button secondary") if error else None,
-                   P(f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds · Engine: {summary['engine_id']}"),
+                   P(timing + f" · Engine: {summary['engine_id']}"),
                    Details(Summary("Technical details"), Pre(json.dumps(summary, indent=2))),
                    action("Observe again" if getattr(pipeline, 'auto_worker', None) else "Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
                    A("Back to Observe", href="/", cls="button secondary")]

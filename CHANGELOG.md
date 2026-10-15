@@ -1,5 +1,12 @@
 # Specification change log
 
+## Capture failure display — 15 October 2026
+
+- Fix the observation page crashing when camera acquisition fails and inference time is null.
+- Show that inference did not run, retain Unknown/error data and offer camera recovery guidance.
+- Cover camera timeout and camera-open failure through the real pipeline and browser route
+  using offline failure fixtures; retain numeric timing for actual inference attempts.
+
 ## Separate camera and engine workspaces — 15 October 2026
 
 - Separate Cameras and Engines lists, detail pages and editors; Observe runs observations.
