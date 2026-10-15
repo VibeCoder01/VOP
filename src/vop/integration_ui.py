@@ -2,10 +2,11 @@
 from dataclasses import replace
 import ipaddress
 import json
+import re
 import secrets as random_secrets
 from urllib.parse import urlsplit
 
-from fasthtml.components import A, Button, Details, Form, H2, Input, Option, P, Pre, Section, Select, Summary
+from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse
 
@@ -29,25 +30,14 @@ def antec_profile(engine):
 
 
 def worker_health_content(health):
-    runtime = health.get("runtime") or {}
-    if health.get("ready"):
-        message = "Worker ready — " + ("synthetic mock" if health.get("synthetic") else str(runtime.get("gpu_name") or runtime.get("device") or "model loaded"))
-    else:
-        message = "Worker unavailable. Start an antec session below, or check your existing worker and tunnel."
+    from vop.operator_workflow import recovery_message
     error = health.get('error') or ''
     code = error.get('code', '') if isinstance(error, dict) else str(error)
-    guidance = {"gpu_capacity": "GPU memory is insufficient. Check antec's existing workload and retry the timed session.",
-                "host_capacity": "The worker has insufficient free RAM for this model.",
-                "secret_unavailable": "Save the worker access key in backend setup.",
-                "worker_auth": "The worker rejected its key. Correct the saved worker access key.",
-                "worker_identity": "The running worker does not match the selected identity/model. Correct the profile or worker.",
-                "clock_skew": "Synchronise the laptop and worker clocks before retrying.",
-                "worker_unavailable": "Start the worker and SSH tunnel, then test health again."}.get(code)
-    return [P(message, role="status", cls="readiness success" if health.get("ready") else "readiness error"),
-            P(guidance, cls="readiness warning") if guidance else None,
-            P("Device: " + str(runtime.get("device", "not connected")) + " · Precision: " + str(runtime.get("precision") or "not reported")),
-            P(("Processing another image" if health.get("busy") else "No image is currently being processed") if health.get("ready") else "Processing status is unavailable"),
-            Details(Summary("Connection details"), Pre(dumps(health)))]
+    return [P('Last check: connected.' if health.get('ready') else 'Last check: not connected.',
+              role='status', cls='readiness success' if health.get('ready') else 'readiness warning'),
+            P(recovery_message(code)) if not health.get('ready') else None,
+            P('The engine is busy. Wait, then try again.') if health.get('busy') else None,
+            Details(Summary('Connection details'), Pre(dumps(health)))]
 
 
 def camera_source(record):
@@ -81,108 +71,271 @@ def install_integration(app, settings, store, pipeline):
         if not pipeline.busy.acquire(False):
             raise ProviderError("overloaded", "Stop or wait for the current capture/inference before changing profiles")
 
-    @app.route("/integration", methods=["GET"])
-    def integration(request):
-        if not operator(request):
-            return JSONResponse({"error": "operator_required"}, status_code=403)
-        csrf = request.scope["session"].setdefault("csrf", random_secrets.token_urlsafe(24))
-        current = pipeline.engine_profile
-        worker = current if current["kind"] == "worker" else {}
-        cams = [s for s in list(pipeline.sources.values()) if s.kind == "rtsp"]
-        saved_cams = [s for s in cams if s.settings.get("endpoint_secret_ref")]
-        selected_id = request.query_params.get("camera")
-        selected = next((s for s in saved_cams if s.source_id == selected_id), None) if selected_id else (saved_cams[0] if saved_cams and "new_camera" not in request.query_params else None)
-        if selected_id and selected is None:
-            raise ValueError("Saved camera setup does not exist")
-        endpoint, username, camera_notice = "", "", "Add a new camera."
-        if selected:
-            camera_notice = "Editing saved setup: " + selected.source_id
-            try:
-                endpoint = secrets.get(selected.settings["endpoint_secret_ref"])
-                username = secrets.camera(selected.settings["secret_ref"])["username"]
-            except ProviderError:
-                camera_notice += ". Protected values are unavailable; re-enter them for this account."
-        model = selected.name.removeprefix("Tapo ") if selected else "C200"
-        session = app.state.worker_session.status()
-        session_message = "No app-managed antec session is running."
-        if session["active"]:
-            from zoneinfo import ZoneInfo
-            session_message = "Session requested until " + session["expires_at"].astimezone(ZoneInfo(settings.timezone_name)).strftime("%H:%M %Z") + ". Test worker health to confirm it is ready."
-        elif session.get("ended"):
-            session_message = "The last app-managed session ended. Start another session and test worker health before capture."
-        session_problems = worker_dependencies(pipeline.engine)
-        if not antec_profile(pipeline.engine):
-            session_problems.append(("Select the real antec-d1 SSH backend at http://127.0.0.1:8878 first.", "#backend-setup"))
-        import os, shutil
-        if not shutil.which("ssh.exe" if os.name == "nt" else "ssh"):
-            session_problems.append(("SSH is missing. Install OpenSSH or Git for Windows before starting an antec session.", "#connection"))
-        cached_health = getattr(pipeline.engine, "last_health", None)
-        content = [Section(H2("Selected inference backend"), P("Engine: " + pipeline.engine.engine_id), Details(Summary("Saved backend details"), Pre(dumps(current))),
-                    P("Captures use this selected worker. Images are privacy-masked before transmission." if isinstance(pipeline.engine, RemoteInferenceEngine) else "Mock selected — synthetic answers only; no image understanding.", cls="readiness info"),
-                    P("Worker profiles use a local loopback endpoint reached directly or through an SSH tunnel. Camera location and model location are independent.")),
-                   Section(H2("Antec connection"), P(session_message, role="status", cls="readiness info" if session["active"] else "readiness warning"),
-                    P("Start temporarily pauses antec's llama workload, starts a timed GPU session and SSH tunnel, then restores the workload at the end, on Stop, or when the connection closes."),
-                    dependency_panel(session_problems, ready="Backend and local key are set. Start checks the tunnel port and trusted SSH login; model/GPU readiness is confirmed by Test worker health."),
-                    Form(hidden(csrf), Select(*(Option(str(m) + " minutes", value=str(m)) for m in (15, 30, 60)), name="minutes", aria_label="Session duration"),
-                         Button("Start antec session", disabled=session["active"] or bool(session_problems)), method="post", action="/integration/session/start"),
-                    P("Stop is available only while this app owns an active session.", cls="muted"),
-                    Form(hidden(csrf), Button("Stop session and restore workload", disabled=not session["active"], cls="danger"), method="post", action="/integration/session/stop"),
-                    *(worker_health_content(cached_health) if cached_health else [P("Worker connection has not been checked in this app session. Starting a session does not prove the model is ready.", cls="readiness warning")]), id="connection"),
-                   Section(H2("Choose backend"), Form(hidden(csrf),
-                    Select(Option("Local mock — no vision", value="mock", selected=current["kind"] == "mock"), Option("Authenticated worker", value="worker", selected=current["kind"] == "worker"), name="kind", aria_label="Backend"),
-                    field("Engine ID", "engine_id", worker.get("id", "liquid-d1-3b"), required=True),
-                    field("Model revision", "version", worker.get("version", CHECKPOINT_REVISION)),
-                    field("Worker identity", "worker_id", worker.get("worker_id", "antec-d1")),
-                    field("Worker loopback URL", "url", worker.get("url", "http://127.0.0.1:8878")),
-                    Select(Option("SSH tunnel to another host", value="ssh", selected=worker.get("transport") != "local"), Option("Worker on this machine", value="local", selected=worker.get("transport") == "local"), name="transport", aria_label="Worker transport"),
-                    field("Worker secret reference", "secret_ref", worker.get("secret_ref", "antec-worker")),
-                    field("Worker access key (blank keeps saved key)", "worker_token", type="password", autocomplete="new-password"),
-                    field("Worker is synthetic (only for mock-worker tests)", "synthetic", "on", type="checkbox", checked=worker.get("synthetic", False)),
-                    P("Selecting a worker enables image transmission to it. Starting a session or capturing remains a separate action."),
-                    Button("Save and select backend"), method="post", action="/integration/engine"), id="backend-setup"),
-                   Form(hidden(csrf), dependency_panel(worker_dependencies(pipeline.engine)) if worker_dependencies(pipeline.engine) else None,
-                        Button("Test worker identity and health (no images)", disabled=bool(worker_dependencies(pipeline.engine))), method="post", action="/integration/health"),
-                   Section(H2("Protected Tapo setup"), P("Credentials are protected locally and never saved in the configuration or audit. Saving does not connect or start sampling. A blank password preserves the existing camera credentials. Retry setup and connection tests as needed."),
-                    P("Use a different source ID for each camera, such as tapo-c200 and tapo-c210. Reusing an ID updates that camera's setup."),
-                    P(camera_notice),
-                    *(P(A("Edit " + s.source_id, href="/integration?camera=" + s.source_id)) for s in saved_cams),
-                    P(A("Add another camera", href="/integration?new_camera=1")),
-                    Form(hidden(csrf), field("Camera ID (optional; generated automatically)", "source_id", selected.source_id if selected else "", placeholder="Leave blank for an automatic name", readonly=bool(selected)),
-                         Select(*(Option(m, value=m, selected=m == model) for m in ("C200", "C210", "C510W")), name="model", aria_label="Camera model"),
-                         field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", endpoint, placeholder="rtsp://192.168.1.100:554/stream1", required=True),
-                         field("Camera account username", "username", username, autocomplete="username"),
-                         field("Camera account password (blank keeps saved credentials)", "password", type="password", autocomplete="new-password"),
-                         Button("Save camera and check connection", name='connect', value='1'), method="post", action="/integration/camera"), id="camera-setup"),
-                   Section(H2("Camera connection tests"),
-                         *(Form(hidden(csrf), P(s.name + " · " + s.source_id),
-                                dependency_panel(camera_dependencies(s), ready="Test captures one local preview; it does not use a worker or retain evidence. Camera reachability and password validity are checked on Test."),
-                                Button("Test camera connection", disabled=bool(camera_dependencies(s))), method="post", action=f"/integration/cameras/{s.source_id}/test") for s in cams),
-                         P("Connection tests work while a source is disabled. For inference, enable the source and at least one question in Sources / Questions. Use Start VOP.cmd to launch with live capture enabled."))]
-        if getattr(pipeline, 'auto_worker', None):
-            content = [Section(H2('Your cameras'), P('Saved setup is reused. Observe now handles the Antec connection and its timed GPU session for you.'),
-                       P('Demo mode produces synthetic answers. Choose Antec once for real image analysis.', cls='readiness warning') if isinstance(pipeline.engine, MockInferenceEngine) else None,
-                       action('Use Antec AI', '/integration/engine/antec', csrf) if isinstance(pipeline.engine, MockInferenceEngine) else None,
-                       *(Section(H2(s.name), P(s.source_id), action('Observe now', f'/ui/sources/{s.source_id}/capture', csrf),
-                                 A('Edit camera', href='/integration?camera=' + s.source_id, cls='button secondary')) for s in cams),
-                       P('Add a camera once using its address and camera account. VOP keeps these protected on this computer.') if not cams else None),
-                       Details(Summary('Add or edit a camera'), content[4], open=not cams or bool(selected_id) or 'new_camera' in request.query_params),
-                       Details(Summary('Advanced connection settings and manual controls'), *content[:4], content[5], open=request.query_params.get('advanced') == '1')]
-        return app.state.page("Engine and camera setup", request, content, view="settings", notice=request.query_params.get("notice"))
+    def csrf(request):
+        return request.scope['session'].setdefault('csrf', random_secrets.token_urlsafe(24))
 
-    @app.route('/integration/engine/antec', methods=['POST'])
-    def antec_preset():
-        value = profile({'kind': 'worker', 'id': 'liquid-d1-3b', 'version': CHECKPOINT_REVISION, 'worker_id': 'antec-d1',
-                         'url': 'http://127.0.0.1:8878', 'transport': 'ssh', 'secret_ref': 'antec-worker', 'synthetic': False})
+    def denied(request):
+        if not operator(request):
+            return JSONResponse({'error': 'operator_required'}, status_code=403)
+
+    def saved_engines():
+        with store.connection() as db:
+            rows = db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'saved_engine:%' ORDER BY id").fetchall()
+        return {row[0].split(':', 1)[1]: json.loads(row[1]) for row in rows}
+
+    def save_engine_record(eid, name, value):
+        with store.connection() as db:
+            db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('saved_engine:' + eid, dumps({'name': name, 'profile': value})))
+
+    if not saved_engines():
+        save_engine_record('current', 'Antec AI' if antec_profile(pipeline.engine) else 'Demo' if pipeline.engine.synthetic else pipeline.engine.engine_id, pipeline.engine_profile)
+
+    with store.connection() as db:
+        if not db.execute("SELECT 1 FROM release_settings WHERE id='active_engine_profile_id'").fetchone():
+            selected_id = next((eid for eid, record in saved_engines().items() if record['profile'] == pipeline.engine_profile), None)
+            db.execute("INSERT INTO release_settings VALUES('active_engine_profile_id',?)", (dumps(selected_id),))
+
+    def active_engine_id():
+        with store.connection() as db:
+            return json.loads(db.execute("SELECT value_json FROM release_settings WHERE id='active_engine_profile_id'").fetchone()[0])
+
+    def engine_record(eid):
+        if eid not in saved_engines():
+            raise ValueError('This engine does not exist. Open Engines and select a saved engine.')
+        return saved_engines()[eid]
+
+    def camera_record(sid):
+        source = pipeline.sources.get(sid)
+        if source is None or source.kind not in ('rtsp', 'usb'):
+            raise ValueError('This camera does not exist. Open Cameras and select a saved camera.')
+        return source
+
+    @app.route('/integration', methods=['GET'])
+    def integration(request):
+        if denied(request): return denied(request)
+        if request.query_params.get('camera'):
+            return camera_editor(request.query_params['camera'], request)
+        if 'new_camera' in request.query_params:
+            return camera_editor('new', request)
+        return app.state.page('Setup', request, [
+            Section(H2('Cameras'), P('Add a camera or change its connection.'), A('Open Cameras', href='/cameras', cls='button')),
+            Section(H2('Engines'), P('Save an engine profile. Select an engine for observations.'), A('Open Engines', href='/engines', cls='button'))
+        ], view='settings')
+
+    @app.route('/cameras', methods=['GET'])
+    def cameras(request):
+        if denied(request): return denied(request)
+        rows = [source for source in pipeline.sources.values() if source.kind in ('rtsp', 'usb')]
+        content = [Div(P(str(len(rows)) + (' camera' if len(rows) == 1 else ' cameras')),
+                       A('Add camera', href='/cameras/new', cls='button'), cls='section-heading')]
+        content.append(Div(*(Div(Div(H2(A(source.name, href='/cameras/' + source.source_id)),
+                                    P(source.source_id, cls='object-meta'),
+                                    P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
+                                 Div(A('Open camera', href='/cameras/' + source.source_id, cls='button secondary'),
+                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='text-link'), cls='actions'), cls='object-row') for source in rows), cls='object-list')
+                       if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
+                                        A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
+        from vop.removal import removed_controls
+        content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb')))
+        return app.state.page('Cameras', request, content, view='cameras', notice=request.query_params.get('notice'))
+
+    def camera_editor(source_id, request):
+        if denied(request): return denied(request)
+        selected = camera_record(source_id) if source_id != 'new' else None
+        if selected and selected.kind != 'rtsp':
+            return RedirectResponse('/ui/sources/' + source_id, status_code=303)
+        endpoint, username, warning = '', '', None
+        if selected:
+            try:
+                endpoint = secrets.get(selected.settings['endpoint_secret_ref'])
+                username = secrets.camera(selected.settings['secret_ref'])['username']
+            except ProviderError:
+                warning = P('VOP could not unlock the saved details. Close VOP and reopen Start VOP before you replace them.', cls='readiness warning')
+        model = selected.name.removeprefix('Tapo ') if selected else 'C200'
+        return app.state.page('Edit camera' if selected else 'Add camera', request, [
+            A('‹ Cameras', href='/cameras', cls='back'), warning,
+            Form(hidden(csrf(request)), Input(type='hidden', name='source_id', value=source_id if selected else ''),
+                 Div(H2('Connection'),
+                     Div(Label('Camera model', _for='camera-model'), Select(*(Option(m, value=m, selected=m == model) for m in ('C200', 'C210', 'C510W')), name='model', id='camera-model'), cls='field'),
+                     field('Camera address', 'endpoint', endpoint, placeholder='rtsp://192.168.1.100:554/stream1', required=True),
+                     P('Use the camera LAN address. Use /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
+                     field('Camera username', 'username', username, autocomplete='username', required=not selected),
+                     field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected),
+                     P('Leave the password empty to keep the saved password.', cls='muted') if selected else None, cls='surface'),
+                 Div(Button('Save camera'), A('Cancel', href='/cameras/' + source_id if selected else '/cameras', cls='button secondary'), cls='actions'),
+                 method='post', action='/cameras/save', cls='editor')
+        ], view='cameras')
+
+    @app.route('/cameras/new', methods=['GET'])
+    def new_camera(request):
+        return camera_editor('new', request)
+
+    @app.route('/cameras/{source_id}/edit', methods=['GET'])
+    def edit_camera(source_id: str, request):
+        return camera_editor(source_id, request)
+
+    @app.route('/cameras/{source_id}', methods=['GET'])
+    def camera_detail(source_id: str, request):
+        if denied(request): return denied(request)
+        source = camera_record(source_id)
+        problems = camera_dependencies(source)
+        last_test = None
+        with store.connection() as db:
+            row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
+            if row: last_test = json.loads(row[0])
+        content = [A('‹ Cameras', href='/cameras', cls='back'),
+            Div(P(source_id), A('Edit camera', href='/cameras/' + source_id + '/edit', cls='button secondary'), cls='section-heading'),
+            Section(H2('Connection'), dependency_panel(problems, ready='Saved details are available. Test the connection to check the camera.'),
+                    P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
+                    Form(hidden(csrf(request)), Button('Test camera', disabled=bool(problems)), method='post', action='/integration/cameras/' + source_id + '/test'),
+                    P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
+            Section(H2('Use this camera'), P('Run an observation or change the questions.'),
+                    Div(A('Observe', href='/?source=' + source_id, cls='button'), A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='actions')),
+            Section(H2('Observation settings'), P('Set the sample interval and evidence policy.'),
+                    Div(A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary'),
+                        A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'), cls='actions'))]
+        return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))
+
+    @app.route('/engines', methods=['GET'])
+    def engines(request):
+        if denied(request): return denied(request)
+        entries = saved_engines()
+        selected_id = active_engine_id()
+        return app.state.page('Engines', request, [
+            Div(P('Use one engine for all observations.'), A('Add engine', href='/engines/new', cls='button'), cls='section-heading'),
+            Div(*(Div(Div(H2(A(record['name'], href='/engines/' + eid)),
+                          P('Demo · synthetic answers' if record['profile']['kind'] == 'mock' else record['profile']['id'], cls='object-meta'),
+                          Span('Selected', cls='status info') if eid == selected_id and record['profile'] == pipeline.engine_profile else
+                          Span('Saved changes', cls='status warning') if eid == selected_id else None, cls='object-copy'),
+                      Div(A('Open engine', href='/engines/' + eid, cls='button secondary'), A('Edit', href='/engines/' + eid + '/edit', cls='text-link'), cls='actions'), cls='object-row')
+                  for eid, record in entries.items()), cls='object-list')
+        ], view='engines', notice=request.query_params.get('notice'))
+
+    def engine_editor(eid, request):
+        if denied(request): return denied(request)
+        record = engine_record(eid) if eid != 'new' else None
+        value = record['profile'] if record else {
+            'kind': 'worker', 'id': 'liquid-d1-3b', 'version': CHECKPOINT_REVISION,
+            'worker_id': 'antec-d1', 'url': 'http://127.0.0.1:8878', 'transport': 'ssh', 'secret_ref': 'antec-worker', 'synthetic': False}
+        kind = value['kind'] if record else request.query_params.get('kind', 'worker')
+        if kind not in ('mock', 'worker'): raise ValueError('Choose a worker or demo engine.')
+        return app.state.page('Edit engine' if record else 'Add engine', request, [
+            A('‹ Engines', href='/engines', cls='back'),
+            Div(A('AI worker', href='/engines/new?kind=worker', cls='button' if kind == 'worker' else 'button secondary'),
+                A('Demo', href='/engines/new?kind=mock', cls='button' if kind == 'mock' else 'button secondary'), cls='actions') if not record else None,
+            Form(hidden(csrf(request)), Input(type='hidden', name='kind', value=kind),
+                 Div(H2('Engine profile'), field('Name', 'name', record['name'] if record else 'Antec AI' if kind == 'worker' else 'Demo', required=True, maxlength=80),
+                     P('The Antec settings are filled in. Open Connection settings only to change them.') if kind == 'worker' and not record else None,
+                     Details(Summary('Connection settings'),
+                         field('Engine ID', 'engine_id', value.get('id', 'liquid-d1-3b'), required=True),
+                         field('Model revision', 'version', value.get('version', CHECKPOINT_REVISION), required=True),
+                         field('Worker ID', 'worker_id', value.get('worker_id', 'antec-d1'), required=True),
+                         field('Local connection address', 'url', value.get('url', 'http://127.0.0.1:8878'), required=True),
+                         P('Use a loopback address. A remote worker is reached through an SSH tunnel.', cls='muted'),
+                         Div(Label('Connection type', _for='worker-transport'), Select(Option('SSH tunnel', value='ssh', selected=value.get('transport') == 'ssh'), Option('Local worker', value='local', selected=value.get('transport') == 'local'), name='transport', id='worker-transport'), cls='field'),
+                         field('Worker access key', 'worker_token', type='password', autocomplete='new-password'),
+                         P('Leave empty to keep the saved key. VOP can recover the Antec key.', cls='muted'),
+                         field('Synthetic worker (test only)', 'synthetic', 'on', type='checkbox', checked=value.get('synthetic', False))) if kind == 'worker' else P('Demo answers are synthetic. This engine does not analyse images.', cls='readiness warning'), cls='surface'),
+                 P('Save stores this profile. Use engine selects it for observations.', cls='muted'),
+                 Div(Button('Save engine'), A('Cancel', href='/engines/' + eid if record else '/engines', cls='button secondary'), cls='actions'),
+                 method='post', action='/engines/' + eid + '/save', cls='editor')
+        ], view='engines')
+
+    @app.route('/engines/new', methods=['GET'])
+    def new_engine(request): return engine_editor('new', request)
+
+    @app.route('/engines/{engine_id}/edit', methods=['GET'])
+    def edit_engine(engine_id: str, request): return engine_editor(engine_id, request)
+
+    @app.route('/engines/{engine_id}/save', methods=['POST'])
+    async def save_engine(engine_id: str, request):
+        form = await request.form()
+        record = engine_record(engine_id) if engine_id != 'new' else None
+        name = str(form.get('name', '')).strip()
+        if not name or len(name) > 80: raise ValueError('Enter an engine name with 1 to 80 characters.')
+        eid = engine_id
+        if not record:
+            entries = saved_engines()
+            if len(entries) >= 32: raise ValueError('You can save up to 32 engines.')
+            base = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:50] or 'engine'
+            eid, number = base, 1
+            while eid in entries or eid == 'new':
+                number += 1
+                eid = base + '-' + str(number)
+        if form['kind'] == 'mock':
+            value = record['profile'] if record and record['profile']['kind'] == 'mock' else {'kind': 'mock', 'id': 'synthetic-mock', 'answers': {**settings.mock_answers, 'human_present': False}}
+        elif form['kind'] == 'worker':
+            secret_ref = record['profile'].get('secret_ref', 'antec-worker') if record else 'antec-worker'
+            key = str(form.get('worker_token', ''))
+            if key:
+                if not 32 <= len(key) <= 256 or not key.isascii() or any(c.isspace() for c in key):
+                    raise ValueError('The worker key must contain 32 to 256 ASCII characters without spaces.')
+                secret_ref = 'engine-key-' + random_secrets.token_hex(12)
+            value = profile({'kind': 'worker', 'id': str(form['engine_id']), 'version': str(form['version']),
+                             'worker_id': str(form['worker_id']), 'url': str(form['url']), 'transport': str(form['transport']),
+                             'secret_ref': secret_ref, 'synthetic': 'synthetic' in form})
+            if key: await run_in_threadpool(secrets.set, secret_ref, key)
+        else: raise ValueError('Choose a worker or demo engine.')
+        save_engine_record(eid, name, value)
+        store.audit('engine_profile', 'saved')
+        return RedirectResponse('/engines/' + eid + '?notice=Engine+saved.+Select+Use+engine+to+apply+it.', status_code=303)
+
+    async def select_engine(eid, value):
         busy()
         try:
+            if value != pipeline.engine_profile:
+                await run_in_threadpool(app.state.worker_session.stop)
+            engine = RemoteInferenceEngine(value, allow_remote=True, secrets=secrets) if value['kind'] == 'worker' else MockInferenceEngine(value['answers'], value['id'])
+            if isinstance(engine, MockInferenceEngine):
+                for sid, qid, version, preset in store.mock_values(): engine.configure_source_answer(sid, qid, version, preset)
             with store.connection() as db:
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES('engine_profile',?)", (dumps(value),))
-            pipeline.engine = RemoteInferenceEngine(value, allow_remote=True, secrets=secrets)
-            pipeline.engine_profile = value
-            store.audit('engine_selection', 'antec_preset')
-        finally:
-            pipeline.busy.release()
-        return RedirectResponse('/integration?notice=Antec+selected.+Observe+now+will+connect+automatically.', status_code=303)
+                db.execute("INSERT OR REPLACE INTO release_settings VALUES('active_engine_profile_id',?)", (dumps(eid),))
+            pipeline.engine, pipeline.engine_profile = engine, value
+            if pipeline.auto_worker:
+                pipeline.auto_worker.retry_after, pipeline.auto_worker.last_failure = 0, None
+            store.audit('engine_selection', 'saved_profile')
+        finally: pipeline.busy.release()
+
+    @app.route('/engines/{engine_id}/use', methods=['POST'])
+    async def use_engine(engine_id: str, request):
+        await select_engine(engine_id, engine_record(engine_id)['profile'])
+        return RedirectResponse('/engines/' + engine_id + '?notice=Engine+in+use.', status_code=303)
+
+    @app.route('/engines/{engine_id}', methods=['GET'])
+    def engine_detail(engine_id: str, request):
+        if denied(request): return denied(request)
+        record = engine_record(engine_id)
+        value, active = record['profile'], engine_id == active_engine_id() and record['profile'] == pipeline.engine_profile
+        session = app.state.worker_session.status()
+        return app.state.page(record['name'], request, [
+            A('‹ Engines', href='/engines', cls='back'),
+            Div(Span('Selected' if active else 'Saved', cls='status info' if active else 'status'),
+                A('Edit engine', href='/engines/' + engine_id + '/edit', cls='button secondary'), cls='section-heading'),
+            Section(H2('Use this engine'), P('This engine will answer questions for all cameras.'),
+                    P('The previous settings are still selected. Use engine applies the saved changes.', cls='readiness info') if engine_id == active_engine_id() and not active else None,
+                    P('Demo answers are synthetic. They do not describe the camera image.', cls='readiness warning') if value['kind'] == 'mock' else None,
+                    action('Use engine', '/engines/' + engine_id + '/use', csrf(request)) if not active else P('This engine is selected. The connection is checked when you observe.', cls='muted'),
+                    A('Open Observe', href='/', cls='button') if active else None),
+            Section(H2('Connection'), P('VOP connects to Antec when you run an observation.') if active and antec_profile(pipeline.engine) else P('Check the selected engine without sending a camera image.'),
+                    P('The check can start a 15-minute Antec session.', cls='muted') if active and antec_profile(pipeline.engine) and pipeline.auto_worker else None,
+                    action('Check connection', '/integration/health', csrf(request)) if active else P('Select Use engine before you check its connection.', cls='muted'),
+                    *(worker_health_content(pipeline.engine.last_health) if active and getattr(pipeline.engine, 'last_health', None) else [])),
+            Details(Summary('Session controls'), P('Antec sessions pause the other GPU workload. The workload returns when the session ends.'),
+                    P('A VOP session is active.' if session['active'] else 'No VOP session is active.'),
+                    Form(hidden(csrf(request)), Select(*(Option(str(m) + ' minutes', value=str(m)) for m in (15, 30, 60)), name='minutes', aria_label='Session length'),
+                         Button('Start session', disabled=session['active']), method='post', action='/integration/session/start'),
+                    action('Stop session', '/integration/session/stop', csrf(request), secondary=True) if session['active'] else None) if active and antec_profile(pipeline.engine) else None,
+            Details(Summary('Engine details'), Pre(dumps({k: v for k, v in value.items() if k not in ('secret_ref', 'answers')})))
+        ], view='engines', notice=request.query_params.get('notice'))
+
+    @app.route('/integration/engine/antec', methods=['POST'])
+    async def antec_preset():
+        value = profile({'kind': 'worker', 'id': 'liquid-d1-3b', 'version': CHECKPOINT_REVISION, 'worker_id': 'antec-d1',
+                         'url': 'http://127.0.0.1:8878', 'transport': 'ssh', 'secret_ref': 'antec-worker', 'synthetic': False})
+        save_engine_record('legacy-current', 'Antec AI', value)
+        await select_engine('legacy-current', value)
+        return RedirectResponse('/engines/legacy-current?notice=Engine+in+use.', status_code=303)
 
     @app.route("/integration/session/start", methods=["POST"])
     async def session_start(request):
@@ -194,13 +347,13 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError("Save a readable worker access key in backend setup before starting antec")
         await run_in_threadpool(app.state.worker_session.start, int(form.get("minutes", "15")))
         store.audit("worker_session", "start_requested")
-        return RedirectResponse("/integration?notice=Antec+session+starting.+Test+worker+health+in+a+few+seconds.", status_code=303)
+        return RedirectResponse('/engines?notice=Session+starting.+Open+the+engine+to+check+its+connection.', status_code=303)
 
     @app.route("/integration/session/stop", methods=["POST"])
     async def session_stop(request):
         await run_in_threadpool(app.state.worker_session.stop)
         store.audit("worker_session", "stop_requested")
-        return RedirectResponse("/integration?notice=Session+stopped.+Original+workload+restoration+requested.", status_code=303)
+        return RedirectResponse('/engines?notice=Session+stopped.+Workload+restoration+requested.', status_code=303)
 
     @app.route("/integration/consent", methods=["POST"])
     async def image_consent(request):
@@ -220,7 +373,6 @@ def install_integration(app, settings, store, pipeline):
         form = await request.form()
         if form.get("kind") == "mock":
             value = {"kind": "mock", "id": "synthetic-mock", "answers": {**settings.mock_answers, "human_present": False}}
-            engine = MockInferenceEngine(value["answers"], value["id"])
         elif form.get("kind") == "worker":
             value = profile({"kind": "worker", "id": str(form["engine_id"]), "version": str(form["version"]), "worker_id": str(form["worker_id"]), "url": str(form["url"]), "secret_ref": str(form["secret_ref"]), "transport": str(form["transport"]), "synthetic": "synthetic" in form})
             key = str(form.get("worker_token", ""))
@@ -228,21 +380,11 @@ def install_integration(app, settings, store, pipeline):
                 if not 32 <= len(key) <= 256 or not key.isascii() or any(c.isspace() for c in key):
                     raise ValueError("Worker key must be 32–256 ASCII characters without whitespace")
                 await run_in_threadpool(secrets.set, value["secret_ref"], key)
-            engine = RemoteInferenceEngine(value, allow_remote=True, secrets=secrets)
         else:
             raise ValueError("Unknown engine kind")
-        busy()
-        try:
-            with store.connection() as db:
-                db.execute("INSERT OR REPLACE INTO release_settings VALUES('engine_profile',?)", (dumps(value),))
-            if isinstance(engine, MockInferenceEngine):
-                for sid, qid, version, preset in store.mock_values():
-                    engine.configure_source_answer(sid, qid, version, preset)
-            pipeline.engine, pipeline.engine_profile = engine, value
-            store.audit("engine_selection", value["kind"])
-        finally:
-            pipeline.busy.release()
-        return RedirectResponse("/integration?notice=Backend+selected", status_code=303)
+        save_engine_record('legacy-current', 'Demo' if value['kind'] == 'mock' else value['id'], value)
+        await select_engine('legacy-current', value)
+        return RedirectResponse('/engines/legacy-current?notice=Engine+in+use.', status_code=303)
 
     @app.route("/integration/health", methods=["POST"])
     async def engine_health(request):
@@ -257,7 +399,7 @@ def install_integration(app, settings, store, pipeline):
         else:
             health = {"ready": True, "device": "mock", "synthetic": True, "engine_id": pipeline.engine.engine_id}
         store.audit("engine_health", "ready" if health.get("ready") else "unavailable")
-        return app.state.page("Worker health", request, [*worker_health_content(health), A("Return to setup", href="/integration")], view="settings")
+        return app.state.page("Engine connection", request, [*worker_health_content(health), action('Check again', '/integration/health', csrf(request)), A("Back to Engines", href="/engines", cls='back')], view="engines")
 
     @app.route("/integration/camera", methods=["POST"])
     async def camera_edit(request):
@@ -310,7 +452,11 @@ def install_integration(app, settings, store, pipeline):
             pipeline.busy.release()
         if form.get('connect') == '1':
             return await camera_test(sid, request)
-        return RedirectResponse("/integration?camera=" + sid + "&notice=Camera+setup+saved", status_code=303)
+        return RedirectResponse('/cameras/' + sid + '?notice=Camera+saved.+Test+the+connection+when+ready.', status_code=303) if request.url.path == '/cameras/save' else RedirectResponse("/integration?camera=" + sid + "&notice=Camera+setup+saved", status_code=303)
+
+    @app.route('/cameras/save', methods=['POST'])
+    async def camera_save(request):
+        return await camera_edit(request)
 
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])
     async def camera_test(source_id: str, request):
@@ -330,7 +476,7 @@ def install_integration(app, settings, store, pipeline):
                 from vop.operator_workflow import recovery_message
                 content = [P('The camera could not connect yet.', cls='readiness warning'), P(recovery_message(exc.code)),
                            action('Retry camera connection', f'/integration/cameras/{source_id}/test', request.scope['session']['csrf']),
-                           A('Correct camera details', href='/integration?camera=' + source_id, cls='button secondary'),
+                           A('Correct camera details', href='/cameras/' + source_id + '/edit', cls='button secondary'),
                            Details(Summary('Technical details'), Pre(exc.code))]
                 diagnostic = {"source_id": source_id, "status": exc.code}
                 store.audit("camera_connection_test", dumps(diagnostic))
@@ -338,4 +484,4 @@ def install_integration(app, settings, store, pipeline):
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_test:" + source_id, dumps(diagnostic)))
         finally:
             pipeline.busy.release()
-        return app.state.page("Camera connection test", request, [*content, A("Return to setup", href="/integration")], view="sources")
+        return app.state.page("Camera connection test", request, [*content, A("Back to camera", href="/cameras/" + source_id)], view="cameras")

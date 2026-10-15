@@ -135,8 +135,9 @@ def test_camera_add_generates_id_enables_and_checks_once_without_inference(app, 
                     'endpoint': 'rtsp://192.168.1.100:554/stream1', 'username': 'offline-user', 'password': 'offline-password', 'connect': '1'})
         assert 'Capture succeeded' in result.text
         assert captures == ['tapo-c200'] and auto_app.state.store.source_control('tapo-c200')['enabled']
-        page = client.get('/integration').text
-        assert 'Observe now' in page and 'Advanced connection settings and manual controls' in page
+        page = client.get('/cameras/tapo-c200').text
+        assert 'Use this camera' in page and 'Edit camera' in page
+        assert 'Worker access key' not in page
         assert auto_app.state.store.health()['observation_count'] == 0
 
 
@@ -225,6 +226,6 @@ def test_enable_and_observe_is_one_action_without_resuming_saved_sampling(app):
         csrf = login(client)
         assert 'Enable and observe' in client.get('/').text
         result = client.post('/ui/sources/synthetic-scene/enable-observe', data={'csrf': csrf})
-        assert 'Capture completed' in result.text
+        assert 'Observation complete' in result.text
         control = auto_app.state.store.source_control('synthetic-scene')
         assert control['enabled'] and control['sample_interval_seconds'] == 0

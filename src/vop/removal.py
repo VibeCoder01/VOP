@@ -11,9 +11,9 @@ from vop.dashboard import action, hidden
 from vop.storage import dumps
 
 
-def removed_controls(store, pipeline, csrf, view):
+def removed_controls(store, pipeline, csrf, view, *, source_kinds=None):
     if view == "sources":
-        rows = [(s.name, f"/ui/sources/{sid}/restore") for sid, s in list(pipeline.removed_sources.items())]
+        rows = [(s.name, f"/ui/sources/{sid}/restore") for sid, s in list(pipeline.removed_sources.items()) if source_kinds is None or s.kind in source_kinds]
     else:
         rows = [(f"{sid} · {r['spec'].text}", f"/ui/questions/{sid}/{r['spec'].question_id}/restore")
                 for sid in list(pipeline.sources) for r in store.questions(sid, include_removed=True)

@@ -82,7 +82,7 @@ def main():
             csrf=re.search(r'name="csrf"[^>]*value="([^"]+)"',html)[1]
             with browser.open(Request(base+'/login',data=urlencode({'csrf':csrf,'access_key':owner}).encode())) as response: response.read()
             with browser.open(base+'/integration') as response:html=response.read().decode()
-            assert 'Engine and camera setup' in html
+            assert 'Open Cameras' in html and 'Open Engines' in html
             csrf=re.search(r'name="csrf"[^>]*value="([^"]+)"',html)[1]
             with browser.open(Request(base+'/integration/health',data=urlencode({'csrf':csrf}).encode())) as response: assert 'mock-worker' in response.read().decode()
             stop_process(dashboard);dashboard=None
