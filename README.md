@@ -9,8 +9,8 @@ C510W is reported temporarily unavailable. Phase 5 is not authorised.
 ## Everyday use on this laptop
 
 Ordinal answers show their configured level names. Liquid d1 returns an expected position:
-for levels Low, Medium, High, a score of 0 is shown as **Expected level: Low** and 0.25 as
-**Expected level: Between Low and Medium**. This is not a rounded category or a calibrated
+for levels Low, Medium, High, a score of 0 is shown as **Expected level: Low (0)** and 0.25 as
+**Expected level: Between Low and Medium (0.25)**. This is not a rounded category or a calibrated
 probability. Technical details preserve the numeric score and provider probabilities.
 Recorded answers use the level names from their original question version.
 

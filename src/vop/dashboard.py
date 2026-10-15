@@ -103,7 +103,7 @@ def answer_label(value, levels=()):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= len(levels) - 1:
             return "Unknown"
         low, high = math.floor(value), math.ceil(value)
-        return "Expected level: " + (levels[low] if low == high else f"Between {levels[low]} and {levels[high]}")
+        return "Expected level: " + (levels[low] if low == high else f"Between {levels[low]} and {levels[high]}") + f" ({value})"
     return ("Yes" if value else "No") if type(value) is bool else str(value)
 
 
