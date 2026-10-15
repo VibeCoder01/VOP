@@ -2,6 +2,7 @@
 from datetime import datetime, time, timedelta
 import json
 import secrets
+import re
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
@@ -87,6 +88,13 @@ if (form) {
 }
 """
 
+WORKSPACE_JS = """document.addEventListener('submit', (event) => {
+  const button = event.submitter;
+  if (!button) return;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = 'Working…';
+});"""
+
 
 def badge(value):
     return Span(str(value), cls=f"status {value}")
@@ -168,12 +176,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href="/?" + urlencode({"view": key}), cls="current" if key == view else "") for key, label in navigation), cls="navigation"),
                                    A("Alerts and release tools", href="/release", cls="button secondary"),
-                                   A("Engine and camera setup", href="/integration", cls="button secondary"),
+                                   A("Cameras and connection", href="/integration", cls="button secondary"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P("Review sampled conditions and their evidence.")),
                                          Span("MOCK · NO VISION" if pipeline.engine.synthetic else pipeline.engine.engine_id, cls="tag"), cls="top"),
-                                  Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell")))
+                                  Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
+                         Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None))
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
         result = []
@@ -192,11 +201,52 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def capture_controls(source, csrf, operator):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
+        automatic = bool(getattr(pipeline, 'auto_worker', None))
+        monitoring = source['enabled'] and source['sample_interval_seconds'] > 0
+        other_problems = [p for p in problems if p[1] != f'/ui/sources/{sid}']
         return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
                    dependency_panel(problems, ready="Capture checks the selected worker before opening the camera. A last successful check cannot guarantee the next connection." if not pipeline.engine.synthetic else "Synthetic/mock backend selected; results do not represent real image understanding.") if operator else P("Capture controls require operator access."),
-                   Div(Form(hidden(csrf), Button("Capture once", disabled=bool(problems)), method="post", action=f"/ui/sources/{sid}/capture") if operator else None,
+                   P("The saved backend is reused automatically. Antec's timed sessions restore the previous workload when they end.", cls="readiness info") if operator and automatic and not pipeline.engine.synthetic else None,
+                   Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
+                                                disabled=bool(other_problems if automatic and not source['enabled'] else problems)),
+                            method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator else None,
+                       Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
+                            Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
+                                   disabled=not monitoring and bool(other_problems)),
+                            method='post', action=f'/ui/sources/{sid}/monitor') if operator and automatic else None,
                        action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if operator and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
                        cls="actions"), cls="capture-source")
+
+    @app.route('/ui/sources/{source_id}/monitor', methods=['POST'])
+    async def monitor(source_id: str, request):
+        if source_id not in pipeline.sources:
+            raise ValueError('Unknown source')
+        form = await request.form()
+        control = store.source_control(source_id)
+        if form.get('mode') not in ('start', 'pause'):
+            raise ValueError('Choose start or pause')
+        with store.connection() as db:
+            row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('monitor_interval:' + source_id,)).fetchone()
+            interval = control['sample_interval_seconds'] or (json.loads(row[0]) if row else 10)
+            db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('monitor_interval:' + source_id, json.dumps(interval)))
+        starting = form['mode'] == 'start'
+        if starting and not store.questions(source_id, active_only=True):
+            raise ValueError('Add or enable a question before starting monitoring')
+        store.update_source(source_id, enabled=True if starting else control['enabled'], retain_evidence=control['retain_evidence'],
+                            sample_interval_seconds=interval if starting else 0)
+        if not starting:
+            pipeline.record_gap(source_id)
+            if not pipeline.busy.locked() and not any(c['enabled'] and c['sample_interval_seconds'] for c in store.sources(tuple(pipeline.sources))):
+                await run_in_threadpool(app.state.worker_session.stop)
+        return RedirectResponse('/?notice=Monitoring+' + ('started' if starting else 'paused'), status_code=303)
+
+    @app.route('/ui/sources/{source_id}/enable-observe', methods=['POST'])
+    async def enable_observe(source_id: str, request):
+        if source_id not in pipeline.sources:
+            raise ValueError('Unknown source')
+        control = store.source_control(source_id)
+        store.update_source(source_id, enabled=True, retain_evidence=control['retain_evidence'], sample_interval_seconds=0)
+        return await capture(source_id, request)
 
     app.state.render_error = lambda request, message: page("Check the request", request,
         [Div(message, cls="error", role="alert"), A("Engine and camera setup", href="/integration", cls="button"), A("Return to workspace", href="/", cls="button secondary")])
@@ -224,6 +274,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def question_editor_script():
         return Response(QUESTION_EDITOR_JS, media_type="application/javascript")
 
+    @app.route('/ui/workspace.js', methods=['GET'])
+    def workspace_script():
+        return Response(WORKSPACE_JS, media_type='application/javascript')
+
     @app.route("/favicon.ico", methods=["GET"])
     def favicon():
         return Response(status_code=204)
@@ -232,10 +286,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def login_page(request):
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
         return Html(Head(Title("Sign in · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
-                    Body(Main(Div("VOP", cls="brand"), P("Local observation workspace"), H2("Sign in"),
-                              Form(hidden(csrf), Input(type="hidden", name="username", value="local-access", autocomplete="username"), field("Access key", "access_key", type="password", required=True, autocomplete="current-password"),
-                                   Button("Open workspace", type="submit"), method="post", action="/login"),
-                              P("Use the operator or viewer key set when the service started.", cls="muted"), cls="login")))
+                    Body(Main(Div("VOP", cls="brand"), H2("Open your workspace"),
+                              P("Open Start VOP on this computer. It signs you in automatically and reuses your saved cameras and connection."),
+                              Details(Summary('Advanced: manual sign-in'), Form(hidden(csrf), Input(type="hidden", name="username", value="local-access", autocomplete="username"), field("Access key", "access_key", type="password", required=True, autocomplete="current-password"),
+                                   Button("Open workspace", type="submit"), method="post", action="/login")), cls="login")))
 
     @app.route("/login", methods=["POST"])
     async def login(request):
@@ -387,36 +441,35 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         csrf = request.scope["session"]["csrf"]
         return page("Edit question" if record else "New question", request, [Form(hidden(csrf),
             Input(type="hidden", name="expected_version", value=q.version if record else ""),
-            field("Question ID", "question_id", q.question_id if record else "", required=True, maxlength=64, pattern=r"[A-Za-z0-9_.\-]{1,64}",
+            Details(Summary('Advanced: question ID'), field("Question ID (optional for new questions)", "question_id", q.question_id if record else "", maxlength=64, pattern=r"[A-Za-z0-9_.\-]{1,64}",
                   title="1–64 ASCII letters, digits, dots, underscores or hyphens; no spaces", aria_describedby="question-id-help", placeholder="human_present", readonly=bool(record)),
-            P("Use 1–64 ASCII letters (A–Z, a–z), digits (0–9), dots (.), underscores (_) or hyphens (-). No spaces. Choose an unused ID for this source; 'new' is reserved for this form. The ID cannot change after saving.", id="question-id-help", cls="muted"),
-            field("Question", "text", q.text, required=True, maxlength=4096),
+            P("Leave blank for an automatic ID. If set, use 1–64 ASCII letters (A–Z, a–z), digits (0–9), dots (.), underscores (_) or hyphens (-). No spaces. Choose an unused ID for this source; 'new' is reserved for this form. The ID cannot change after saving.", id="question-id-help", cls="muted")),
+            field("Question", "text", q.text if record else '', required=True, maxlength=4096, placeholder='Is there a human in the picture?'),
             Div(Label("Answer kind", _for="kind"), Select(*(Option(k.value, value=k.value, selected=k == selected_kind) for k in AnswerKind), name="kind", id="kind"), cls="field"),
             Noscript(P("With JavaScript off, choose a type before entering the question: ", *(A(k.value + " ", href=request.url.path + "?kind=" + k.value) for k in AnswerKind))),
-            Div(field("Binary threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01", disabled=not binary),
+            Div(Details(Summary('Advanced: detection and episode settings'), field("Binary threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01", disabled=not binary),
                 Div(field("Positive confirmations", "positive_confirmations", policy.positive_confirmations, type="number", min=1, max=100, disabled=not binary),
                     field("Negative confirmations", "negative_confirmations", policy.negative_confirmations, type="number", min=1, max=100, disabled=not binary), cls="pair"),
                 Div(Label("After an unknown gap", _for="unknown_gap_policy"), Select(Option("Resume the episode after reconfirmation", value="resume", selected=policy.unknown_gap_policy == "resume"),
                 Option("Split into an interrupted episode and a new episode", value="split", selected=policy.unknown_gap_policy == "split"),
                 Option("Require operator review before continuing", value="manual_review", selected=policy.unknown_gap_policy == "manual_review"), id="unknown_gap_policy", name="unknown_gap_policy", disabled=not binary), cls="field"),
-                data_answer_kind="binary", hidden=not binary),
+                ), data_answer_kind="binary", hidden=not binary),
             Div(Label("Choice options — one name | description per line", _for="choices"), Textarea("\n".join(f"{n}|{d}" for n, d in q.choices), name="choices", id="choices", disabled=selected_kind != AnswerKind.CHOICE),
                 P("At least two options, each with a unique nonempty name and a description. Example: cat|A cat is visible", cls="muted"),
                 data_answer_kind="choice", hidden=selected_kind != AnswerKind.CHOICE),
             Div(Label("Ordinal levels — one description per line, lowest first", _for="levels"), Textarea("\n".join(q.levels), name="levels", id="levels", disabled=selected_kind != AnswerKind.ORDINAL),
                 P("Enter 2–10 nonempty levels in increasing order, for example: Low, Medium, High (on separate lines).", cls="muted"),
                 data_answer_kind="ordinal", hidden=selected_kind != AnswerKind.ORDINAL),
-            field("Maximum observation gap (seconds)", "max_gap_seconds", policy.max_gap_seconds, type="number", min=1, max=86400),
+            Details(Summary('Advanced: observation settings'), field("Maximum observation gap (seconds)", "max_gap_seconds", policy.max_gap_seconds, type="number", min=1, max=86400),
             field("ROI (optional: x, y, width, height in 0–1)", "roi", ",".join(str(v) for v in policy.roi) if policy.roi else ""),
-            Label(Input(type="checkbox", name="enabled", checked=record["enabled"] if record else True), " Question enabled"),
+            Label(Input(type="checkbox", name="enabled", checked=record["enabled"] if record else True), " Question enabled")),
             *(Div(field(label, "mock_answer", mock if k == q.kind else "", id="mock-" + k.value, disabled=k != selected_kind, placeholder=example),
                   data_answer_kind=k.value, hidden=k != selected_kind) for k, label, example in (
                     (AnswerKind.BINARY, "Mock answer preset (true or false)", "true"),
                     (AnswerKind.CHOICE, "Mock answer preset (an option name)", "cat"),
                     (AnswerKind.ORDINAL, "Mock answer preset (zero-based level number)", "0"))) if isinstance(engine, MockInferenceEngine) else (),
             P("Each save creates an immutable version." + (" Mock presets are synthetic instructions, not image analysis." if isinstance(engine, MockInferenceEngine) else ""), cls="muted"),
-            Div(P("For a manual-review gap, review the history and save a new version to start fresh confirmations.", cls="muted"), data_answer_kind="binary", hidden=not binary),
-            Button("Save new version"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor", data_question_editor=""),
+            Button("Save changes" if record else "Add question"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor", data_question_editor=""),
             Script(src="/ui/question-editor.js", defer=True)], view="questions")
 
     @app.route("/ui/questions/{source_id}/{question_id}", methods=["POST"])
@@ -425,7 +478,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if source_id not in pipeline.sources:
             raise ValueError("Unknown source")
         form = await request.form()
-        qid = identifier(str(form["question_id"]))
+        requested_id = str(form.get('question_id', '')).strip()
+        if not requested_id and question_id == 'new':
+            base = re.sub(r'[^A-Za-z0-9_.-]+', '_', str(form['text']).lower()).strip('_.-')[:56] or 'question'
+            if base == 'new': base = 'question_new'
+            requested_id, number = base, 1
+            ids = {r['spec'].question_id for r in store.questions(source_id, include_removed=True)}
+            while requested_id in ids:
+                number += 1
+                requested_id = base + '_' + str(number)
+        qid = identifier(requested_id)
         creating = question_id == "new" and not form.get("expected_version")
         if creating and qid == "new":
             raise ValueError("Question ID 'new' is reserved for the new-question form. Choose another ID.")
@@ -470,7 +532,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if source_id not in pipeline.sources:
             raise ValueError("Unknown source")
         problems = capture_dependencies(pipeline, source_id)
-        if not problems:
+        if not problems and not getattr(pipeline, 'auto_worker', None):
             from vop.inference.remote import RemoteInferenceEngine
             if isinstance(pipeline.engine, RemoteInferenceEngine):
                 try:
@@ -483,8 +545,17 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 if not problems:
                     pipeline.engine.allow_remote = True
         if problems:
-            return page("Capture blocked", request, [dependency_panel(problems), P("No camera image was acquired and no inference was requested."), A("Engine and camera setup", href="/integration", cls="button"), A("Return to overview", href="/", cls="button secondary")], view="sources")
-        result = await run_in_threadpool(pipeline.run, source_id)
+            return page("Capture blocked", request, [dependency_panel(problems), P("No camera image was acquired and no inference was requested."),
+                        action('Enable camera and observe', f'/ui/sources/{source_id}/enable-observe', request.scope['session']['csrf']) if not store.source_control(source_id)['enabled'] else None,
+                        A("Camera and connection settings", href="/integration", cls="button"), A("Return to overview", href="/", cls="button secondary")], view="sources")
+        try:
+            result = await run_in_threadpool(pipeline.run, source_id)
+        except ProviderError as exc:
+            from vop.operator_workflow import recovery_message
+            return page("Could not observe yet", request, [P(recovery_message(exc.code), cls='readiness warning'),
+                        action('Retry automatically', f'/ui/sources/{source_id}/capture', request.scope['session']['csrf']),
+                        A('Camera and connection settings', href='/integration', cls='button secondary'),
+                        Details(Summary('Technical details'), Pre(exc.code))], view='sources')
         summary = result["result"]
         questions = {r["spec"].question_id: r["spec"].text for r in store.questions(source_id)}
         answers = []
@@ -508,7 +579,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    A("Engine and camera setup", href="/integration") if error else None,
                    P(f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds · Engine: {summary['engine_id']}"),
                    Details(Summary("Technical details"), Pre(json.dumps(summary, indent=2))),
-                   action("Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
+                   action("Observe again" if getattr(pipeline, 'auto_worker', None) else "Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
                    A("Return to overview", href="/", cls="button secondary")]
         if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, summary["frame_id"]):
             content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; inspect recorded engine provenance",

@@ -19,7 +19,7 @@ def camera_dependencies(source):
             if source.settings.get("secret_ref"):
                 SecretStore().camera(source.settings["secret_ref"])
         except ProviderError:
-            problems.append(("Camera address or protected account is unavailable. Save its setup again.", "/integration?camera=" + source.source_id if source.settings.get("endpoint_secret_ref") else "/integration#camera-setup"))
+            problems.append(("Saved camera details could not be read. Reopen Start VOP under the same Windows account; if this persists, check the camera setup.", "/integration?camera=" + source.source_id if source.settings.get("endpoint_secret_ref") else "/integration#camera-setup"))
     if source.kind == "file" and not Path(source.settings["path"]).is_file():
         problems.append(("The configured image file is missing. Correct its path in the source configuration.", "/?view=sources"))
     return problems
@@ -50,13 +50,17 @@ def capture_dependencies(pipeline, source_id):
     if source.kind not in ("synthetic", "file") and not getattr(pipeline.capture_adapter, "allow_live_sources", True):
         problems.append(("Live capture is off. Restart using Start VOP.cmd, or add --allow-live-sources to the launcher command.", "/integration#camera-setup"))
     problems.extend(camera_dependencies(source))
-    problems.extend(worker_dependencies(pipeline.engine))
+    automatic = getattr(pipeline, 'auto_worker', None)
+    from vop.operator_workflow import is_antec
+    automatic = automatic and is_antec(pipeline.engine)
+    if not automatic:
+        problems.extend(worker_dependencies(pipeline.engine))
     if isinstance(pipeline.engine, MockInferenceEngine):
         if any(q['spec'].question_id not in pipeline.engine.configured and (source_id, q['spec'].question_id, q['spec'].version) not in pipeline.engine.source_answers for q in questions):
             problems.append(("Mock answers are missing. Save a synthetic answer in Questions or select a real worker.", "/?view=questions&source=" + source_id))
     else:
         health = getattr(pipeline.engine, "last_health", None)
-        if health is not None and not health.get("ready"):
+        if not automatic and health is not None and not health.get("ready"):
             problems.append(("Worker was unavailable at the last check. Start/check the worker and SSH tunnel, then test worker health again.", "/integration#connection"))
     if pipeline.busy.locked():
         problems.append(("Another capture is running. Wait for it to finish, then refresh this page.", "/"))

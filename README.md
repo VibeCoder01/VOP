@@ -6,7 +6,33 @@ d1-3B CUDA/BF16 execution and a laptop→antec fixture request passed. Default i
 mock until deliberately changed. C200/C210 live validation needs local credential setup;
 C510W is reported temporarily unavailable. Phase 5 is not authorised.
 
-## Test the dashboard on this laptop
+## Everyday use on this laptop
+
+Double-click **Start VOP.cmd**. It opens your signed-in workspace using a short-lived, single-use
+local launch link; you do not copy any keys. Keep its terminal window open while using VOP.
+Saved cameras, questions and the selected backend are reused. Click **Observe now** for a result.
+Use **Start monitoring** for repeated observations (10 seconds by default, or your saved custom
+interval) and **Pause monitoring** to stop them. Pause leaves manual observations available;
+when no other scheduled source is active and no capture is in flight, it also stops the owned
+Antec session and restores the previous workload. Interval and pause choices persist.
+For the established Antec pilot, VOP checks/reconnects the worker, recovers its existing key over
+trusted SSH when needed, and starts or reuses a 15-minute GPU session automatically. The owner
+authorised temporarily pausing the existing workload for these on-demand sessions; it is
+restored on session end, Stop or disconnect. Configured sampling can request a new timed session
+when it next needs inference. Stop sampling or close VOP when you no longer want it using the GPU.
+
+Add a camera once using its address and camera account, then **Save camera and check connection**.
+A new camera gets an automatic ID, is enabled for observations, and its preview is checked in
+that action; sampling and evidence retention remain off. Questions also get automatic IDs when
+left blank. If no real backend was selected yet, **Use Antec AI** selects the verified preset
+once without asking for worker IDs or keys. There is no automatic model substitution.
+
+Failures show a short explanation and **Retry automatically**, with detailed codes expandable.
+Manual backend/session controls and credentials remain under **Advanced connection settings**;
+question ID, timing, ROI and confirmation options are also advanced. A saved paused source stays
+paused. Camera addresses/passwords and the question itself still require your one-time input.
+
+## Install and validate (advanced)
 
 ```powershell
 # Run from your VOP checkout:
@@ -21,9 +47,9 @@ git switch main
 ```
 
 Create the venv first (`py -3.11 -m venv .venv`) for a new checkout. The smoke script uses a
-temporary synthetic database/key and prints `result: PASS`. The dashboard launcher intentionally
-prints a local operator key for sign-in. Open **http://127.0.0.1:8765**, paste that key into
-**Access key**, and select **Open workspace**. The service runs in that terminal; Ctrl+C stops it.
+temporary synthetic database/key and prints `result: PASS`. Use **Start VOP.cmd** for automatic
+browser sign-in. Advanced API/manual clients can add `--show-access-key` to the launcher command.
+The service runs in that terminal; Ctrl+C stops it.
 The default synthetic/mock setup needs no GPU, d1-3B weights or camera. An existing `VOP_API_TOKEN`
 can be used; a generated key changes on restart. Neither key is stored in the application DB.
 
@@ -35,7 +61,8 @@ The question editor switches criteria when **Answer kind** changes: binary thres
 episode-confirmation settings, named choice options, or ordered ordinal levels. Irrelevant
 controls are hidden and disabled; observation gap, ROI and enabled state apply to every type.
 The synthetic preset, when using the local mock backend, also describes the selected type.
-Question IDs accept 1–64 ASCII letters, digits, dots, underscores or hyphens, with no spaces.
+Question IDs are generated automatically when left blank. Manual IDs accept 1–64 ASCII letters,
+digits, dots, underscores or hyphens, with no spaces.
 Choose an unused ID within that source; `new` is reserved for the editor route. IDs become
 read-only after creation. Browser validation and server validation enforce these rules.
 Type switching uses a small authenticated same-origin script with no external library or inline
@@ -100,7 +127,8 @@ Browser login uses a signed HttpOnly/SameSite=Strict one-hour cookie; write form
 and same-origin checks. Optional read-only access uses a distinct `VOP_VIEWER_TOKEN` set before
 startup (same 32–256 ASCII-character requirement). Viewers can inspect metadata/metrics, but cannot
 capture, edit, sample or access image evidence. There are no individual user accounts or SSO.
-Bearer API access continues to work. No key-in-URL login, external scripts/CDNs, SPA or frontend
+Bearer API access continues to work. Long-lived keys never appear in login URLs; desktop launch
+uses an authenticated, one-use ticket valid for 60 seconds. There are no external scripts/CDNs, SPA or frontend
 build tooling is used. Templates escape user text, and CSS respects reduced motion.
 
 Additional authenticated APIs: `GET /api/v1/events`, `GET /api/v1/metrics`, `POST /api/v1/replay`.
@@ -216,12 +244,14 @@ environment is not the current development release or a production security reco
 
 On Windows, double-click **Start VOP.cmd** in the VOP folder. It opens the browser and starts
 the local app with camera support. Keep its terminal window open. The launcher stores its
-operator access key using Windows DPAPI and reuses it on later launches; the key is still
-printed for sign-in. If a local app already occupies the port, the launcher opens that page
-without starting a second server. An existing unreadable key is never silently replaced.
-The command-line launcher remains available with its previous behaviour.
+operator access key using Windows DPAPI and reuses it internally on later launches. No key is
+printed unless `--show-access-key` is requested. Existing instances are authenticated and their
+listener ownership/launcher path checked before a one-time browser ticket is issued. An
+unrelated port listener is not given a key or taken over. An unreadable saved key is never
+silently replaced. Close/reopen VOP if an older running instance cannot authenticate the launcher.
 
-In **Engine and camera setup**, select the verified antec SSH backend, then:
+Normally **Observe now** manages the connection for you. The following optional manual controls
+remain under **Advanced connection settings** (or launch with `--manual-worker`):
 
 1. Choose a **15, 30 or 60 minute** session and press **Start antec session**. The button
    opens the SSH tunnel and temporarily pauses the
@@ -246,11 +276,12 @@ or **Technical details** for native provenance and raw scores. A failed inferenc
 it is never displayed as an absent person. Session controls do not change sampling, evidence,
 camera credentials. No permission checkboxes are required: selecting a worker enables its use
 by the dashboard; **Start** requests the stated temporary workload pause, and **Test camera
-connection** requests one local preview. Saving camera credentials still does not start capture.
+connection** requests one local preview. The normal save-and-check camera action also requests
+a preview; it does not infer, retain evidence or start scheduled sampling.
 
 Use **Engine and camera setup** in the sidebar. Operator access and CSRF are required; viewers
 cannot see credential forms or invoke connection tests. Live capture and remote transmission
-are independent settings. Saving credentials never starts capture/sampling. The dashboard launcher
+are independent settings. Saving/checking a camera never starts scheduled sampling. The dashboard launcher
 uses the saved selected worker after restart, without requiring permission to be ticked again.
 The lower-level API/service and remote-engine constructors retain their explicit transmission
 opt-in; the dashboard's worker selection/capture action supplies it. Authentication, CSRF,
@@ -282,7 +313,8 @@ request is made by that connection test. Capture failure never asserts “no hum
 
 The setup page reopens the saved camera's address, username and model; passwords stay blank.
 Use **Edit tapo-c200** / **Edit tapo-c210** to choose an existing camera, or **Add another camera**
-for an empty new-camera form. Saving returns to the camera just edited. The sample IP is a
+for an empty new-camera form. Save-and-check opens its connection result; the edit link returns
+to that camera. The sample IP is a
 placeholder only and is never submitted as a default address.
 
 If a connection test reports that another capture is running, wait for that request to finish

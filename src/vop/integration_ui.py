@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 
 from vop.config import SourceSpec, identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec
-from vop.dashboard import field, hidden, evidence_image, dependency_panel
+from vop.dashboard import field, hidden, evidence_image, dependency_panel, action
 from vop.inference.liquid_d1 import CHECKPOINT_REVISION
 from vop.inference.mock import MockInferenceEngine
 from vop.inference.remote import RemoteInferenceEngine, profile
@@ -147,18 +147,42 @@ def install_integration(app, settings, store, pipeline):
                     P(camera_notice),
                     *(P(A("Edit " + s.source_id, href="/integration?camera=" + s.source_id)) for s in saved_cams),
                     P(A("Add another camera", href="/integration?new_camera=1")),
-                    Form(hidden(csrf), field("Camera source ID", "source_id", selected.source_id if selected else "", placeholder="tapo-c200", required=True),
+                    Form(hidden(csrf), field("Camera ID (optional; generated automatically)", "source_id", selected.source_id if selected else "", placeholder="Leave blank for an automatic name", readonly=bool(selected)),
                          Select(*(Option(m, value=m, selected=m == model) for m in ("C200", "C210", "C510W")), name="model", aria_label="Camera model"),
                          field("Camera RTSP endpoint (LAN IP, no credentials)", "endpoint", endpoint, placeholder="rtsp://192.168.1.100:554/stream1", required=True),
                          field("Camera account username", "username", username, autocomplete="username"),
                          field("Camera account password (blank keeps saved credentials)", "password", type="password", autocomplete="new-password"),
-                         Button("Save protected camera setup"), method="post", action="/integration/camera"), id="camera-setup"),
+                         Button("Save camera and check connection", name='connect', value='1'), method="post", action="/integration/camera"), id="camera-setup"),
                    Section(H2("Camera connection tests"),
                          *(Form(hidden(csrf), P(s.name + " · " + s.source_id),
                                 dependency_panel(camera_dependencies(s), ready="Test captures one local preview; it does not use a worker or retain evidence. Camera reachability and password validity are checked on Test."),
                                 Button("Test camera connection", disabled=bool(camera_dependencies(s))), method="post", action=f"/integration/cameras/{s.source_id}/test") for s in cams),
                          P("Connection tests work while a source is disabled. For inference, enable the source and at least one question in Sources / Questions. Use Start VOP.cmd to launch with live capture enabled."))]
+        if getattr(pipeline, 'auto_worker', None):
+            content = [Section(H2('Your cameras'), P('Saved setup is reused. Observe now handles the Antec connection and its timed GPU session for you.'),
+                       P('Demo mode produces synthetic answers. Choose Antec once for real image analysis.', cls='readiness warning') if isinstance(pipeline.engine, MockInferenceEngine) else None,
+                       action('Use Antec AI', '/integration/engine/antec', csrf) if isinstance(pipeline.engine, MockInferenceEngine) else None,
+                       *(Section(H2(s.name), P(s.source_id), action('Observe now', f'/ui/sources/{s.source_id}/capture', csrf),
+                                 A('Edit camera', href='/integration?camera=' + s.source_id, cls='button secondary')) for s in cams),
+                       P('Add a camera once using its address and camera account. VOP keeps these protected on this computer.') if not cams else None),
+                       Details(Summary('Add or edit a camera'), content[4], open=not cams or bool(selected_id) or 'new_camera' in request.query_params),
+                       Details(Summary('Advanced connection settings and manual controls'), *content[:4], content[5], open=request.query_params.get('advanced') == '1')]
         return app.state.page("Engine and camera setup", request, content, view="settings", notice=request.query_params.get("notice"))
+
+    @app.route('/integration/engine/antec', methods=['POST'])
+    def antec_preset():
+        value = profile({'kind': 'worker', 'id': 'liquid-d1-3b', 'version': CHECKPOINT_REVISION, 'worker_id': 'antec-d1',
+                         'url': 'http://127.0.0.1:8878', 'transport': 'ssh', 'secret_ref': 'antec-worker', 'synthetic': False})
+        busy()
+        try:
+            with store.connection() as db:
+                db.execute("INSERT OR REPLACE INTO release_settings VALUES('engine_profile',?)", (dumps(value),))
+            pipeline.engine = RemoteInferenceEngine(value, allow_remote=True, secrets=secrets)
+            pipeline.engine_profile = value
+            store.audit('engine_selection', 'antec_preset')
+        finally:
+            pipeline.busy.release()
+        return RedirectResponse('/integration?notice=Antec+selected.+Observe+now+will+connect+automatically.', status_code=303)
 
     @app.route("/integration/session/start", methods=["POST"])
     async def session_start(request):
@@ -224,6 +248,8 @@ def install_integration(app, settings, store, pipeline):
     async def engine_health(request):
         if isinstance(pipeline.engine, RemoteInferenceEngine):
             try:
+                if getattr(pipeline, 'auto_worker', None):
+                    await run_in_threadpool(pipeline.auto_worker.ensure_ready)
                 health = await run_in_threadpool(pipeline.engine.health)
             except ProviderError as exc:
                 health = {"ready": False, "error": exc.code, "message": exc.message}
@@ -236,7 +262,15 @@ def install_integration(app, settings, store, pipeline):
     @app.route("/integration/camera", methods=["POST"])
     async def camera_edit(request):
         form = await request.form()
-        sid = identifier(str(form["source_id"]))
+        requested_id = str(form.get('source_id', '')).strip()
+        if not requested_id:
+            base = 'tapo-' + str(form['model']).lower()
+            requested_id, number = base, 1
+            while requested_id in pipeline.sources or requested_id in pipeline.removed_sources:
+                number += 1
+                requested_id = base + '-' + str(number)
+        sid = identifier(requested_id)
+        is_new = sid not in pipeline.sources
         parsed = urlsplit(str(form["endpoint"]))
         try:
             address = ipaddress.ip_address(parsed.hostname or "")
@@ -269,9 +303,13 @@ def install_integration(app, settings, store, pipeline):
             with store.connection() as db:
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_profile:" + sid, dumps(record)))
             pipeline.sources[sid] = source
+            if is_new and form.get('connect') == '1':
+                store.update_source(sid, enabled=True, retain_evidence=False, sample_interval_seconds=0)
             store.audit("camera_setup", "saved_protected_references")
         finally:
             pipeline.busy.release()
+        if form.get('connect') == '1':
+            return await camera_test(sid, request)
         return RedirectResponse("/integration?camera=" + sid + "&notice=Camera+setup+saved", status_code=303)
 
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])
@@ -289,7 +327,11 @@ def install_integration(app, settings, store, pipeline):
                 diagnostic = {"source_id": source_id, "status": "capture_success", "width": frame.width, "height": frame.height, "captured_at_utc": frame.captured_at_utc.isoformat()}
                 store.audit("camera_connection_test", dumps(diagnostic))
             except ProviderError as exc:
-                content = [P("Capture failed: " + exc.code, cls="readiness error"), P("Check the camera account, LAN address and availability. You can save corrected credentials and retry.")]
+                from vop.operator_workflow import recovery_message
+                content = [P('The camera could not connect yet.', cls='readiness warning'), P(recovery_message(exc.code)),
+                           action('Retry camera connection', f'/integration/cameras/{source_id}/test', request.scope['session']['csrf']),
+                           A('Correct camera details', href='/integration?camera=' + source_id, cls='button secondary'),
+                           Details(Summary('Technical details'), Pre(exc.code))]
                 diagnostic = {"source_id": source_id, "status": exc.code}
                 store.audit("camera_connection_test", dumps(diagnostic))
             with store.connection() as db:

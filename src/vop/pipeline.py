@@ -54,6 +54,12 @@ class Pipeline:
             source = self.source(source_id)
             if not source.questions:
                 raise ProviderError("no_active_questions", "Enable at least one question before capturing")
+            if getattr(self, 'auto_worker', None):
+                try:
+                    self.auto_worker.ensure_ready()
+                except ProviderError as exc:
+                    self.save_capture_error(source, exc)
+                    raise
             if frame is None:
                 try:
                     frame = self.capture_adapter.capture(source)
