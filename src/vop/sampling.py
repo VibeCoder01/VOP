@@ -28,6 +28,8 @@ class Sampler:
     def tick(self, now=None):
         now = monotonic() if now is None else now
         for source_id in list(self.pipeline.sources):
+            if self.stop_event.is_set():
+                break
             control = self.pipeline.store.source_control(source_id)
             interval = control["sample_interval_seconds"]
             if not control["enabled"] or interval == 0 or not self.pipeline.store.questions(source_id, active_only=True):

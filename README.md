@@ -16,6 +16,20 @@ Recorded answers use the level names from their original question version.
 
 Double-click **Start VOP.cmd**. It opens your signed-in workspace using a short-lived, single-use
 local launch link; you do not copy any keys. Keep its terminal window open while using VOP.
+Start VOP now stops previous VOP servers from this installation on the same port before it
+starts a fresh server. It asks responsive servers to finish their work and close their owned
+worker sessions; after a bounded wait it clears stale processes and their children. Other
+applications, other installations, other Windows accounts and other ports are left alone.
+If another application owns the port, the launcher explains the conflict and stops.
+
+Use **Restart VOP** in the sidebar or **Settings → Restart VOP** to restart from the browser.
+The workspace reconnects automatically when JavaScript is enabled. The current observation
+finishes before shutdown; background sampling stops before worker cleanup. Saved camera
+details, names, questions, backend, login key and monitoring choices are retained. Monitoring
+resumes when the new server starts. This restart reloads application code as well as settings.
+If restart cannot complete, open **Start VOP** to clear stale instances. Advanced servers
+started outside `tools/run_dashboard.py` do not expose an enabled restart control.
+
 Saved cameras, questions and the selected backend are reused. Click **Observe now** for a result.
 Use **Start monitoring** for repeated observations (10 seconds by default, or your saved custom
 interval) and **Pause monitoring** to stop them. Pause leaves manual observations available;
@@ -379,7 +393,14 @@ camera IP in Tapo Device Settings → Device Info and its dedicated account in A
 address, camera availability and RTSP setup before changing passwords.
 
 Windows credential/key values are encrypted with user-bound DPAPI under
-`%LOCALAPPDATA%/VOP/secrets`. Configuration, SQLite and exports contain references, not secret
+`%USERPROFILE%/.vop/secrets`. This location is shared by direct Windows launches and launches
+from packaged Codex; AppData redirection previously made them see different saved details.
+Missing values are recovered automatically from the previous AppData or Codex LocalCache
+vault, validating the most recently saved encrypted file before copying it. Originals are retained, and an
+existing value in the shared vault is never overwritten by migration. If the newest old value
+cannot be unlocked, VOP reports the problem instead of silently substituting an older value.
+`VOP_SECRET_DIR` is an advanced absolute-path override; smoke tests use it for disposable
+storage and disable legacy migration there. Configuration, SQLite and exports contain references, not secret
 values. RTSP credentials are resolved and inserted into the locator only within the capture child;
 native diagnostics are suppressed. Linux camera secret setup requires an unlocked OS Secret
 Service (`secret-tool`), rather than falling back to plaintext. After restoring/moving configuration,

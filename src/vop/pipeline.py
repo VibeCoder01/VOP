@@ -34,6 +34,7 @@ class Pipeline:
         self.busy = Lock()
         self.skipped = 0
         self.latest_preview = None  # One privacy-masked, downscaled preview; never an unbounded cache.
+        self.stopping = False
 
     def source(self, source_id: str):
         if source_id not in self.sources:
@@ -51,6 +52,8 @@ class Pipeline:
             self.store.audit("capture_skipped", "overload")
             raise ProviderError("overloaded", "An inference is in flight; this request was not queued")
         try:
+            if self.stopping:
+                raise ProviderError('application_stopping', 'VOP is restarting. Wait for the workspace to reconnect.')
             source = self.source(source_id)
             if not source.questions:
                 raise ProviderError("no_active_questions", "Enable at least one question before capturing")
