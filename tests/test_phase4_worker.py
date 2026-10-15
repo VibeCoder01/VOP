@@ -360,6 +360,29 @@ def test_capture_page_gives_plain_answer_and_hides_raw_details(app):
         assert re.search(r'<details>\s*<summary>Technical details</summary>', page.text)
 
 
+@pytest.mark.parametrize('code,status,message', [
+    ('capture_timeout', Status.TIMEOUT, 'The camera did not respond in time.'),
+    ('capture_open_failed', Status.MODEL_FAILURE, 'The camera could not connect.')])
+def test_capture_page_handles_acquisition_failure_without_inference_time(app, monkeypatch, code, status, message):
+    def fail(source):
+        raise ProviderError(code, 'Fixture acquisition failed', status)
+    monkeypatch.setattr(app.state.pipeline.capture_adapter, 'capture', fail)
+    monkeypatch.setattr(app.state.pipeline.engine, 'infer', lambda *_: pytest.fail('No frame: inference must not run'))
+    with TestClient(app) as client:
+        csrf = login(client)
+        page = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
+        assert page.status_code == 200
+        assert 'No valid answer' in page.text and message in page.text
+        assert 'Inference was not run. No image was available.' in page.text
+        assert '0.000 seconds' not in page.text
+        assert 'Capture again' in page.text and '/ui/sources/synthetic-scene' in page.text
+        rows = app.state.store.observations('synthetic-scene')
+        assert rows and all(row['normalised_state'] == 'error' for row in rows)
+        assert all(row['answer']['value'] is None for row in rows)
+        assert app.state.store.summary('synthetic-scene', 'red_square', '1', kind='binary')['state'] == 'UNKNOWN'
+        assert all(row['provenance']['elapsed_ms'] is None for row in rows)
+
+
 @pytest.mark.skipif(__import__('os').name != 'nt', reason="Windows DPAPI hardware/OS-specific")
 def test_actual_windows_dpapi_round_trip_without_plaintext(tmp_path):
     store = SecretStore(tmp_path)
