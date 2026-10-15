@@ -1,5 +1,12 @@
 # Specification change log
 
+## Ordinal answer labels — 15 October 2026
+
+- Show configured ordinal level names in capture results, latest answers, recent observations,
+  the observation list and inspection. Keep historical labels tied to their question version.
+- Describe fractional scores as between adjacent levels, without rounding an expected score
+  into a category. Preserve stored numeric results, provider fields and trend calculations.
+
 ## Visible removal and confirmed data deletion — 15 October 2026
 
 - Put camera removal on camera rows and detail pages, with restore on the camera listing.

@@ -1,6 +1,7 @@
 """Server-rendered browser workspace; native forms and SVG, no CDN or frontend build."""
 from datetime import datetime, time, timedelta
 import json
+import math
 import secrets
 import re
 from urllib.parse import urlencode
@@ -94,6 +95,18 @@ def field(label, name, value="", *, type="text", required=False, **kwargs):
     return Div(Label(label, _for=control_id), Input(id=control_id, name=name, value=value, type=type, required=required, **kwargs), cls="field")
 
 
+def answer_label(value, levels=()):
+    """Describe the expected ordinal position; never round it into a category."""
+    if value is None:
+        return "Unknown"
+    if levels:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= len(levels) - 1:
+            return "Unknown"
+        low, high = math.floor(value), math.ceil(value)
+        return "Expected level: " + (levels[low] if low == high else f"Between {levels[low]} and {levels[high]}")
+    return ("Yes" if value else "No") if type(value) is bool else str(value)
+
+
 def chart(points, label):
     numeric = [p["value"] for p in points if isinstance(p["value"], (int, float))]
     if not numeric:
@@ -158,6 +171,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None))
+
+    def recorded_label(source_id, answer):
+        if answer.get("status") != "success":
+            return "Unknown"
+        # Historical answers keep the level names from their immutable question version.
+        with store.connection() as db:
+            row = db.execute("SELECT specification FROM question_versions WHERE source_id=? AND question_id=? AND version=?",
+                             (source_id, answer["question_id"], answer["question_version"])).fetchone()
+        spec = json.loads(row[0]) if row else {}
+        return answer_label(answer.get("value"), spec.get("levels", ()) if spec.get("kind") == "ordinal" else ())
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
         result = []
@@ -312,7 +335,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats"),
                         Section(H2("Latest answers"), table(["Question", "Source", "State", "Last answer", "Observed"],
                         [Tr(Td(StrongText(d["spec"].text), Small("Version " + d["spec"].version)), Td(d["source_id"]),
-                            Td(badge(d["summary"]["state"])), Td(str(d["summary"]["latest_value"]) if d["summary"]["latest_value"] is not None else "Unknown"),
+                            Td(badge(d["summary"]["state"])), Td(answer_label(d["summary"]["latest_value"], d["spec"].levels)),
                             Td(local_time(d["summary"]["last_observed_at_utc"], zone))) for d in data]))]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode({"view": view, "source": selected, "timezone": zone}), cls="button secondary"), cls="muted"))
@@ -348,7 +371,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         ("Occupancy", "No eligible data" if occupancy is None else f"{occupancy:.0%}"))), cls="stats"),
                     chart(summary["trend"][-60:], q.text),
                     P("Episode rate: " + (f"{summary['episodes_per_hour']:.3f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval") + f" · Unobserved time: {summary['unknown_seconds']:.1f}s", cls="muted") if q.kind == "binary" else None,
-                    P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". Values are ordered levels, not physical units.", cls="muted") if q.kind == "ordinal" else None,
+                    P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". The score is an expected position and can fall between levels. It is not a physical unit or a selected category.", cls="muted") if q.kind == "ordinal" else None,
                     Details(Summary("Daily episode counts / choice dwell"), Pre(json.dumps({"daily_counts": summary["daily_episode_counts"], "choice_dwell_seconds": summary["choice_dwell_seconds"]}, indent=2))),
                     Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {d['policy'].max_gap_seconds:g}s break the line. Hover over points for timestamps in " + zone)))
         else:
@@ -362,7 +385,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if view in ("overview", "sources"):
             observations = store.observations(selected or None, limit=20)
             content.append(Section(Div(H2("Recent observations"), A('All observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Provenance"],
-                [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(str(o["answer"].get("value")))),
+                [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
                     Td(local_time(o["captured_at_utc"], zone)),
                     Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
         if operator and view in ("sources", "questions"):
@@ -386,7 +409,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             Div(P('Newest answers first. One capture can contain several answers.'),
                 A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and operator else P('Select an input to delete its full history.', cls='muted') if operator else None, cls='section-heading'),
             table(['Question / input', 'Result', 'Time', 'Actions'], [Tr(
-                Td(o['question_id'], Small(o['source_id'])), Td(badge(o['status'])),
+                Td(o['question_id'], Small(o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
                 Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
                 Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
                        A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if operator else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
@@ -566,7 +589,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     human_question = questions.get(answer["question_id"]) == "Is there a human in the picture?"
                     label = ("Human present" if value else "No human detected") if human_question else ("Yes" if value else "No")
                 else:
-                    label = str(value)
+                    label = recorded_label(source_id, answer)
             answers.append(Section(H2(questions.get(answer["question_id"], answer["question_id"])), P(label, cls="readiness success" if answer['status'] == 'success' else "readiness error")))
         error = summary.get("error") or {}
         camera_error = error.get('code', '').startswith(('capture_', 'snapshot_', 'endpoint_', 'live_')) or error.get('code') == 'secret_unavailable'
@@ -657,6 +680,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if observation is None:
             return Response("Observation not found", status_code=404)
         content = [P(observation["source_id"] + " / " + observation["question_id"] + " · version " + observation["question_version"]),
+                   P(recorded_label(observation["source_id"], observation["answer"])),
                    P("Captured: " + local_time(observation["captured_at_utc"], settings.timezone_name)),
                    Pre(json.dumps(observation["run"], indent=2))]
         frame_id = observation["run"]["frame_id"]

@@ -8,6 +8,12 @@ C510W is reported temporarily unavailable. Phase 5 is not authorised.
 
 ## Everyday use on this laptop
 
+Ordinal answers show their configured level names. Liquid d1 returns an expected position:
+for levels Low, Medium, High, a score of 0 is shown as **Expected level: Low** and 0.25 as
+**Expected level: Between Low and Medium**. This is not a rounded category or a calibrated
+probability. Technical details preserve the numeric score and provider probabilities.
+Recorded answers use the level names from their original question version.
+
 Double-click **Start VOP.cmd**. It opens your signed-in workspace using a short-lived, single-use
 local launch link; you do not copy any keys. Keep its terminal window open while using VOP.
 Saved cameras, questions and the selected backend are reused. Click **Observe now** for a result.
