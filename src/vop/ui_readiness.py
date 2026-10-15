@@ -18,8 +18,11 @@ def camera_dependencies(source):
             camera_endpoint(source)
             if source.settings.get("secret_ref"):
                 SecretStore().camera(source.settings["secret_ref"])
-        except ProviderError:
-            problems.append(("Saved camera details could not be read. Reopen Start VOP under the same Windows account; if this persists, check the camera setup.", "/integration?camera=" + source.source_id if source.settings.get("endpoint_secret_ref") else "/integration#camera-setup"))
+        except ProviderError as exc:
+            message = ("The saved camera address does not match its allowed address. Edit the camera address and save it again."
+                       if exc.code == "endpoint_denied" else
+                       "VOP could not unlock the saved camera details. Close the VOP terminal and reopen Start VOP under the same Windows account. Your saved details have not been deleted.")
+            problems.append((message, "/integration?camera=" + source.source_id if source.settings.get("endpoint_secret_ref") else "/integration#camera-setup"))
     if source.kind == "file" and not Path(source.settings["path"]).is_file():
         problems.append(("The configured image file is missing. Correct its path in the source configuration.", "/?view=sources"))
     return problems

@@ -1,5 +1,12 @@
 # Specification change log
 
+## Protected-settings diagnostics — 15 October 2026
+- Distinguish an invalid camera address from unavailable protected credentials.
+- Bind Windows DPAPI ctypes signatures once for concurrent readers and log failure categories
+  and Windows error numbers without secret values or references.
+- Add network-free camera setup readiness to authenticated JSON health. The recurring reboot
+  discrepancy is not yet proven resolved; existing saved values remain intact.
+
 ## Phase 4 automatic operator workflow — 15 October 2026
 
 - Desktop launch opens a signed-in workspace using authenticated, single-use, expiring tickets;

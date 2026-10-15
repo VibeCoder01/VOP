@@ -62,6 +62,21 @@ def test_no_default_or_weak_secret(settings, token):
         create_app(settings, token=token)
 
 
+def test_health_reports_camera_setup_without_opening_camera_or_exposing_details(settings, monkeypatch):
+    from vop.config import SourceSpec
+    app = create_app(settings, token=TOKEN)
+    app.state.pipeline.sources['saved-camera'] = SourceSpec('saved-camera', 'Test', 'snapshot', {'endpoint_secret_ref': 'private-ref'}, ())
+    def fail(source):
+        raise ProviderError('secret_unavailable', 'private-details')
+    monkeypatch.setattr('vop.ui_readiness.camera_endpoint', fail)
+    with TestClient(app, headers=HEADERS) as client:
+        result = client.get('/api/v1/health')
+        assert result.json()['camera_setup'] == {'saved-camera': {'ready': False}}
+        assert 'private-ref' not in result.text and 'private-details' not in result.text
+        monkeypatch.setattr('vop.ui_readiness.camera_endpoint', lambda source: 'http://unused.invalid/image')
+        assert client.get('/api/v1/health').json()['camera_setup'] == {'saved-camera': {'ready': True}}
+
+
 def test_duplicate_ingestion_idempotent_and_conflict_not_overwritten(settings):
     app = create_app(settings, token=TOKEN)
     with TestClient(app, headers=HEADERS) as client:

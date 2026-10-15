@@ -32,6 +32,14 @@ Manual backend/session controls and credentials remain under **Advanced connecti
 question ID, timing, ROI and confirmation options are also advanced. A saved paused source stays
 paused. Camera addresses/passwords and the question itself still require your one-time input.
 
+If saved camera details appear unavailable after a restart, they may still be intact. Close
+the VOP terminal and reopen **Start VOP** before re-entering credentials. The authenticated
+`/api/v1/health` response includes `camera_setup` readiness without camera addresses or passwords;
+checking it never connects to cameras. Protected-store failures log only their error category
+and Windows error number in the terminal. An invalid saved address now has a separate message.
+The recurring post-reboot process discrepancy is still under investigation; this is not a claim
+that physical reboot recovery has been fixed.
+
 ## Install and validate (advanced)
 
 ```powershell
