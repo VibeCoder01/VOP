@@ -66,7 +66,9 @@ def test_question_removal_history_restart_restore_and_alert_rules(app):
         assert reliable.rules()[0]['enabled'] is False
 
 
-def test_remove_all_sources_backup_restart_and_safe_restore(app, tmp_path):
+def test_remove_all_sources_backup_restart_and_safe_restore(app, tmp_path, monkeypatch):
+    # Test persisted scheduling controls without racing an unrelated background capture.
+    monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
     store, pipeline = app.state.store, app.state.pipeline
     pipeline.run(SID)
     original_ids = {o['id'] for o in store.observations()}

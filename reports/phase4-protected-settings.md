@@ -24,6 +24,8 @@ This validates protected setup readability, not camera reachability or model inf
 - src/vop/service.py: authenticated health includes network-free camera_setup readiness booleans.
 - tests/test_protected_settings.py and tests/test_phase1_service.py: disposable cross-process
   concurrent DPAPI reads, safe diagnostics, distinct errors and secret-free health regression.
+- tests/test_removal.py: disable the background sampler in the persisted-controls removal test;
+  Windows CI exposed a pre-existing race with its immediate scheduled capture (HTTP 429).
 - README.md and CHANGELOG.md: recovery instructions and candid unresolved limitation.
 
 ## Actual verification
@@ -33,6 +35,8 @@ This validates protected setup readability, not camera reachability or model inf
 # 255 passed, 4 skipped in 34.59s (before adding the final health-route regression)
 .\.venv\Scripts\python.exe -m pytest tests/test_phase1_service.py tests/test_protected_settings.py -q
 # 29 passed in 3.29s, including that final regression
+.\.venv\Scripts\python.exe -m pytest tests/test_removal.py tests/test_phase1_service.py tests/test_protected_settings.py -q
+# 35 passed in 13.04s after isolating the removal test's background sampler
 .\.venv\Scripts\python.exe tools\phase4_smoke.py
 # PASS: synthetic loopback HTTP, persisted restart, disconnect Unknown, real Windows DPAPI
 git diff --check
