@@ -5,6 +5,12 @@ Model/runtime feasibility and the scoped worker/dashboard/camera software are au
 Actual camera endpoints/credentials still require local owner provisioning; existing workloads,
 OS/driver changes and unattended service deployment need their separate explicit approval.
 
+15 October operator-workflow update: the owner explicitly authorised VOP to pause Antec's
+other GPU workload automatically when inference is needed and restore it after a timed session.
+This covers on-demand recovery and the existing foreground app's configured sampling, not OS
+autostart, permanent services or Phase 5 deployment. Normal desktop use reuses saved setup,
+automates local sign-in and hides manual controls under advanced settings.
+
 ## Outcome
 
 A local browser dashboard can evaluate captured images using the explicitly selected backend:

@@ -1,5 +1,15 @@
 # Specification change log
 
+## Phase 4 automatic operator workflow — 15 October 2026
+
+- Desktop launch opens a signed-in workspace using authenticated, single-use, expiring tickets;
+  long-lived keys stay internal. Manual key entry/display remains advanced.
+- Observe now checks/reconnects Antec, recovers the existing worker key over trusted SSH and
+  starts/reuses a bounded session, with restoration of the prior workload. Owner authorised
+  automatic temporary GPU priority; no persistent service or Phase 5 deployment was added.
+- Camera save/check/enable is one action; camera/question IDs can be generated. Normal setup
+  reuses saved choices, with advanced configuration collapsed and plain-language retry guidance.
+
 ## Phase 4 practical-use follow-up — 14 October 2026
 
 - Question forms now show only criteria and mock-preset guidance for the selected answer kind.

@@ -27,7 +27,7 @@ from vop.reliable import Reliable
 
 def create_app(settings: Settings, *, token: str | None = None,
                engine: InferenceEngine | None = None, capture=None, allow_live_sources: bool = False,
-               viewer_token: str | None = None, allow_remote_inference: bool = False):
+               viewer_token: str | None = None, allow_remote_inference: bool = False, auto_recover: bool = False):
     token = token if token is not None else os.environ.get("VOP_API_TOKEN", "")
     if not isinstance(token, str) or len(token) < 32 or len(token) > 256 or not token.isascii() or any(c.isspace() for c in token):
         raise ValueError("Set VOP_API_TOKEN to a 32–256 character ASCII secret without whitespace")
@@ -98,6 +98,9 @@ def create_app(settings: Settings, *, token: str | None = None,
     app.state.worker_session = app_session
     app.state.sampler = sampler
     app.state.reliable = reliable
+    from vop.operator_workflow import AutoWorker, install_local_login
+    pipeline.auto_worker = AutoWorker(pipeline, app_session, store) if auto_recover else None
+    install_local_login(app, store)
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
     from vop.release_ui import install_release
     install_release(app, settings, store, pipeline, reliable)
@@ -108,7 +111,7 @@ def create_app(settings: Settings, *, token: str | None = None,
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():
-        return JSONResponse({"status": "ready", **store.health(), "in_flight": pipeline.busy.locked(),
+        return JSONResponse({"status": "ready", "application": "vop", "automatic_recovery": bool(pipeline.auto_worker), **store.health(), "in_flight": pipeline.busy.locked(),
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,
                              "rules_error": reliable.last_error,

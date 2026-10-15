@@ -75,7 +75,7 @@ def test_question_editor_only_enables_relevant_criteria(settings, kind):
         page = client.get('/ui/questions/synthetic-scene/new?kind=' + kind)
         soup = BeautifulSoup(page.text, 'html.parser')
         groups = soup.select('[data-answer-kind]')
-        assert len(groups) == 7
+        assert {g['data-answer-kind'] for g in groups} == {'binary', 'choice', 'ordinal'}
         for group in groups:
             active = group['data-answer-kind'] == kind
             assert group.has_attr('hidden') is not active

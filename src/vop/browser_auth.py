@@ -44,7 +44,7 @@ class BrowserAuth:
         bearer = b"authorization" in headers
         supplied = headers.get(b"authorization", b"")
         role = self.credential_role(supplied[7:]) if bearer and supplied.startswith(b"Bearer ") else (None if bearer else session.get("role"))
-        public = path in ("/login", "/ui/style.css", "/favicon.ico")
+        public = path in ("/login", "/ui/style.css", "/favicon.ico") or path.startswith('/launch/') and method == 'GET'
         wants_html = b"text/html" in headers.get(b"accept", b"")
         if not role and not public:
             await self.audit_denial("authentication")
@@ -100,7 +100,7 @@ class BrowserAuth:
                                       (b"x-content-type-options", b"nosniff"),
                                       (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
-        admitted = method == "POST"
+        admitted = method == "POST" and path != '/api/v1/browser-ticket'
         if admitted and not self.admission.acquire(blocking=False):
             self.pipeline.skipped += 1
             await run_in_threadpool(self.store.audit, "capture_skipped", "overload")
