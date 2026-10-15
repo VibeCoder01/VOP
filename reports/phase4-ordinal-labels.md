@@ -29,3 +29,7 @@ level legend and an explanation. Existing camera connectivity issues are outside
 
 Recommendation: review the named ordinal results in the current Phase 4 pilot. Phase 5
 remains unauthorised.
+
+Follow-up: display the numeric score in parentheses beside each level description, including
+historical answers. `.\.venv\Scripts\python.exe -m pytest -q tests/test_ordinal_labels.py`:
+9 passed in 1.17 s; `git diff --check`: passed. No hardware tests run for this text change.

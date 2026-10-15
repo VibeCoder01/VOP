@@ -6,6 +6,7 @@
   the observation list and inspection. Keep historical labels tied to their question version.
 - Describe fractional scores as between adjacent levels, without rounding an expected score
   into a category. Preserve stored numeric results, provider fields and trend calculations.
+- Show the numeric score alongside the level description in all answer views.
 
 ## Visible removal and confirmed data deletion — 15 October 2026
 
