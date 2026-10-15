@@ -149,14 +149,15 @@ def replay(observations: list[dict], policy: QueryPolicy, *, kind: str = "binary
                 state, positive, negative = "UNKNOWN", 0, 0
         else:
             state = "OBSERVED"
-        samples += 1
+        samples += int(not row.get('retention_gap'))
         valid_samples += int(valid)
-        sampled_points.append((stamp, valid))
+        if not row.get('retention_gap'):
+            sampled_points.append((stamp, valid))
         if valid and kind == "binary":
             buckets.setdefault(stamp.astimezone(zone).date().isoformat(), 0)
         trend.append({"at_utc": stamp.isoformat(), "local_label": stamp.astimezone(zone).strftime("%d %b %H:%M:%S %Z %z"), "gap_before": gap,
                       "value": value if valid else None})
-        last_time, last_valid, last_value, last_observation_id = stamp, valid, value, row["id"]
+        last_time, last_valid, last_value, last_observation_id = stamp, valid, value, None if row.get('retention_gap') else row["id"]
         if valid:
             last_good_time = stamp
     stale = False

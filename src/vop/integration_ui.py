@@ -1,6 +1,7 @@
 """Operator-owned engine profiles and protected camera setup. No credentials in SQLite."""
 from dataclasses import replace
 import ipaddress
+from hashlib import sha256
 import json
 import re
 import secrets as random_secrets
@@ -132,11 +133,12 @@ def install_integration(app, settings, store, pipeline):
                                     P(source.source_id, cls='object-meta'),
                                     P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
                                  Div(A('Open camera', href='/cameras/' + source.source_id, cls='button secondary'),
-                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='text-link'), cls='actions'), cls='object-row') for source in rows), cls='object-list')
+                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='text-link'),
+                                     A('Remove…', href='/ui/sources/' + source.source_id + '/remove', cls='button danger'), cls='actions'), cls='object-row') for source in rows), cls='object-list')
                        if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
                                         A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
         from vop.removal import removed_controls
-        content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb')))
+        content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb'), heading='Removed cameras'))
         return app.state.page('Cameras', request, content, view='cameras', notice=request.query_params.get('notice'))
 
     def camera_editor(source_id, request):
@@ -193,7 +195,9 @@ def install_integration(app, settings, store, pipeline):
                     Div(A('Observe', href='/?source=' + source_id, cls='button'), A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='actions')),
             Section(H2('Observation settings'), P('Set the sample interval and evidence policy.'),
                     Div(A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary'),
-                        A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'), cls='actions'))]
+                        A('Recorded observations', href='/observations?source=' + source_id, cls='button secondary'), cls='actions')),
+            Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
+                    A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
         return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))
 
     @app.route('/engines', methods=['GET'])
@@ -207,7 +211,8 @@ def install_integration(app, settings, store, pipeline):
                           P('Demo · synthetic answers' if record['profile']['kind'] == 'mock' else record['profile']['id'], cls='object-meta'),
                           Span('Selected', cls='status info') if eid == selected_id and record['profile'] == pipeline.engine_profile else
                           Span('Saved changes', cls='status warning') if eid == selected_id else None, cls='object-copy'),
-                      Div(A('Open engine', href='/engines/' + eid, cls='button secondary'), A('Edit', href='/engines/' + eid + '/edit', cls='text-link'), cls='actions'), cls='object-row')
+                      Div(A('Open engine', href='/engines/' + eid, cls='button secondary'), A('Edit', href='/engines/' + eid + '/edit', cls='text-link'),
+                          A('Delete…', href='/engines/' + eid + '/delete', cls='button danger'), cls='actions'), cls='object-row')
                   for eid, record in entries.items()), cls='object-list')
         ], view='engines', notice=request.query_params.get('notice'))
 
@@ -302,6 +307,34 @@ def install_integration(app, settings, store, pipeline):
         await select_engine(engine_id, engine_record(engine_id)['profile'])
         return RedirectResponse('/engines/' + engine_id + '?notice=Engine+in+use.', status_code=303)
 
+    @app.route('/engines/{engine_id}/delete', methods=['GET', 'POST'])
+    async def delete_engine(engine_id: str, request):
+        if denied(request): return denied(request)
+        record = engine_record(engine_id)
+        expected = sha256(dumps(record).encode()).hexdigest()
+        selected = engine_id == active_engine_id()
+        changed = False
+        if request.method == 'POST' and not selected:
+            form = await request.form()
+            if str(form.get('expected', '')) == expected:
+                busy()
+                try:
+                    with store.connection() as db:
+                        db.execute('DELETE FROM release_settings WHERE id=?', ('saved_engine:' + engine_id,))
+                    store.audit('engine_profile', 'deleted')
+                finally: pipeline.busy.release()
+                return RedirectResponse('/engines?notice=Engine+profile+deleted.', status_code=303)
+            changed = True
+        return app.state.page('Delete engine profile', request, [
+            P(record['name']), P('The profile changed. Review it before you confirm.', cls='readiness warning') if changed else None,
+            P('Select another engine before you delete this one.', cls='readiness warning') if selected else None,
+            A('Choose another engine', href='/engines', cls='button') if selected else None,
+            P('This deletes the saved profile. Recorded observations, model files and protected keys remain.'),
+            P('This cannot be undone in VOP.'),
+            Form(hidden(csrf(request)), Input(type='hidden', name='expected', value=expected), Button('Delete profile', cls='danger', disabled=selected), method='post', action=request.url.path),
+            A('Cancel', href='/engines/' + engine_id, cls='button secondary')
+        ], view='engines')
+
     @app.route('/engines/{engine_id}', methods=['GET'])
     def engine_detail(engine_id: str, request):
         if denied(request): return denied(request)
@@ -326,7 +359,9 @@ def install_integration(app, settings, store, pipeline):
                     Form(hidden(csrf(request)), Select(*(Option(str(m) + ' minutes', value=str(m)) for m in (15, 30, 60)), name='minutes', aria_label='Session length'),
                          Button('Start session', disabled=session['active']), method='post', action='/integration/session/start'),
                     action('Stop session', '/integration/session/stop', csrf(request), secondary=True) if session['active'] else None) if active and antec_profile(pipeline.engine) else None,
-            Details(Summary('Engine details'), Pre(dumps({k: v for k, v in value.items() if k not in ('secret_ref', 'answers')})))
+            Details(Summary('Engine details'), Pre(dumps({k: v for k, v in value.items() if k not in ('secret_ref', 'answers')}))),
+            Section(H2('Delete profile'), P('Delete this saved profile. Model files and observations remain.'),
+                    A('Delete engine profile…', href='/engines/' + engine_id + '/delete', cls='button danger'))
         ], view='engines', notice=request.query_params.get('notice'))
 
     @app.route('/integration/engine/antec', methods=['POST'])

@@ -246,7 +246,7 @@ class Store:
     def _history(self, connection, source_id: str, question_id: str, version: str) -> list[dict]:
         # ponytail: O(n) replay for the starter dataset; incremental snapshots when history volume warrants it.
         rows = connection.execute("SELECT * FROM observations WHERE source_id=? AND question_id=? AND question_version=? ORDER BY sequence", (source_id, question_id, version)).fetchall()
-        return [{**dict(r), "answer": json.loads(r["answer_json"])} for r in rows]
+        return [{**dict(r), "answer": json.loads(r["answer_json"]), 'retention_gap': r['status'] == 'retention_gap'} for r in rows]
 
     def _rebuild(self, connection, source_id: str, question_id: str, version: str) -> dict:
         spec = connection.execute("SELECT specification FROM question_versions WHERE source_id=? AND question_id=? AND version=?", (source_id, question_id, version)).fetchone()
@@ -301,7 +301,7 @@ class Store:
 
     def observation(self, observation_id: str) -> dict | None:
         with self.connection() as connection:
-            row = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON o.run_id=r.id WHERE o.id=?", (observation_id,)).fetchone()
+            row = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON o.run_id=r.id WHERE o.id=? AND o.status!='retention_gap'", (observation_id,)).fetchone()
         if row is None:
             return None
         item = dict(row)
@@ -352,10 +352,11 @@ class Store:
             connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (processed, "capture_inference", result["status"]))
         return {"run_id": run_id, "result": result, "duplicate": False}
 
-    def observations(self, source_id: str | None = None, *, after: int = 0, limit: int = 20) -> list[dict]:
+    def observations(self, source_id: str | None = None, *, after: int = 0, limit: int = 20, before: int | None = None, newest: bool = False) -> list[dict]:
         with self.connection() as connection:
-            rows = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.sequence>? AND (? IS NULL OR o.source_id=?) ORDER BY o.sequence LIMIT ?",
-                                      (after, source_id, source_id, limit)).fetchall()
+            order = 'DESC' if newest else 'ASC'
+            rows = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.status!='retention_gap' AND o.sequence>? AND (? IS NULL OR o.source_id=?) AND (? IS NULL OR o.sequence<?) ORDER BY o.sequence " + order + " LIMIT ?",
+                                      (after, source_id, source_id, before, before, limit)).fetchall()
         results = []
         for row in rows:
             item = dict(row)
@@ -369,5 +370,5 @@ class Store:
     def health(self) -> dict:
         with self.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            count = connection.execute("SELECT count(*) FROM observations").fetchone()[0]
+            count = connection.execute("SELECT count(*) FROM observations WHERE status!='retention_gap'").fetchone()[0]
         return {"database_schema": version, "observation_count": count}

@@ -1,5 +1,16 @@
 # Specification change log
 
+## Visible removal and confirmed data deletion — 15 October 2026
+
+- Put camera removal on camera rows and detail pages, with restore on the camera listing.
+- Add confirmed engine-profile deletion; the selected engine must be changed first.
+- Add Observations navigation, paging and capture/input-history deletion previews. Delete
+  shared answers, raw runs and evidence together; pause affected rules, remove related alerts
+  and deliveries, and rebuild derived history. Retain explicit timestamp-only Unknown gaps
+  for individual capture deletion; complete input-history deletion also removes these markers.
+- Require operator permission, CSRF, stable preview and capture/rule locks. No data is deleted
+  automatically; setup, protected keys, audit records, backups and sent messages remain.
+
 ## Capture failure display — 15 October 2026
 
 - Fix the observation page crashing when camera acquisition fails and inference time is null.
