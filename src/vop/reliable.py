@@ -289,7 +289,7 @@ class Reliable:
                     if question_id and q.question_id != question_id:
                         continue
                     with self.store.connection() as db:
-                        provenance = [json.loads(r[0]) for r in db.execute("SELECT DISTINCT r.result_json FROM runs r JOIN observations o ON o.run_id=r.id WHERE o.source_id=? AND o.question_id=? AND o.question_version=?", (sid, q.question_id, q.version))]
+                        provenance = [json.loads(r[0]) for r in db.execute("SELECT DISTINCT r.result_json FROM runs r JOIN observations o ON o.run_id=r.id WHERE o.status!='retention_gap' AND o.source_id=? AND o.question_id=? AND o.question_version=?", (sid, q.question_id, q.version))]
                     engines = sorted({(r["engine_id"], r["engine_version"], r["synthetic"]) for r in provenance})
                     rows.append({"source_id": sid, "question_id": q.question_id, "question_version": q.version,
                                  "provenance": [{"engine_id": eid, "engine_version": ver, "synthetic": synthetic} for eid, ver, synthetic in engines],

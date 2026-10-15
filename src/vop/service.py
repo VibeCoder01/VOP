@@ -108,6 +108,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_integration(app, settings, store, pipeline)
     from vop.removal import install_removal
     install_removal(app, store, pipeline, reliable)
+    from vop.history_deletion import install_history_deletion
+    install_history_deletion(app, store, pipeline, reliable)
 
     @app.route("/api/v1/health", methods=["GET"])
     def health():

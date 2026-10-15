@@ -109,6 +109,29 @@ Removing every source or question is supported. Configuration exports include cu
 full database backups preserve removal records, history and recovery information. Removal is
 recoverable configuration removal, not permanent erasure of history or protected credentials.
 
+### Remove setup or delete recorded data
+
+- **Cameras → Remove…** is visible on each camera row and its detail page. Removal stops using
+  that camera and keeps history and protected details. **Removed cameras → Restore** brings it
+  back with monitoring and evidence retention off. **Questions → Remove…** remains recoverable.
+- **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
+  if that profile is selected; VOP never chooses a fallback. Model files, protected keys and
+  recorded observations are kept. Shared keys are not erased by profile deletion.
+- **Observations → Delete capture…** previews deletion of every answer that shares that capture,
+  its raw result and its retained image. It deletes related alerts/delivery records, pauses
+  affected alert rules, and rebuilds episodes/metrics from remaining history. A timestamp-only
+  gap marker remains to prevent charts from joining across deleted data; it is not a model
+  answer and is excluded from answer counts and model provenance.
+- To clear an input's recorded data, select it on **Observations**, then choose **Delete input
+  history…**. Pause its monitoring first. This also removes deletion-gap markers. Camera setup,
+  questions and engine profiles remain. You can review history for a removed input here too.
+
+Delete actions show effects and require confirmation. A changed preview must be reviewed again;
+GET links never delete. There is no Undo for permanent data/profile deletion. Audit records,
+backups and messages already sent remain. Retained images can also be deleted independently
+on observation detail pages without deleting measured answers. No user data is deleted merely
+by installing this update or opening a page.
+
 Temporal states are **UNKNOWN**, **INACTIVE**, **PENDING**, **ACTIVE**, **RECOVERING** (binary), or
 **OBSERVED** (valid choice/ordinal). Binary activation/recovery use configurable confirmation
 counts (default 2/2). Episodes start at the activation-confirmation timestamp and close only

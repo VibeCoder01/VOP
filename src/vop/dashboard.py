@@ -143,11 +143,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         csrf = session.setdefault("csrf", secrets.token_urlsafe(24))
         role = request.scope.get("auth_role") or session.get("role")
         navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
-                      ("questions", "Questions", "/?view=questions"), ("events", "History", "/?view=events"),
+                      ("questions", "Questions", "/?view=questions"), ("observations", "Observations", "/observations"), ("events", "History", "/?view=events"),
                       ("metrics", "Trends", "/?view=metrics"), ("settings", "Settings", "/?view=settings")]
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
-                        "events": "Review confirmed episodes.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
+                        "events": "Review confirmed episodes.", "observations": "Review recorded answers. Delete captures or input history.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
         return Html(Head(Title(f"{title} · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
@@ -330,7 +330,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
             event_rows = store.events(selected or None)
-            content += [Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
+            content += [P('Episodes are built from observations. ', A('Open Observations to delete recorded data.', href='/observations', cls='text-link')),
+                Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(e["source_id"] + " · version " + e["question_version"])),
                     Td(local_time(e["started_at_utc"], zone)), Td(local_time(e["ended_at_utc"], zone) if e["ended_at_utc"] else "Not confirmed ended"),
                     Td(badge(e["status"])), Td(f"{e['estimated_observed_seconds']:.1f} s"), Td(f"{e['unknown_seconds']:.1f} s")) for e in event_rows])),
@@ -360,7 +361,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                                 A("Other inputs", href="/?view=sources", cls="button secondary"), A("Alerts and release tools", href="/release", cls="button secondary"), cls="actions"))]
         if view in ("overview", "sources"):
             observations = store.observations(selected or None, limit=20)
-            content.append(Section(H2("Recent observations"), table(["Question", "Result", "Captured", "Provenance"],
+            content.append(Section(Div(H2("Recent observations"), A('All observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Provenance"],
                 [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(str(o["answer"].get("value")))),
                     Td(local_time(o["captured_at_utc"], zone)),
                     Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
@@ -368,6 +369,29 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             from vop.removal import removed_controls
             content.append(removed_controls(store, pipeline, csrf, view))
         return page({"overview": "Observe", "events": "History", "metrics": "Trends", "sources": "Inputs"}.get(view, view.title()), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
+
+    @app.route('/observations', methods=['GET'])
+    def observation_list(request):
+        selected = request.query_params.get('source') or None
+        before = int(request.query_params['before']) if request.query_params.get('before') else None
+        if before is not None and before < 1: raise ValueError('Invalid observation page')
+        with store.connection() as db:
+            names = {r['id']: json.loads(r['configuration']).get('name', r['id']) for r in db.execute('SELECT id,configuration FROM sources')}
+        if selected and selected not in names: raise ValueError('Unknown input')
+        rows = store.observations(selected, newest=True, before=before, limit=100)
+        operator = request.scope.get('auth_role') == 'operator'
+        return page('Observations', request, [
+            Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items()), name='source', id='history-source'), cls='field'),
+                 Button('Show', cls='secondary'), method='get', action='/observations', cls='filters'),
+            Div(P('Newest answers first. One capture can contain several answers.'),
+                A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and operator else P('Select an input to delete its full history.', cls='muted') if operator else None, cls='section-heading'),
+            table(['Question / input', 'Result', 'Time', 'Actions'], [Tr(
+                Td(o['question_id'], Small(o['source_id'])), Td(badge(o['status'])),
+                Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
+                Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
+                       A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if operator else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
+            A('Older answers', href='/observations?' + urlencode({'source': selected or '', 'before': rows[-1]['sequence']}), cls='button secondary') if len(rows) == 100 else None
+        ], view='observations', notice=request.query_params.get('notice'))
 
     @app.route("/ui/sources/{source_id}", methods=["GET"])
     def source_editor(source_id: str, request):
@@ -565,6 +589,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, summary["frame_id"]):
             content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; inspect recorded engine provenance",
                                              tuple(r["policy"].roi for r in store.questions(source_id))))
+        with store.connection() as db:
+            recorded = db.execute('SELECT id FROM observations WHERE run_id=? ORDER BY sequence LIMIT 1', (result['run_id'],)).fetchone()
+        if recorded:
+            content.append(A('Delete capture…', href='/ui/observations/' + recorded[0] + '/delete', cls='button danger'))
         return page("Observation", request, content, view="overview")
 
     @app.route("/ui/sources/{source_id}/demo", methods=["POST"])
@@ -638,7 +666,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content.append(action("Delete retained evidence", url + "/delete", request.scope["session"]["csrf"], secondary=True))
         else:
             content.append(P("No accessible retained evidence.", cls="muted"))
-        return page("Observation detail", request, content, view="events")
+        if request.scope.get('auth_role') == 'operator':
+            content.append(Section(H2('Delete this capture'), P('Review the answers and shared image that will be deleted.'),
+                                   A('Delete capture…', href='/ui/observations/' + observation_id + '/delete', cls='button danger')))
+        return page("Observation detail", request, content, view="observations")
 
 
 def StrongText(value):

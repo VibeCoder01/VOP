@@ -16,6 +16,11 @@ and use pages. Named engine profiles use the existing protected-worker contract 
 store. Saving a profile does not select it; Use engine is explicit. This is Phase 4 operator
 workflow work, not a new model installation or Phase 5 deployment.
 
+The owner also requested visible deletion for cameras, engines and observations. This follow-up
+exposes recoverable setup removal and explicit, previewed retention deletion (OPS-007/NFR-015).
+Observed answers remain append-only except this documented operator-confirmed retention path;
+there is no automatic data purge, model uninstall, secret erasure or Phase 5 expansion.
+
 ## Outcome
 
 A local browser dashboard can evaluate captured images using the explicitly selected backend:

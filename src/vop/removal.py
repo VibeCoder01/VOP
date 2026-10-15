@@ -11,14 +11,14 @@ from vop.dashboard import action, hidden
 from vop.storage import dumps
 
 
-def removed_controls(store, pipeline, csrf, view, *, source_kinds=None):
+def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=None):
     if view == "sources":
         rows = [(s.name, f"/ui/sources/{sid}/restore") for sid, s in list(pipeline.removed_sources.items()) if source_kinds is None or s.kind in source_kinds]
     else:
         rows = [(f"{sid} · {r['spec'].text}", f"/ui/questions/{sid}/{r['spec'].question_id}/restore")
                 for sid in list(pipeline.sources) for r in store.questions(sid, include_removed=True)
                 if store.is_removed(sid, r['spec'].question_id)]
-    return Section(H2("Removed " + view), P("Restore keeps monitoring disabled. History and protected camera details are retained."),
+    return Section(H2(heading or "Removed " + view), P("Restore keeps monitoring disabled. History and protected camera details are retained."),
                    *(Section(P(label), action("Restore", url, csrf, secondary=True)) for label, url in rows)) if rows else None
 
 
@@ -90,15 +90,17 @@ def install_removal(app, store, pipeline, reliable):
             return Response("Operator required", status_code=403)
         checked(source_id, question_id)
         view = "questions" if question_id is not None else "sources"
+        camera = question_id is None and pipeline.sources[source_id].kind in ('rtsp', 'usb')
+        destination = '/cameras' if camera else f'/?view={view}'
         if request.method == 'POST':
             await run_in_threadpool(change, source_id, question_id)
-            return RedirectResponse(f"/?view={view}&notice=Removed.+History+retained", status_code=303)
+            return RedirectResponse(destination + ('?' if camera else '&') + 'notice=Removed.+History+retained', status_code=303)
         label = question_id if question_id is not None else pipeline.sources[source_id].name
         return app.state.page("Remove " + label, request, [
             P("This removes the item from active configuration and disables its alert rules. Pending webhook deliveries are cancelled. Recorded observations, events, evidence and immutable versions remain."),
             P("Protected camera details are retained. Restore is available on the listing; monitoring and alert rules must be enabled explicitly afterwards."),
             Form(hidden(request.scope['session']['csrf']), Button("Remove " + label, cls="danger"), method="post", action=request.url.path),
-            A("Cancel", href=f"/?view={view}", cls="button secondary")], view=view)
+            A("Cancel", href=destination, cls="button secondary")], view='cameras' if camera else view)
 
     @app.route('/ui/sources/{source_id}/remove', methods=['GET', 'POST'])
     async def remove_source(request, source_id: str):
@@ -111,6 +113,8 @@ def install_removal(app, store, pipeline, reliable):
     @app.route('/ui/sources/{source_id}/restore', methods=['POST'])
     def restore_source(source_id: str):
         change(source_id, restore=True)
+        if pipeline.sources[source_id].kind in ('rtsp', 'usb'):
+            return RedirectResponse('/cameras?notice=Camera+restored.+Monitoring+is+paused.', status_code=303)
         return RedirectResponse('/?view=sources&notice=Restored.+Monitoring+disabled', status_code=303)
 
     @app.route('/ui/questions/{source_id}/{question_id}/restore', methods=['POST'])
