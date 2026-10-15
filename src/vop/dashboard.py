@@ -69,7 +69,7 @@ WORKSPACE_JS = """document.addEventListener('submit', (event) => {
 
 
 def badge(value):
-    return Span(str(value), cls=f"status {value}")
+    return Span(metric_label(str(value)), cls=f"status {value}")
 
 
 def local_time(value, zone):
@@ -93,6 +93,41 @@ def dependency_panel(problems, *, ready="Local prerequisites met; connection is 
 def field(label, name, value="", *, type="text", required=False, **kwargs):
     control_id = kwargs.pop("id", name)
     return Div(Label(label, _for=control_id), Input(id=control_id, name=name, value=value, type=type, required=required, **kwargs), cls="field")
+
+
+METRIC_HELP = {
+    "Configured sources": "Number of saved image inputs in this view, including demo inputs. This does not mean that each input is connected or monitoring.",
+    "Active conditions": "Number of questions currently in the ACTIVE state after the required positive confirmations. This counts questions, not people or cameras. Conditions awaiting end confirmation are shown as RECOVERING instead.",
+    "Unknown conditions": "Number of questions whose current condition cannot be determined. Causes include missing, failed or stale answers, disabled questions, and disabled inputs. Unknown does not mean absent.",
+    "Episodes recorded": "Number of confirmed episodes stored for the selected inputs, across question versions. Repeated positive samples in the same episode do not add to this count.",
+    "Episodes": "Number of confirmed episodes that started in the selected range. An episode begins after the required positive confirmations; repeated positive samples do not create new episodes.",
+    "Estimated active time": "Sum of covered intervals in confirmed episodes, including intervals while awaiting end confirmation. Unobserved gaps are excluded. This is an estimate from samples, not proof of continuous presence.",
+    "Episode rate": "Confirmed episode starts per covered hour in the selected range. Unobserved gaps are excluded from the time used to calculate this rate.",
+    "Unobserved time": "Time in the measured range that could not be covered by valid samples within the allowed gap. It includes failed intervals, long gaps and stale time. No active condition is assumed during this time.",
+    "ACTIVE": "The condition has met the required positive confirmations. This is a sampled state, not proof of continuous presence.",
+    "INACTIVE": "No episode is active. The required negative confirmations have ended any previous episode.",
+    "PENDING": "A positive answer was received, but more positive confirmations are needed before an episode is confirmed.",
+    "RECOVERING": "An episode is active, but negative answers are awaiting the required end confirmations.",
+    "UNKNOWN": "There is no reliable current answer. Samples may be missing, failed or stale, or the input or question may be disabled. Unknown does not mean absent.",
+    "OBSERVED": "A valid choice or ordinal answer was received. Binary episode confirmation states do not apply to this answer type.",
+    "DISABLED": "This input is disabled. Enable it before requesting new observations.",
+    "CONNECTING": "The input is enabled, but a successful frame has not yet confirmed its connection.",
+    "HEALTHY": "The latest recorded capture succeeded. This is not a live guarantee that the camera is still connected.",
+    "DISCONNECTED": "The latest capture failed. Check the camera connection and saved setup, then retry.",
+    "Daily episode counts / choice dwell": "Daily episode counts show how many confirmed episodes started on each date in the selected time zone. Choice dwell estimates the seconds spent in each named answer, using the previous answer between valid samples. Gaps are excluded.",
+    "Occupancy": "Estimated active time divided by covered time, shown as a percentage. Applies to binary questions only. Unobserved gaps are excluded; this does not prove continuous presence.",
+    "Coverage": "Covered time divided by covered time plus unobserved time in the measured range, shown as a percentage. No interval data means there is not enough timing evidence to calculate it.",
+    "Covered time": "Time between consecutive valid samples that are no farther apart than the allowed gap. Failed samples and longer gaps are excluded. This is an estimate, not proof of continuous observation.",
+    "Valid samples": "Number of successful answers with a usable value in the selected range. Failed, missing and temporally excluded answers are not counted.",
+    "Unobserved gap": "Time within this episode for which VOP could not estimate the condition because samples failed or were too far apart. This time is excluded from estimated duration.",
+    "Estimated duration": "Sum of covered intervals while the episode was active or awaiting confirmation that it ended. Unobserved gaps are excluded. This is an estimate from samples, not the full wall-clock span or proof of continuous presence.",
+}
+
+
+def metric_label(label):
+    explanation = METRIC_HELP.get(label)
+    return Span(label, title=explanation, tabindex="0", aria_label=label + ". " + explanation,
+                style="cursor:help;text-decoration:underline dotted;text-underline-offset:4px") if explanation else label
 
 
 def answer_label(value, levels=()):
@@ -249,7 +284,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         [Div(message, cls="error", role="alert"), A("Cameras", href="/cameras", cls="button secondary"), A("Engines", href="/engines", cls="button secondary"), A("Return to workspace", href="/", cls="button secondary")])
 
     def table(headers, rows):
-        return Div(Table(Thead(Tr(*(Th(h) for h in headers))), Tbody(*rows)), cls="table-wrap")
+        return Div(Table(Thead(Tr(*(Th(metric_label(h)) for h in headers))), Tbody(*rows)), cls="table-wrap")
 
     app.state.page, app.state.table = page, table
 
@@ -257,7 +292,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         selected_zone = request.scope["session"].get("timezone", settings.timezone_name) if request else settings.timezone_name
         return Form(Input(type="hidden", name="view", value=view),
                     Div(Label("Source", _for="source"), Select(Option("All sources", value=""),
-                         *(Option(s, value=s, selected=s == selected) for s in pipeline.sources), name="source", id="source"), cls="field"),
+                         *(Option(pipeline.sources[s].name + " · " + s, value=s, selected=s == selected) for s in pipeline.sources), name="source", id="source"), cls="field"),
                     Div(Label("Timezone", _for="timezone"), Select(*(Option(zone, value=zone, selected=zone == selected_zone) for zone in dict.fromkeys([settings.timezone_name, "UTC", "Europe/London"])), name="timezone", id="timezone"), cls="field"),
                     field("From date", "from", request.query_params.get("from", "") if request else "", type="date") if view == "metrics" else None,
                     field("Through date", "through", request.query_params.get("through", "") if request else "", type="date") if view == "metrics" else None,
@@ -331,10 +366,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             count = store.event_count(selected or None)
             content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if operator else None, cls="section-heading"),
                                 *(capture_controls(s, csrf, operator) for s in sources)),
-                        Div(*(Div(Small(label), StrongText(number), cls="stat")
+                        Div(*(Div(Small(metric_label(label)), StrongText(number), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats"),
                         Section(H2("Latest answers"), table(["Question", "Source", "State", "Last answer", "Observed"],
-                        [Tr(Td(StrongText(d["spec"].text), Small("Version " + d["spec"].version)), Td(d["source_id"]),
+                        [Tr(Td(StrongText(d["spec"].text), Small("Version " + d["spec"].version)), Td(pipeline.sources[d["source_id"]].name, Small(d["source_id"])),
                             Td(badge(d["summary"]["state"])), Td(answer_label(d["summary"]["latest_value"], d["spec"].levels)),
                             Td(local_time(d["summary"]["last_observed_at_utc"], zone))) for d in data]))]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
@@ -364,15 +399,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]
                 content.append(Section(H2(q.text), P(f"{d['source_id']} · version {q.version} · {q.kind}"),
-                    Div(*(Div(Small(label), StrongText(value), cls="stat") for label, value in (
+                    Div(*(Div(Small(metric_label(label)), StrongText(value), cls="stat") for label, value in (
                         ("Episodes" if q.kind == "binary" else "Valid samples", ("No data" if summary["episode_count"] is None else str(summary["episode_count"])) if q.kind == "binary" else str(summary["valid_sample_count"])),
                         ("Estimated active time" if q.kind == "binary" else "Covered time", f"{summary['estimated_active_seconds'] if q.kind == 'binary' else summary['covered_seconds']:.3f}s" if summary["covered_seconds"] > 0 else "No interval data"),
                         ("Coverage", "No interval data" if summary["coverage_fraction"] is None else f"{summary['coverage_fraction']:.0%}"),
                         ("Occupancy", "No eligible data" if occupancy is None else f"{occupancy:.0%}"))), cls="stats"),
                     chart(summary["trend"][-60:], q.text),
-                    P("Episode rate: " + (f"{summary['episodes_per_hour']:.3f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval") + f" · Unobserved time: {summary['unknown_seconds']:.1f}s", cls="muted") if q.kind == "binary" else None,
+                    P(metric_label("Episode rate"), ": " + (f"{summary['episodes_per_hour']:.3f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval"),
+                      " · ", metric_label("Unobserved time"), f": {summary['unknown_seconds']:.1f}s", cls="muted") if q.kind == "binary" else None,
                     P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". The score is an expected position and can fall between levels. It is not a physical unit or a selected category.", cls="muted") if q.kind == "ordinal" else None,
-                    Details(Summary("Daily episode counts / choice dwell"), Pre(json.dumps({"daily_counts": summary["daily_episode_counts"], "choice_dwell_seconds": summary["choice_dwell_seconds"]}, indent=2))),
+                    Details(Summary(metric_label("Daily episode counts / choice dwell")), Pre(json.dumps({"daily_counts": summary["daily_episode_counts"], "choice_dwell_seconds": summary["choice_dwell_seconds"]}, indent=2))),
                     Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {d['policy'].max_gap_seconds:g}s break the line. Hover over points for timestamps in " + zone)))
         else:
             content += [Section(H2("Processing and access"), P("One inference slot; no queued frames. Live capture and model loading require explicit operator setup."),

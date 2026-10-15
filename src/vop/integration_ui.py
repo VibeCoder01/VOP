@@ -56,11 +56,19 @@ def camera_source(record):
 def restore_cameras(store, settings, pipeline):
     with store.connection() as db:
         rows = db.execute("SELECT value_json FROM release_settings WHERE id LIKE 'camera_profile:%'").fetchall()
+        names = {row[0].removeprefix('camera_name:'): json.loads(row[1]) for row in
+                 db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_name:%'")}
     for row in rows:
         source = camera_source(json.loads(row[0]))
+        source = replace(source, name=names.get(source.source_id, source.name))
         store.configure(replace(settings, sources=(source,)))
         target = pipeline.removed_sources if store.is_removed(source.source_id) else pipeline.sources
         target[source.source_id] = source
+    for sources in (pipeline.sources, pipeline.removed_sources):
+        for sid, source in list(sources.items()):
+            if source.kind in ('rtsp', 'usb') and sid in names and source.name != names[sid]:
+                sources[sid] = replace(source, name=names[sid])
+                store.configure(replace(settings, sources=(sources[sid],)))
 
 
 def install_integration(app, settings, store, pipeline):
@@ -145,7 +153,7 @@ def install_integration(app, settings, store, pipeline):
         if denied(request): return denied(request)
         selected = camera_record(source_id) if source_id != 'new' else None
         if selected and selected.kind != 'rtsp':
-            return RedirectResponse('/ui/sources/' + source_id, status_code=303)
+            return RedirectResponse('/cameras/' + source_id + '/rename', status_code=303)
         endpoint, username, warning = '', '', None
         if selected:
             try:
@@ -153,11 +161,16 @@ def install_integration(app, settings, store, pipeline):
                 username = secrets.camera(selected.settings['secret_ref'])['username']
             except ProviderError:
                 warning = P('VOP could not unlock the saved details. Close VOP and reopen Start VOP before you replace them.', cls='readiness warning')
-        model = selected.name.removeprefix('Tapo ') if selected else 'C200'
+        model = 'C200'
+        if selected:
+            with store.connection() as db:
+                row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_profile:' + source_id,)).fetchone()
+            model = json.loads(row[0])['model'] if row else selected.name.removeprefix('Tapo ')
         return app.state.page('Edit camera' if selected else 'Add camera', request, [
             A('‹ Cameras', href='/cameras', cls='back'), warning,
             Form(hidden(csrf(request)), Input(type='hidden', name='source_id', value=source_id if selected else ''),
-                 Div(H2('Connection'),
+                 Div(field('Camera name', 'name', selected.name if selected else '', placeholder='For example, Front door', maxlength=128),
+                     P('Use a name you recognise. Leave it empty for the model name.', cls='muted'), H2('Connection'),
                      Div(Label('Camera model', _for='camera-model'), Select(*(Option(m, value=m, selected=m == model) for m in ('C200', 'C210', 'C510W')), name='model', id='camera-model'), cls='field'),
                      field('Camera address', 'endpoint', endpoint, placeholder='rtsp://192.168.1.100:554/stream1', required=True),
                      P('Use the camera LAN address. Use /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
@@ -176,6 +189,35 @@ def install_integration(app, settings, store, pipeline):
     def edit_camera(source_id: str, request):
         return camera_editor(source_id, request)
 
+    @app.route('/cameras/{source_id}/rename', methods=['GET'])
+    def rename_camera_editor(source_id: str, request):
+        if denied(request): return denied(request)
+        source = camera_record(source_id)
+        return app.state.page('Rename camera', request, [A('‹ Camera', href='/cameras/' + source_id, cls='back'),
+            Form(hidden(csrf(request)), field('Camera name', 'name', source.name, required=True, maxlength=128),
+                 P('The camera ID, connection, questions and history stay the same.', cls='muted'), Button('Save name'),
+                 method='post', action=request.url.path, cls='editor')], view='cameras')
+
+    @app.route('/cameras/{source_id}/rename', methods=['POST'])
+    async def rename_camera(source_id: str, request):
+        source = camera_record(source_id)
+        name = str((await request.form()).get('name', '')).strip()
+        if not name or len(name) > 128 or any(ord(c) < 32 for c in name):
+            raise ValueError('Enter a camera name with 1 to 128 characters.')
+        source = replace(source, name=name)
+        busy()
+        try:
+            with store.connection() as db:
+                configuration = json.loads(db.execute('SELECT configuration FROM sources WHERE id=?', (source_id,)).fetchone()[0])
+                configuration['name'] = name
+                db.execute('UPDATE sources SET configuration=? WHERE id=?', (dumps(configuration), source_id))
+                db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + source_id, dumps(name)))
+            pipeline.sources[source_id] = source
+            store.audit('camera_name', 'saved')
+        finally:
+            pipeline.busy.release()
+        return RedirectResponse('/cameras/' + source_id + '?notice=Camera+name+saved.', status_code=303)
+
     @app.route('/cameras/{source_id}', methods=['GET'])
     def camera_detail(source_id: str, request):
         if denied(request): return denied(request)
@@ -186,7 +228,8 @@ def install_integration(app, settings, store, pipeline):
             row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
             if row: last_test = json.loads(row[0])
         content = [A('‹ Cameras', href='/cameras', cls='back'),
-            Div(P(source_id), A('Edit camera', href='/cameras/' + source_id + '/edit', cls='button secondary'), cls='section-heading'),
+            Div(P(source_id), Div(A('Rename', href='/cameras/' + source_id + '/rename', cls='button secondary'),
+                                 A('Edit camera', href='/cameras/' + source_id + '/edit', cls='button secondary'), cls='actions'), cls='section-heading'),
             Section(H2('Connection'), dependency_panel(problems, ready='Saved details are available. Test the connection to check the camera.'),
                     P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
                     Form(hidden(csrf(request)), Button('Test camera', disabled=bool(problems)), method='post', action='/integration/cameras/' + source_id + '/test'),
@@ -457,6 +500,10 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError("Use a literal private LAN camera IP, RTSP port 554, /stream1 or /stream2, without credentials") from None
         record = {"source_id": sid, "model": str(form["model"]), "endpoint_ref": sid + "-endpoint", "credentials_ref": sid + "-credentials", "allowed_hosts": [parsed.hostname]}
         source = camera_source(record)
+        name = str(form.get('name', pipeline.sources[sid].name if not is_new else '')).strip() or source.name
+        if len(name) > 128 or any(ord(c) < 32 for c in name):
+            raise ValueError('Enter a camera name with 1 to 128 characters.')
+        source = replace(source, name=name)
         if store.is_removed(sid):
             raise ValueError("Restore this source on Sources before editing its camera setup")
         if sid in pipeline.sources and pipeline.sources[sid].kind != "rtsp":
@@ -479,6 +526,7 @@ def install_integration(app, settings, store, pipeline):
             store.configure(replace(settings, sources=(source,)))
             with store.connection() as db:
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_profile:" + sid, dumps(record)))
+                db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
             pipeline.sources[sid] = source
             if is_new and form.get('connect') == '1':
                 store.update_source(sid, enabled=True, retain_evidence=False, sample_interval_seconds=0)
