@@ -31,6 +31,15 @@ Use **Cameras → Add camera** to save its address and camera account. Saving do
 camera or start observations. Open that camera, then **Test camera** to receive one preview.
 Use **Observe** to run questions against it. Camera IDs are generated; new cameras start paused,
 with sampling and evidence retention off. Question IDs are also generated when left blank.
+Give the camera a name during setup, or open its page and choose **Rename**. Renaming also
+works for USB cameras and does not require camera credentials. Names survive app restarts;
+the camera ID, connection, questions and recorded history stay the same.
+
+Hover over the dotted-underlined metric labels and condition states for plain-language
+explanations. These include Active conditions, Unknown conditions, Coverage, Occupancy,
+Covered time, Valid samples and episode duration/gap terms. The same explanations are
+included in the labels read by assistive technology. Durations are estimates from samples;
+unobserved intervals are excluded, and Unknown does not mean absent.
 
 Use **Engines → Add engine** to save an inference profile. The Antec connection is filled in;
 connection details remain in an expandable section. **Save engine** stores the profile only.

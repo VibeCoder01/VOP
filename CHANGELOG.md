@@ -1,5 +1,15 @@
 # Specification change log
 
+## Metric explanations and camera names — 15 October 2026
+
+- Add native hover explanations and accessible labels to measurement terms, overview counts
+  and condition states. Describe coverage, occupancy, dwell and episode estimates from the
+  existing measurement rules; no measurement calculations change.
+- Name cameras at creation and rename network/USB cameras independently of credentials,
+  IDs, questions and history. Persist names across restart. Read the Tapo model from its saved
+  profile so a custom name cannot change which model appears in the connection editor.
+- Show camera names alongside IDs in input filters and latest answers.
+
 ## Ordinal answer labels — 15 October 2026
 
 - Show configured ordinal level names in capture results, latest answers, recent observations,
