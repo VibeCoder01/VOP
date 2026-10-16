@@ -52,8 +52,8 @@ the camera ID, connection, questions and recorded history stay the same.
 **Individual Observations** lists each recorded answer from a capture. **Continuous
 Observations (Episodes)** groups checks into confirmed episodes; it does not mean continuous
 video recording. URLs and existing records are unchanged.
-Page headings show the installed VOP version in small text; browser-tab titles include it too.
-Observation lists, episode lists and result pages use the camera/input name when available,
+The VOP title at the far left shows the installed version in small text; browser-tab titles include it too.
+Observation lists, episode lists, Trends and result pages use the camera/input name when available,
 with its stable ID as the fallback. IDs remain unchanged in URLs and technical details.
 
 Images are optional and saving is **off by default**. A capture can show a temporary preview

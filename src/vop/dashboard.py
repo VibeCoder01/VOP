@@ -28,7 +28,7 @@ CSS = """
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d1d1f;background:#f5f5f7;font-size:15px;--accent:#0066cc;--line:#dcdce0;--muted:#626268}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
 .shell{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}.sidebar{padding:32px 18px;background:#ececf0;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:auto}
-.brand{font-size:28px;letter-spacing:-1.6px;font-weight:700;padding:0 12px;color:#1d1d1f}.subtitle{font-size:11px;color:var(--muted);padding:7px 12px;letter-spacing:.4px}
+.brand{font-size:28px;letter-spacing:-1.6px;font-weight:700;padding:0 12px;color:#1d1d1f}.sidebar .app-version{display:inline;margin:0 0 0 8px;font-size:12px;line-height:1}.subtitle{font-size:11px;color:var(--muted);padding:7px 12px;letter-spacing:.4px}
 .navigation{display:grid;gap:4px;margin:34px 0 auto}.navigation a{padding:11px 14px;border-radius:9px;font-weight:500;transition:background 150ms,color 150ms}.navigation a:hover{background:#e0e0e5}.navigation a.current{background:#dbeaff;color:#0055b3}.sidebar small{font-size:11px;line-height:1.7;margin:28px 12px 12px;color:var(--muted)}.sidebar small p{font-size:11px;margin:0}.sidebar form{margin:0 10px}
 .sidebar .restart-control{margin:0 10px 10px}.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}.title-line{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.app-version{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:0;white-space:nowrap}
 h1{font-size:34px;letter-spacing:-1.2px;line-height:1.15;margin:0;font-weight:650}h2{font-size:21px;letter-spacing:-.5px;margin:0 0 16px;line-height:1.3;font-weight:600}h3{font-size:16px;margin:22px 0 10px}p{line-height:1.6;margin:8px 0;color:var(--muted)}small,.muted{color:var(--muted);font-size:12px}section{margin:28px 0 36px}section[id]{scroll-margin-top:24px}
@@ -214,13 +214,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
-                    Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
+                    Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
                                          if role != "viewer" or key not in ("cameras", "engines")), cls="navigation", aria_label="Main"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    restart_control(csrf) if role == 'operator' and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
-                             Main(Header(Div(Div(H1(title), Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), cls='title-line'), P(descriptions.get(view, ""))),
+                             Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
@@ -434,7 +434,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             for d in data:
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]
-                content.append(Section(H2(q.text), P(f"{d['source_id']} · version {q.version} · {q.kind}"),
+                content.append(Section(H2(q.text), P(f"{source_name(d['source_id'])} · version {q.version} · {q.kind}"),
                     Div(*(Div(Small(metric_label(label)), StrongText(value), cls="stat") for label, value in (
                         ("Episodes" if q.kind == "binary" else "Valid samples", ("No data" if summary["episode_count"] is None else str(summary["episode_count"])) if q.kind == "binary" else str(summary["valid_sample_count"])),
                         ("Estimated active time" if q.kind == "binary" else "Covered time", f"{summary['estimated_active_seconds'] if q.kind == 'binary' else summary['covered_seconds']:.3f}s" if summary["covered_seconds"] > 0 else "No interval data"),

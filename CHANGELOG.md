@@ -2,9 +2,9 @@
 
 ## Title version and camera names in observations — 16 October 2026
 
-- Show the installed VOP package version in small text beside page headings and in tab titles.
+- Show the installed VOP package version in small text beside VOP at the far left and in tab titles.
 - Show camera/input names in individual observations, recent observations, episodes, capture
-  results and inspection. Fall back to the stable source ID when no name is available.
+  results, Trends and inspection. Fall back to the stable source ID when no name is available.
 
 ## Observation page names and recorded-image guidance — 16 October 2026
 

@@ -3,12 +3,12 @@
 Changed `src/vop/dashboard.py`, `tests/test_title_camera_names.py`, `README.md`,
 `CHANGELOG.md` and this report. Supports existing UI-003/UI-004 within Phase 4.
 
-Show the installed VOP package version in a small, muted label beside page headings and
+Show the installed VOP package version in a small, muted label beside VOP at the far left and
 in browser-tab titles, including sign-in. Use Python's package metadata rather than a copied
 version constant. Current project release remains 0.5.0; no release version is invented.
 
 Use camera/input names in Individual Observations, recent observations, Continuous
-Observations (Episodes), capture results and inspection. Resolve active/removed names and
+Observations (Episodes), Trends, capture results and inspection. Resolve active/removed names and
 stored configuration, with the stable ID as fallback. Keep IDs in URLs, stored records and
 technical details. HTML components escape user-supplied names.
 
@@ -36,3 +36,10 @@ No new visual browser automation was performed; generated HTML and synthetic bro
 were checked offline. Names reflect current display names; technical provenance retains the
 original IDs. Recommendation: review the small version label and named observation pages in
 the current Phase 4 pilot. Phase 5 remains unauthorised.
+
+Placement correction: moved the version from page headings into the far-left VOP brand link,
+keeping it visible on narrow screens. Trends now uses the same name/ID fallback as observations.
+The regression check parses brand/main placement and covers escaped Trends names and ID fallback.
+`.\.venv\Scripts\python.exe -m pytest -q tests/test_title_camera_names.py tests/test_observation_images_ui.py tests/test_phase2_browser_storage.py`:
+16 passed in 7.13 s. The Phase 2 synthetic browser/image smoke also passed again. No hardware
+tests or user settings changed for this presentation correction.
