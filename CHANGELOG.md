@@ -1,5 +1,11 @@
 # Specification change log
 
+## Automatic Trends refresh — 16 October 2026
+
+- Refresh Trends every 10 seconds, retaining the current query/filter URL. Pause while the
+  tab is hidden, filters have focus or filter edits have not been applied. Keep a manual
+  Refresh now link and no-JavaScript guidance. Do not start sampling or inference from refresh.
+
 ## Title version and camera names in observations — 16 October 2026
 
 - Show the installed VOP package version in small text beside VOP at the far left and in tab titles.

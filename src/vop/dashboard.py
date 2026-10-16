@@ -69,6 +69,18 @@ WORKSPACE_JS = """document.addEventListener('submit', (event) => {
 });"""
 
 
+TRENDS_REFRESH_JS = """const filters = document.querySelector('form.filters');
+if (filters) {
+  const saved = new URLSearchParams(new FormData(filters)).toString();
+  setInterval(() => {
+    if (document.hidden || filters.contains(document.activeElement)) return;
+    if (new URLSearchParams(new FormData(filters)).toString() !== saved) return;
+    location.reload();
+  }, 10000);
+}
+"""
+
+
 def badge(value):
     return Span(metric_label(str(value)), cls=f"status {value}")
 
@@ -224,7 +236,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
-                         Script(src='/ui/restart.js', defer=True) if role == 'operator' and app.state.shutdown_request else None))
+                         Script(src='/ui/restart.js', defer=True) if role == 'operator' and app.state.shutdown_request else None,
+                         Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None))
 
     def recorded_label(source_id, answer):
         if answer.get("status") != "success":
@@ -346,6 +359,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def workspace_script():
         return Response(WORKSPACE_JS, media_type='application/javascript')
 
+    @app.route('/ui/trends-refresh.js', methods=['GET'])
+    def trends_refresh_script():
+        return Response(TRENDS_REFRESH_JS, media_type='application/javascript')
+
     @app.route("/favicon.ico", methods=["GET"])
     def favicon():
         return Response(status_code=204)
@@ -431,6 +448,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     Td(badge(e["status"])), Td(f"{e['estimated_observed_seconds']:.1f} s"), Td(f"{e['unknown_seconds']:.1f} s")) for e in event_rows])),
                 P("Latest 100 episodes. Durations estimate bounded sampled intervals; missing observations never close an episode.", cls="muted")]
         elif view == "metrics":
+            content += [P('Auto refresh: every 10 seconds. ', A('Refresh now', href=str(request.url), cls='text-link')),
+                        P('Updates recorded results; it does not start monitoring. Refresh pauses while you edit filters. Apply your changes to resume.', cls='muted'),
+                        Noscript(P('Automatic refresh requires JavaScript. Use Refresh now to update the page.', cls='notice'))]
             for d in data:
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]

@@ -154,7 +154,10 @@ def test_all_views_native_markup_and_no_external_assets(settings):
             response = client.get("/?view=" + view)
             assert response.status_code == 200
             assets = re.findall(r'<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"', response.text)
-            assert all(not url.startswith(('http:', 'https:', '//')) for url in assets) and "<script" not in response.text
+            assert all(not url.startswith(('http:', 'https:', '//')) for url in assets)
+            scripts = re.findall(r'<script\b([^>]*)>(.*?)</script>', response.text, re.S)
+            assert len(scripts) == (1 if view == 'metrics' else 0)
+            assert all('src="/ui/trends-refresh.js"' in attrs and not body.strip() for attrs, body in scripts)
             assert 'name="viewport"' in response.text
         assert client.get("/api/v1/metrics").json()["metrics"][0]["summary"]["state"] == "UNKNOWN"
         assert client.get("/?view=metrics&timezone=invalid/timezone").status_code == 400

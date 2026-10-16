@@ -55,6 +55,10 @@ video recording. URLs and existing records are unchanged.
 The VOP title at the far left shows the installed version in small text; browser-tab titles include it too.
 Observation lists, episode lists, Trends and result pages use the camera/input name when available,
 with its stable ID as the fallback. IDs remain unchanged in URLs and technical details.
+Trends refreshes every 10 seconds while its tab is visible. Automatic refresh pauses while
+you focus or change its filters; apply changes to resume. Selected camera, date range and time
+zone stay in the page URL. Refresh updates recorded results and does not start monitoring.
+With JavaScript disabled, use **Refresh now** instead.
 
 Images are optional and saving is **off by default**. A capture can show a temporary preview
 without keeping it. On the camera page, **Recorded images → Change image-saving setting**
