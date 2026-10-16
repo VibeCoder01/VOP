@@ -1,5 +1,6 @@
 """Server-rendered browser workspace; native forms and SVG, no CDN or frontend build."""
 from datetime import datetime, time, timedelta
+from importlib.metadata import version
 import json
 import math
 import secrets
@@ -29,7 +30,7 @@ CSS = """
 .shell{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}.sidebar{padding:32px 18px;background:#ececf0;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:auto}
 .brand{font-size:28px;letter-spacing:-1.6px;font-weight:700;padding:0 12px;color:#1d1d1f}.subtitle{font-size:11px;color:var(--muted);padding:7px 12px;letter-spacing:.4px}
 .navigation{display:grid;gap:4px;margin:34px 0 auto}.navigation a{padding:11px 14px;border-radius:9px;font-weight:500;transition:background 150ms,color 150ms}.navigation a:hover{background:#e0e0e5}.navigation a.current{background:#dbeaff;color:#0055b3}.sidebar small{font-size:11px;line-height:1.7;margin:28px 12px 12px;color:var(--muted)}.sidebar small p{font-size:11px;margin:0}.sidebar form{margin:0 10px}
-.sidebar .restart-control{margin:0 10px 10px}.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}
+.sidebar .restart-control{margin:0 10px 10px}.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}.title-line{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.app-version{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:0;white-space:nowrap}
 h1{font-size:34px;letter-spacing:-1.2px;line-height:1.15;margin:0;font-weight:650}h2{font-size:21px;letter-spacing:-.5px;margin:0 0 16px;line-height:1.3;font-weight:600}h3{font-size:16px;margin:22px 0 10px}p{line-height:1.6;margin:8px 0;color:var(--muted)}small,.muted{color:var(--muted);font-size:12px}section{margin:28px 0 36px}section[id]{scroll-margin-top:24px}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border:1px solid transparent;border-radius:9px;background:var(--accent);color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms,box-shadow 150ms,transform 150ms;line-height:1.3}.button:hover,button:hover{background:#0055b3}.button:active,button:active{transform:scale(.98)}.button.secondary,button.secondary{background:white;color:#0055b3;border-color:#d3d3d9}.button.secondary:hover,button.secondary:hover{background:#f0f5ff;border-color:#a8bfdf}.button.danger,button.danger{background:white;color:#a1252c;border-color:#e4c4c7}.button.danger:hover,button.danger:hover{background:#fff0f1}button:disabled,button:disabled:hover{background:#e8e8ed;color:#6a6a70;border-color:#d8d8df;cursor:not-allowed;transform:none}button[aria-busy=true]{background:#455d78;cursor:progress}.text-link{color:#0055b3;font-size:13px;font-weight:600}.text-link:hover{text-decoration:underline}.back{display:inline-block;color:#0055b3;margin-bottom:24px;font-size:13px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #72aaff;outline-offset:3px}
@@ -192,6 +193,16 @@ def evidence_image(url, label, rois=()):
 
 
 def install_dashboard(app, settings, store, pipeline, engine, token, viewer_token=None):
+    app_version = version('vop')
+
+    def source_name(source_id):
+        source = pipeline.sources.get(source_id) or pipeline.removed_sources.get(source_id)
+        if source and source.name:
+            return source.name
+        with store.connection() as db:
+            row = db.execute('SELECT configuration FROM sources WHERE id=?', (source_id,)).fetchone()
+        return (json.loads(row[0]).get('name') if row else None) or source_id
+
     def page(title, request, content, *, view="overview", notice=None):
         session = request.scope["session"]
         csrf = session.setdefault("csrf", secrets.token_urlsafe(24))
@@ -202,14 +213,14 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
-        return Html(Head(Title(f"{title} · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
+        return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
                                          if role != "viewer" or key not in ("cameras", "engines")), cls="navigation", aria_label="Main"),
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    restart_control(csrf) if role == 'operator' and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
-                             Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
+                             Main(Header(Div(Div(H1(title), Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), cls='title-line'), P(descriptions.get(view, ""))),
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
@@ -342,8 +353,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route("/login", methods=["GET"])
     def login_page(request):
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
-        return Html(Head(Title("Sign in · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
-                    Body(Main(Div("VOP", cls="brand"), H2("Open your workspace"),
+        return Html(Head(Title(f"Sign in · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
+                    Body(Main(Div(Div("VOP", cls="brand"), Small('v' + app_version, cls='app-version'), cls='title-line'), H2("Open your workspace"),
                               P("Open Start VOP on this computer. It signs you in automatically and reuses your saved cameras and connection."),
                               Details(Summary('Advanced: manual sign-in'), Form(hidden(csrf), Input(type="hidden", name="username", value="local-access", autocomplete="username"), field("Access key", "access_key", type="password", required=True, autocomplete="current-password"),
                                    Button("Open workspace", type="submit"), method="post", action="/login")), cls="login")))
@@ -415,7 +426,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             event_rows = store.events(selected or None)
             content += [P('Episodes group individual observations after the required confirmations. ', A('Open Individual Observations to inspect results, saved images or delete recorded data.', href='/observations', cls='text-link')),
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
-                [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(e["source_id"] + " · version " + e["question_version"])),
+                [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(source_name(e["source_id"]) + " · version " + e["question_version"])),
                     Td(local_time(e["started_at_utc"], zone)), Td(local_time(e["ended_at_utc"], zone) if e["ended_at_utc"] else "Not confirmed ended"),
                     Td(badge(e["status"])), Td(f"{e['estimated_observed_seconds']:.1f} s"), Td(f"{e['unknown_seconds']:.1f} s")) for e in event_rows])),
                 P("Latest 100 episodes. Durations estimate bounded sampled intervals; missing observations never close an episode.", cls="muted")]
@@ -448,7 +459,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if view in ("overview", "sources"):
             observations = store.observations(selected or None, limit=20)
             content.append(Section(Div(H2("Recent Individual Observations"), A('All Individual Observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Image", "Provenance"],
-                [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
+                [Tr(Td(o["question_id"], Small(source_name(o["source_id"]) + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
                     Td(local_time(o["captured_at_utc"], zone)), Td(recorded_image_status(o, operator)),
                     Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
         if operator and view in ("sources", "questions"):
@@ -475,7 +486,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             Div(P('Newest answers first.'),
                 A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and operator else P('Select an input to delete its full history.', cls='muted') if operator else None, cls='section-heading'),
             table(['Question / input', 'Result', 'Time', 'Image', 'Actions'], [Tr(
-                Td(o['question_id'], Small(o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
+                Td(o['question_id'], Small(names.get(o['source_id']) or o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
                 Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
                 Td(recorded_image_status(o, operator)),
                 Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
@@ -672,7 +683,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             guidance = recovery_message(error.get('code'))
         timing = (f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds"
                   if summary['elapsed_ms'] is not None else "Inference was not run. No image was available.")
-        content = [P("Observation complete" if summary["status"] == "success" else "No valid answer", role="status", cls="readiness success" if summary['status'] == 'success' else "readiness error"),
+        content = [P(source_name(source_id)), P("Observation complete" if summary["status"] == "success" else "No valid answer", role="status", cls="readiness success" if summary['status'] == 'success' else "readiness error"),
                    *answers, P(guidance, role="alert") if guidance else None,
                    A("Open camera" if camera_error else "Open Engines", href=("/cameras/" + source_id if pipeline.sources[source_id].kind in ("rtsp", "usb") else "/ui/sources/" + source_id) if camera_error else "/engines", cls="button secondary") if error else None,
                    P(timing + f" · Engine: {summary['engine_id']}"),
@@ -756,7 +767,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if observation is None:
             return Response("Observation not found", status_code=404)
         content = [A('‹ Individual Observations', href='/observations?source=' + observation['source_id'], cls='back'),
-                   P(observation["source_id"] + " / " + observation["question_id"] + " · version " + observation["question_version"]),
+                   P(source_name(observation["source_id"]) + " / " + observation["question_id"] + " · version " + observation["question_version"]),
                    P(recorded_label(observation["source_id"], observation["answer"])),
                    P("Captured: " + local_time(observation["captured_at_utc"], settings.timezone_name))]
         frame_id = observation["run"]["frame_id"]
