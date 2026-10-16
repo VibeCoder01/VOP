@@ -1,5 +1,16 @@
 # Specification change log
 
+## Observation page names and recorded-image guidance — 16 October 2026
+
+- Rename the navigation/pages to Individual Observations and Continuous Observations
+  (Episodes), retaining existing URLs and stored records. Explain that episodes group sampled
+  checks and are not continuous video.
+- Show whether an image is saved on each observation, with a link to its recorded image.
+  Distinguish capture failure, missing images and operator-only image access.
+- Show the current image-saving setting and a direct edit link on camera and observation
+  pages. Explain the off-by-default policy, temporary previews, future-only changes and
+  independent deletion/retention of images. Do not change any user's image-saving setting.
+
 ## Full launcher restart and browser restart — 15 October 2026
 
 - Correct the Windows vault location so direct and packaged-Codex launches share protected
