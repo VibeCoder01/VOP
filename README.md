@@ -49,6 +49,22 @@ Give the camera a name during setup, or open its page and choose **Rename**. Ren
 works for USB cameras and does not require camera credentials. Names survive app restarts;
 the camera ID, connection, questions and recorded history stay the same.
 
+**Individual Observations** lists each recorded answer from a capture. **Continuous
+Observations (Episodes)** groups checks into confirmed episodes; it does not mean continuous
+video recording. URLs and existing records are unchanged.
+
+Images are optional and saving is **off by default**. A capture can show a temporary preview
+without keeping it. On the camera page, **Recorded images → Change image-saving setting**
+opens **Save images for Individual Observations**. Turn that on and save to keep one
+privacy-masked still image per future capture, shared by all its answers. The observations
+list shows **View saved image**, **No image saved** or **No image captured**; open an individual
+observation to see its image. You can also select an input on that list to see the current
+setting and its edit link. Images remain restricted to operators under the current access policy.
+
+Turning image saving on cannot recover old unsaved or deleted images. Turning it off does
+not delete images already saved. Manual deletion and retention rules can remove images while
+keeping answers, so a missing historical image does not prove what the setting was at capture time.
+
 Hover over the dotted-underlined metric labels and condition states for plain-language
 explanations. These include Active conditions, Unknown conditions, Coverage, Occupancy,
 Covered time, Valid samples and episode duration/gap terms. The same explanations are
@@ -118,7 +134,8 @@ The mock preset is a user-selected synthetic answer, not computer vision. Its pe
 override survives restart. Unconfigured mock questions return unsupported instead of fabricated
 answers. The source and model interfaces remain independent; Phase 4 worker setup is described below.
 
-**Sources → Edit source** controls enabled state, evidence retention and sample interval. A nonzero
+**Cameras → Open camera → Edit observation settings** controls enabled state, image saving
+and sample interval. Other inputs use **Settings → Other inputs → Edit source**. A nonzero
 interval (1–3600 seconds) explicitly starts background sampling, independent of browser tabs;
 0 stops it. Saved sampling controls resume after restart. There is one worker and zero queued
 frames; missed/busy samples are dropped and audited, failed sources back off up to 300 seconds.
@@ -146,12 +163,12 @@ recoverable configuration removal, not permanent erasure of history or protected
 - **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
   if that profile is selected; VOP never chooses a fallback. Model files, protected keys and
   recorded observations are kept. Shared keys are not erased by profile deletion.
-- **Observations → Delete capture…** previews deletion of every answer that shares that capture,
+- **Individual Observations → Delete capture…** previews deletion of every answer that shares that capture,
   its raw result and its retained image. It deletes related alerts/delivery records, pauses
   affected alert rules, and rebuilds episodes/metrics from remaining history. A timestamp-only
   gap marker remains to prevent charts from joining across deleted data; it is not a model
   answer and is excluded from answer counts and model provenance.
-- To clear an input's recorded data, select it on **Observations**, then choose **Delete input
+- To clear an input's recorded data, select it on **Individual Observations**, then choose **Delete input
   history…**. Pause its monitoring first. This also removes deletion-gap markers. Camera setup,
   questions and engine profiles remain. You can review history for a removed input here too.
 

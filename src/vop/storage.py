@@ -301,10 +301,11 @@ class Store:
 
     def observation(self, observation_id: str) -> dict | None:
         with self.connection() as connection:
-            row = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON o.run_id=r.id WHERE o.id=? AND o.status!='retention_gap'", (observation_id,)).fetchone()
+            row = connection.execute("SELECT o.*,r.result_json,f.evidence_png IS NOT NULL AS image_saved FROM observations o JOIN runs r ON o.run_id=r.id LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.id=? AND o.status!='retention_gap'", (observation_id,)).fetchone()
         if row is None:
             return None
         item = dict(row)
+        item['image_saved'] = bool(item['image_saved'])
         item["answer"] = json.loads(item.pop("answer_json"))
         item["run"] = json.loads(item.pop("result_json"))
         return item
@@ -355,11 +356,12 @@ class Store:
     def observations(self, source_id: str | None = None, *, after: int = 0, limit: int = 20, before: int | None = None, newest: bool = False) -> list[dict]:
         with self.connection() as connection:
             order = 'DESC' if newest else 'ASC'
-            rows = connection.execute("SELECT o.*,r.result_json FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.status!='retention_gap' AND o.sequence>? AND (? IS NULL OR o.source_id=?) AND (? IS NULL OR o.sequence<?) ORDER BY o.sequence " + order + " LIMIT ?",
+            rows = connection.execute("SELECT o.*,r.result_json,f.evidence_png IS NOT NULL AS image_saved FROM observations o JOIN runs r ON r.id=o.run_id LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.status!='retention_gap' AND o.sequence>? AND (? IS NULL OR o.source_id=?) AND (? IS NULL OR o.sequence<?) ORDER BY o.sequence " + order + " LIMIT ?",
                                       (after, source_id, source_id, before, before, limit)).fetchall()
         results = []
         for row in rows:
             item = dict(row)
+            item['image_saved'] = bool(item['image_saved'])
             answer = json.loads(item.pop("answer_json"))
             run = json.loads(item.pop("result_json"))
             item["answer"] = answer

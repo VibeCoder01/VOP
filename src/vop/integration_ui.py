@@ -242,9 +242,10 @@ def install_integration(app, settings, store, pipeline):
                     P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
             Section(H2('Use this camera'), P('Run an observation or change the questions.'),
                     Div(A('Observe', href='/?source=' + source_id, cls='button'), A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='actions')),
-            Section(H2('Observation settings'), P('Set the sample interval and evidence policy.'),
+            Section(H2('Recorded images'), app.state.image_settings(source_id, True)),
+            Section(H2('Observation settings'), P('Set the sample interval and image-saving setting.'),
                     Div(A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary'),
-                        A('Recorded observations', href='/observations?source=' + source_id, cls='button secondary'), cls='actions')),
+                        A('Individual Observations', href='/observations?source=' + source_id, cls='button secondary'), cls='actions')),
             Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
                     A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
         return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))

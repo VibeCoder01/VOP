@@ -197,11 +197,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         csrf = session.setdefault("csrf", secrets.token_urlsafe(24))
         role = request.scope.get("auth_role") or session.get("role")
         navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
-                      ("questions", "Questions", "/?view=questions"), ("observations", "Observations", "/observations"), ("events", "History", "/?view=events"),
+                      ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", "Continuous Observations (Episodes)", "/?view=events"),
                       ("metrics", "Trends", "/?view=metrics"), ("settings", "Settings", "/?view=settings")]
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
-                        "events": "Review confirmed episodes.", "observations": "Review recorded answers. Delete captures or input history.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
+                        "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
         return Html(Head(Title(f"{title} · VOP"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
@@ -224,6 +224,23 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                              (source_id, answer["question_id"], answer["question_version"])).fetchone()
         spec = json.loads(row[0]) if row else {}
         return answer_label(answer.get("value"), spec.get("levels", ()) if spec.get("kind") == "ordinal" else ())
+
+    def image_settings(source_id, operator):
+        enabled = store.source_control(source_id)['retain_evidence']
+        return Div(P('Image saving is ' + ('ON. Future captures will keep a privacy-masked still image.' if enabled else 'OFF. Future captures keep answers without saving an image.'), role='status'),
+                   P('This setting affects future captures only. It does not restore unsaved or deleted images, or delete images already saved.', cls='muted'),
+                   A('Change image-saving setting', href='/ui/sources/' + source_id + '#image-saving', cls='button secondary') if operator and source_id in pipeline.sources else
+                   P('Restore this input to change its settings.' if operator else 'An operator can change image saving.', cls='muted'), cls='readiness info')
+
+    def recorded_image_status(observation, operator):
+        frame_id = observation['provenance']['frame_id']
+        if not frame_id:
+            return 'No image captured'
+        if not operator:
+            return 'Operator access required'
+        return A('View saved image', href='/ui/observations/' + observation['id'] + '#recorded-image', cls='text-link') if observation['image_saved'] else 'No image saved'
+
+    app.state.image_settings = image_settings
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
         result = []
@@ -396,7 +413,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
             event_rows = store.events(selected or None)
-            content += [P('Episodes are built from observations. ', A('Open Observations to delete recorded data.', href='/observations', cls='text-link')),
+            content += [P('Episodes group individual observations after the required confirmations. ', A('Open Individual Observations to inspect results, saved images or delete recorded data.', href='/observations', cls='text-link')),
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(e["source_id"] + " · version " + e["question_version"])),
                     Td(local_time(e["started_at_utc"], zone)), Td(local_time(e["ended_at_utc"], zone) if e["ended_at_utc"] else "Not confirmed ended"),
@@ -430,14 +447,14 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                                 A("Other inputs", href="/?view=sources", cls="button secondary"), A("Alerts and release tools", href="/release", cls="button secondary"), cls="actions"))]
         if view in ("overview", "sources"):
             observations = store.observations(selected or None, limit=20)
-            content.append(Section(Div(H2("Recent observations"), A('All observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Provenance"],
+            content.append(Section(Div(H2("Recent Individual Observations"), A('All Individual Observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Image", "Provenance"],
                 [Tr(Td(o["question_id"], Small(o["source_id"] + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
-                    Td(local_time(o["captured_at_utc"], zone)),
+                    Td(local_time(o["captured_at_utc"], zone)), Td(recorded_image_status(o, operator)),
                     Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
         if operator and view in ("sources", "questions"):
             from vop.removal import removed_controls
             content.append(removed_controls(store, pipeline, csrf, view))
-        return page({"overview": "Observe", "events": "History", "metrics": "Trends", "sources": "Inputs"}.get(view, view.title()), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
+        return page({"overview": "Observe", "events": "Continuous Observations (Episodes)", "metrics": "Trends", "sources": "Inputs"}.get(view, view.title()), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
 
     @app.route('/observations', methods=['GET'])
     def observation_list(request):
@@ -449,14 +466,18 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if selected and selected not in names: raise ValueError('Unknown input')
         rows = store.observations(selected, newest=True, before=before, limit=100)
         operator = request.scope.get('auth_role') == 'operator'
-        return page('Observations', request, [
+        return page('Individual Observations', request, [
+            P('Each row is one answer from a captured image. Open a result to see its saved image, if available. Several answers can share the same image.'),
+            P('Image saving is off by default. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
             Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items()), name='source', id='history-source'), cls='field'),
                  Button('Show', cls='secondary'), method='get', action='/observations', cls='filters'),
-            Div(P('Newest answers first. One capture can contain several answers.'),
+            image_settings(selected, operator) if selected else P('Select an input above to see whether image saving is on or off and change its setting.' if operator else 'Select an input above to see its image-saving setting.', cls='notice'),
+            Div(P('Newest answers first.'),
                 A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and operator else P('Select an input to delete its full history.', cls='muted') if operator else None, cls='section-heading'),
-            table(['Question / input', 'Result', 'Time', 'Actions'], [Tr(
+            table(['Question / input', 'Result', 'Time', 'Image', 'Actions'], [Tr(
                 Td(o['question_id'], Small(o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
                 Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
+                Td(recorded_image_status(o, operator)),
                 Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
                        A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if operator else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
             A('Older answers', href='/observations?' + urlencode({'source': selected or '', 'before': rows[-1]['sequence']}), cls='button secondary') if len(rows) == 100 else None
@@ -471,11 +492,14 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         control = store.source_control(source_id)
         csrf = request.scope["session"]["csrf"]
         return page("Observation settings", request, [A("Back to camera", href="/cameras/" + source_id, cls="back") if pipeline.sources[source_id].kind in ("rtsp", "usb") else A("Back to inputs", href="/?view=sources", cls="back"), Form(hidden(csrf), H2(pipeline.sources[source_id].name),
-            P("Set the sample interval and evidence policy."),
+            P("Set the sample interval and image-saving setting."),
             Label(Input(type="checkbox", name="enabled", checked=control["enabled"]), " Enabled"),
-            Div(Label(Input(type="checkbox", name="retain_evidence", checked=control["retain_evidence"]), " Retain privacy-masked evidence"), cls="field"),
+            Section(H2('Recorded images'),
+                    Label(Input(type="checkbox", name="retain_evidence", checked=control["retain_evidence"]), " Save images for Individual Observations"),
+                    P('Off by default. When on, VOP saves one privacy-masked still image per capture, shared by its answers. Open an Individual Observation to see its image.'),
+                    P('Applies to future captures only. Turning this on cannot recover older unsaved or deleted images. Turning it off keeps images already saved. Retention rules or manual deletion can remove them.', cls='muted'), id='image-saving'),
             field("Sample interval in seconds (0 stops sampling)", "sample_interval_seconds", control["sample_interval_seconds"], type="number", min=0, max=3600, step=1),
-            P("Saving a nonzero interval explicitly starts background sampling. Evidence is off by default.", cls="muted"), Button("Save settings"),
+            P("Saving a nonzero interval explicitly starts background sampling. Image saving is off by default.", cls="muted"), Button("Save settings"),
             method="post", action=f"/ui/sources/{source_id}", cls="editor")], view="sources")
 
     @app.route("/ui/sources/{source_id}", methods=["POST"])
@@ -661,6 +685,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         with store.connection() as db:
             recorded = db.execute('SELECT id FROM observations WHERE run_id=? ORDER BY sequence LIMIT 1', (result['run_id'],)).fetchone()
         if recorded:
+            saved = store.observation(recorded[0])
+            if summary['frame_id']:
+                content.append(P('An image was saved with this capture.' if saved['image_saved'] else
+                                 'Temporary preview only. No image was saved with this capture.', cls='notice'))
+                content.append(image_settings(source_id, True))
+            content.append(A('Open Individual Observation', href='/ui/observations/' + recorded[0], cls='button secondary'))
             content.append(A('Delete capture…', href='/ui/observations/' + recorded[0] + '/delete', cls='button danger'))
         return page("Observation", request, content, view="overview")
 
@@ -725,21 +755,29 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         observation = store.observation(observation_id)
         if observation is None:
             return Response("Observation not found", status_code=404)
-        content = [P(observation["source_id"] + " / " + observation["question_id"] + " · version " + observation["question_version"]),
+        content = [A('‹ Individual Observations', href='/observations?source=' + observation['source_id'], cls='back'),
+                   P(observation["source_id"] + " / " + observation["question_id"] + " · version " + observation["question_version"]),
                    P(recorded_label(observation["source_id"], observation["answer"])),
-                   P("Captured: " + local_time(observation["captured_at_utc"], settings.timezone_name)),
-                   Pre(json.dumps(observation["run"], indent=2))]
+                   P("Captured: " + local_time(observation["captured_at_utc"], settings.timezone_name))]
         frame_id = observation["run"]["frame_id"]
-        if request.scope.get("auth_role") == "operator" and frame_id and store.evidence(observation["source_id"], frame_id):
+        operator = request.scope.get('auth_role') == 'operator'
+        if operator and frame_id and observation['image_saved']:
             url = f"/ui/evidence/{observation['source_id']}/{frame_id}"
-            content.insert(2, evidence_image(url, "Retained privacy-masked evidence", (store.policy(observation["source_id"], observation["question_id"], observation["question_version"]).roi,)))
-            content.append(action("Delete retained evidence", url + "/delete", request.scope["session"]["csrf"], secondary=True))
+            content.append(Section(H2('Recorded image'),
+                evidence_image(url, "Retained privacy-masked evidence", (store.policy(observation["source_id"], observation["question_id"], observation["question_version"]).roi,)),
+                P('This is the saved still image for this capture. It is shared by all answers from the same capture.', cls='muted'),
+                action("Delete saved image", url + "/delete", request.scope["session"]["csrf"], secondary=True), id='recorded-image'))
         else:
-            content.append(P("No accessible retained evidence.", cls="muted"))
-        if request.scope.get('auth_role') == 'operator':
+            message = ('Recorded images require operator access. Sign in as an operator to view any saved image.' if not operator else
+                       'No image was captured for this observation.' if not frame_id else
+                       'No saved image is available. Image saving may have been off when this capture was taken, or its image may have been deleted manually or by a retention rule.')
+            content.append(Section(H2('Recorded image'), P(message, cls='notice'), id='recorded-image'))
+        content.append(image_settings(observation['source_id'], operator))
+        content.append(Details(Summary('Technical details'), Pre(json.dumps(observation['run'], indent=2))))
+        if operator:
             content.append(Section(H2('Delete this capture'), P('Review the answers and shared image that will be deleted.'),
                                    A('Delete capture…', href='/ui/observations/' + observation_id + '/delete', cls='button danger')))
-        return page("Observation detail", request, content, view="observations")
+        return page("Individual Observation", request, content, view="observations")
 
 
 def StrongText(value):
