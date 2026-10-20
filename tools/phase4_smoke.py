@@ -81,6 +81,9 @@ def main():
             with browser.open(base+'/login') as response:html=response.read().decode()
             csrf=re.search(r'name="csrf"[^>]*value="([^"]+)"',html)[1]
             with browser.open(Request(base+'/login',data=urlencode({'csrf':csrf,'access_key':owner}).encode())) as response: response.read()
+            with browser.open(base+'/') as response:html=response.read().decode()
+            csrf=re.search(r'name="csrf"[^>]*value="([^"]+)"',html)[1]
+            with browser.open(Request(base+'/ui/mode',data=urlencode({'csrf':csrf,'mode':'configure'}).encode())) as response: response.read()
             with browser.open(base+'/integration') as response:html=response.read().decode()
             assert 'Open Cameras' in html and 'Open Engines' in html
             csrf=re.search(r'name="csrf"[^>]*value="([^"]+)"',html)[1]

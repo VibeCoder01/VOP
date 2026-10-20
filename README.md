@@ -49,6 +49,17 @@ Give the camera a name during setup, or open its page and choose **Rename**. Ren
 works for USB cameras and does not require camera credentials. Names survive app restarts;
 the camera ID, connection, questions and recorded history stay the same.
 
+VOP opens in **View mode** after sign-in, including Start VOP. View mode shows Observe,
+Individual Observations, Continuous Observations (Episodes) and Trends. Operators can run
+**Observe now** on an enabled input and view permitted saved images. Existing monitoring
+continues without changes. Choose **Configure workspace** in the sidebar to manage cameras,
+engines, questions, monitoring, image saving, deletion and restart. Choose **Switch to View**
+when finished. No extra access key is required. The selected mode stays in this browser
+session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
+Old setup links show a Switch to Configure mode button. A stale form submitted in View mode
+is refused; switch modes and reopen the form. Authenticated bearer API clients keep their
+existing permissions. Modes simplify the interface; they are not separate user accounts.
+
 **Individual Observations** lists each recorded answer from a capture. **Continuous
 Observations (Episodes)** groups checks into confirmed episodes; it does not mean continuous
 video recording. URLs and existing records are unchanged.

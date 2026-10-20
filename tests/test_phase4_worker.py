@@ -164,7 +164,9 @@ def app(tmp_path, monkeypatch):
 def login(client):
     token = re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get("/login").text)[1]
     assert client.post("/login", data={"csrf": token, "access_key": OWNER}).status_code == 200
-    return re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get("/integration").text)[1]
+    token = re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get("/").text)[1]
+    assert client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'}).status_code == 200
+    return token
 
 
 def test_gui_protected_camera_retry_profile_restart_and_viewer_denial(app):

@@ -160,6 +160,8 @@ def test_exports_permissions_csrf_xss_csv_and_rate_limit(app):
         csrf = re.search(r'name="csrf"[^>]*value="([^"]+)"', html)[1]
         assert client.post("/login", data={"csrf": csrf, "access_key": TOKEN}).status_code == 200
         assert client.post("/release/rules", data={}).status_code == 403
+        csrf = re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get("/").text)[1]
+        client.post("/ui/mode", data={"csrf": csrf, "mode": "configure"})
         html = client.get("/release?notice=%3Cscript%3Ebad%3C/script%3E").text
         assert "&lt;script&gt;" in html and "<script>bad" not in html
         from bs4 import BeautifulSoup

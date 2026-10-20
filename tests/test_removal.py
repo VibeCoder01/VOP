@@ -30,7 +30,10 @@ def app(tmp_path):
 def login(client, key=OWNER):
     csrf = re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get('/login').text)[1]
     client.post('/login', data={'csrf': csrf, 'access_key': key})
-    return re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get('/').text)[1]
+    csrf = re.search(r'name="csrf"[^>]*value="([^"]+)"', client.get('/').text)[1]
+    if key == OWNER:
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
+    return csrf
 
 
 def test_question_removal_history_restart_restore_and_alert_rules(app):
