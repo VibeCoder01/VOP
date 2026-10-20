@@ -95,3 +95,59 @@ def test_failed_capture_does_not_invent_last_observed_time(settings):
     summary = app.state.store.summary("synthetic-scene", "red_square", "1")
     assert summary["state"] == "UNKNOWN" and summary["last_observed_at_utc"] is None
     assert summary["last_sample_at_utc"] is not None
+
+
+def test_multiple_cameras_take_round_robin_turns_without_backlog(settings, monkeypatch):
+    first = settings.sources[0]
+    sources = tuple(replace(first, source_id=sid, name=sid) for sid in ('camera-a', 'camera-b', 'camera-c'))
+    app = create_app(replace(settings, sources=sources), token=TOKEN)
+    for source in sources:
+        app.state.store.update_source(source.source_id, enabled=True, retain_evidence=False, sample_interval_seconds=2)
+    turns = []
+    def run(source_id):
+        turns.append(source_id)
+        return {'result': {'status': 'success'}}
+    monkeypatch.setattr(app.state.pipeline, 'run', run)
+    sampler = Sampler(app.state.pipeline)
+    for _ in range(4): sampler.tick(10)
+    assert turns == ['camera-a', 'camera-b', 'camera-c']
+    sampler.tick(100)  # One fresh turn, never catches up obsolete frames.
+    assert turns == ['camera-a', 'camera-b', 'camera-c', 'camera-a']
+    app.state.store.update_source('camera-b', enabled=True, retain_evidence=False, sample_interval_seconds=0)
+    sampler.tick(100)
+    assert turns[-1] == 'camera-c'
+    sampler.tick(100)
+    assert len(turns) == 5
+    # A failed input yields the next turn and retains per-camera backoff.
+    def fail_first(source_id):
+        turns.append(source_id)
+        if source_id == 'camera-a': return {'result': {'status': 'model_failure'}}
+        return {'result': {'status': 'success'}}
+    monkeypatch.setattr(app.state.pipeline, 'run', fail_first)
+    sampler.tick(102)
+    sampler.tick(102)
+    assert turns[-2:] == ['camera-a', 'camera-c']
+    assert sampler.deadlines['camera-a'] == 106
+
+
+def test_manual_turn_coalesces_and_takes_fresh_frame_without_enabling_monitoring(settings):
+    app = create_app(settings, token=TOKEN)
+    store, pipeline = app.state.store, app.state.pipeline
+    store.update_source('synthetic-scene', enabled=True, retain_evidence=False, sample_interval_seconds=0)
+    sampler = Sampler(pipeline)
+    assert sampler.request('synthetic-scene')
+    assert not sampler.request('synthetic-scene')
+    count = store.health()['observation_count']
+    pipeline.busy.acquire()
+    try:
+        sampler.tick(10)
+        assert sampler.requested('synthetic-scene')
+        assert store.health()['observation_count'] == count
+    finally:
+        pipeline.busy.release()
+    sampler.tick(11)
+    assert not sampler.requested('synthetic-scene')
+    assert store.health()['observation_count'] == count + 3
+    sampler.tick(100)
+    assert store.health()['observation_count'] == count + 3
+    assert store.source_control('synthetic-scene')['sample_interval_seconds'] == 0

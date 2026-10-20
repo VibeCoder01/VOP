@@ -294,10 +294,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         action_problems = other_problems if automatic and not source['enabled'] else problems
         return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
                    P('This input is paused. Choose Start monitoring to begin repeated observations.' if operator and automatic else 'This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
-                   dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not busy) else
-                   Div(StrongText('Observing…'), P('An observation is in progress. Monitoring continues automatically. You can pause monitoring at any time.' if monitoring else 'An observation is in progress. Wait for it to finish before observing again.'), cls='readiness info', role='status') if operator else P("Capture controls require operator access."),
+                   Div(StrongText('Monitoring is running'), P('This camera takes repeated observations. Cameras take turns; monitoring stays on between samples. Pause monitoring to stop.'),
+                       P('Demo engine selected. Answers are synthetic.') if pipeline.engine.synthetic else None, cls='readiness success', role='status') if operator and monitoring else None,
+                   dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring and not busy) else
+                   Div(StrongText('Observation in progress'), P('Another observation is using the shared worker. A manual observation will be scheduled for this camera’s turn.'), cls='readiness info', role='status') if operator and busy and not monitoring else P("Capture controls require operator access.") if not operator else None,
+                   P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
-                                                disabled=busy or bool(action_problems)),
+                                                disabled=bool(action_problems)),
                             method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator and (configure or source['enabled']) else None,
                        Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
                             Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
@@ -676,18 +679,20 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             engine.configure_source_answer(source_id, saved.question_id, saved.version, value)
         return RedirectResponse("/?view=questions&notice=Immutable+question+version+saved", status_code=303)
 
-    def observation_in_progress(request):
-        return page('Observation in progress', request, [
-            P('VOP is already observing. No extra observation was started. If monitoring is on, it continues automatically.', cls='readiness info'),
+    def schedule_observation(request, source_id):
+        app.state.sampler.request(source_id)
+        return page('Observation scheduled', request, [
+            P('This camera will take a fresh image on its turn. Repeated clicks keep one pending observation for this camera.', cls='readiness info'),
+            A('View Individual Observations', href='/observations?source=' + source_id, cls='button secondary'),
             A('Back to Observe', href='/', cls='button secondary')], view='overview')
 
     @app.route("/ui/sources/{source_id}/capture", methods=["POST"])
     async def capture(source_id: str, request):
         if source_id not in pipeline.sources:
             raise ValueError("Unknown source")
-        if pipeline.busy.locked():
-            return observation_in_progress(request)
         problems = capture_dependencies(pipeline, source_id)
+        if not problems and (request.scope.get('capture_schedule_only') or pipeline.busy.locked() or app.state.sampler.requested(source_id)):
+            return schedule_observation(request, source_id)
         if not problems and not getattr(pipeline, 'auto_worker', None):
             from vop.inference.remote import RemoteInferenceEngine
             if isinstance(pipeline.engine, RemoteInferenceEngine):
@@ -708,7 +713,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             result = await run_in_threadpool(pipeline.run, source_id)
         except ProviderError as exc:
             if exc.code == 'overloaded':
-                return observation_in_progress(request)
+                return schedule_observation(request, source_id)
             from vop.operator_workflow import recovery_message
             return page("Could not observe yet", request, [P(recovery_message(exc.code), cls='readiness warning'),
                         action('Retry automatically', f'/ui/sources/{source_id}/capture', request.scope['session']['csrf']),

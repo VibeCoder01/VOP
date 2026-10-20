@@ -121,13 +121,18 @@ class BrowserAuth:
             response = RedirectResponse('/configure' if method in ('GET', 'HEAD') else '/configure?stale=1', status_code=303) if method in ('GET', 'HEAD') or wants_html else JSONResponse(
                 {'error': 'configure_mode_required', 'message': 'Switch to Configure mode to change this workspace.', 'remediation': '/configure'}, status_code=403)
             return await response(scope, receive, secured_send)
-        admitted = method == "POST" and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
-        if admitted and not self.admission.acquire(blocking=False):
+        monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
+        scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
+        admitted = method == "POST" and not monitoring_control and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
+        acquired = admitted and self.admission.acquire(blocking=False)
+        if admitted and not acquired and scheduled_capture:
+            scope['capture_schedule_only'] = True
+        elif admitted and not acquired:
             self.pipeline.skipped += 1
             await run_in_threadpool(self.store.audit, "capture_skipped", "overload")
             return await JSONResponse({"error": "overloaded"}, status_code=429)(scope, receive, secured_send)
         try:
             await self.app(scope, receive, secured_send)
         finally:
-            if admitted:
+            if acquired:
                 self.admission.release()
