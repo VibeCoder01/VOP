@@ -34,6 +34,7 @@ def test_ordinal_labels_in_capture_overview_history_and_old_version(settings):
         assert label in response.text
         observation = store.observations()[0]
         assert observation["answer"]["value"] == 0.25
+        client.post("/ui/mode", data={"csrf": csrf, "mode": "view"})
         for path in ("/", "/observations", "/ui/observations/" + observation["id"]):
             assert label in client.get(path).text
         store.edit_question("synthetic-scene", replace(question, levels=("New low", "New medium", "New high")),

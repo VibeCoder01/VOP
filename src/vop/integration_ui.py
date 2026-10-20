@@ -146,7 +146,7 @@ def install_integration(app, settings, store, pipeline):
                        if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
                                         A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
         from vop.removal import removed_controls
-        content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb'), heading='Removed cameras'))
+        content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb'), heading='Retired Cameras'))
         return app.state.page('Cameras', request, content, view='cameras', notice=request.query_params.get('notice'))
 
     def camera_editor(source_id, request):
@@ -240,8 +240,8 @@ def install_integration(app, settings, store, pipeline):
                     P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
                     Form(hidden(csrf(request)), Button('Test camera', disabled=bool(problems)), method='post', action='/integration/cameras/' + source_id + '/test'),
                     P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
-            Section(H2('Use this camera'), P('Run an observation or change the questions.'),
-                    Div(A('Observe', href='/?source=' + source_id, cls='button'), A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='actions')),
+            Section(H2('Questions'), P('Choose what this camera observes. Switch to View mode to run observations.'),
+                    A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary')),
             Section(H2('Recorded images'), app.state.image_settings(source_id, True)),
             Section(H2('Observation settings'), P('Set the sample interval and image-saving setting.'),
                     Div(A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary'),
@@ -399,7 +399,7 @@ def install_integration(app, settings, store, pipeline):
                     P('The previous settings are still selected. Use engine applies the saved changes.', cls='readiness info') if engine_id == active_engine_id() and not active else None,
                     P('Demo answers are synthetic. They do not describe the camera image.', cls='readiness warning') if value['kind'] == 'mock' else None,
                     action('Use engine', '/engines/' + engine_id + '/use', csrf(request)) if not active else P('This engine is selected. The connection is checked when you observe.', cls='muted'),
-                    A('Open Observe', href='/', cls='button') if active else None),
+                    P('Switch to View mode to run observations.') if active else None),
             Section(H2('Connection'), P('VOP connects to Antec when you run an observation.') if active and antec_profile(pipeline.engine) else P('Check the selected engine without sending a camera image.'),
                     P('The check can start a 15-minute Antec session.', cls='muted') if active and antec_profile(pipeline.engine) and pipeline.auto_worker else None,
                     action('Check connection', '/integration/health', csrf(request)) if active else P('Select Use engine before you check its connection.', cls='muted'),

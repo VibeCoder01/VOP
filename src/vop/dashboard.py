@@ -227,12 +227,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
-                    Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
+                    Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href='/cameras' if configure else '/', cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
-                                         if configure or key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
+                                         if configure and key != 'overview' or not configure and key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
                                    P('Configure mode' if configure else 'View mode', cls='mode-label', role='status'),
                                    Form(hidden(csrf), Input(type='hidden', name='mode', value='view' if configure else 'configure'),
-                                        Button('Switch to View' if configure else 'Configure workspace', cls='secondary'), method='post', action='/ui/mode') if role == 'operator' else None,
+                                        Button('View mode' if configure else 'Configure mode', cls='secondary', aria_label='Switch to View mode' if configure else 'Switch to Configure mode'), method='post', action='/ui/mode') if role == 'operator' else None,
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    restart_control(csrf) if configure and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
@@ -299,7 +299,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(action_problems)),
-                            method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator and (configure or source['enabled']) else None,
+                            method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator and not monitoring and (configure or source['enabled']) else None,
                        Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
                             Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
                                    disabled=not monitoring and bool(other_problems)),
@@ -412,8 +412,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return page('Configure this workspace', request, [
             P('No changes were saved. Switch to Configure mode, then reopen the form.', cls='notice') if request.query_params.get('stale') else None,
             P('Use Configure mode to manage cameras, engines, questions, monitoring intervals and saved data. Use Observe in View mode to start or pause monitoring.'),
-            Form(hidden(request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))), Input(type='hidden', name='mode', value='configure'),
-                 Button('Switch to Configure mode'), method='post', action='/ui/mode') if request.scope.get('auth_role') == 'operator' else
+            P('Use the mode switch in the sidebar to open Configure mode.') if request.scope.get('auth_role') == 'operator' else
             P('Configure mode requires operator access. Open Start VOP on this computer to sign in.')])
 
     @app.route("/logout", methods=["POST"])
@@ -424,6 +423,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route("/", methods=["GET"])
     def overview(request):
         view = request.query_params.get("view", "overview")
+        if view == 'overview' and configuring(request) and not request.headers.get('authorization'):
+            return RedirectResponse('/cameras', status_code=303)
         if view not in ("overview", "sources", "questions", "events", "metrics", "settings"):
             raise ValueError("Unknown view")
         selected = request.query_params.get("source", "")
@@ -503,7 +504,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         Section(H2("Evidence policy"), P("Retention is off by default. Enable it per source; retained frames are privacy-masked and restricted to operators.")),
                         Section(H2("Setup"), Div(A("Cameras", href="/cameras", cls="button secondary"), A("Engines", href="/engines", cls="button secondary"),
                                                 A("Other inputs", href="/?view=sources", cls="button secondary"), A("Alerts and release tools", href="/release", cls="button secondary"), cls="actions"))]
-        if view in ("overview", "sources"):
+        if view == "sources":
             observations = store.observations(selected or None, limit=20)
             content.append(Section(Div(H2("Recent Individual Observations"), A('All Individual Observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Image", "Provenance"],
                 [Tr(Td(o["question_id"], Small(source_name(o["source_id"]) + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
@@ -527,7 +528,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return page('Individual Observations', request, [
             P('Each row is one answer from a captured image. Open a result to see its saved image, if available. Several answers can share the same image.'),
             P('Image saving is off by default. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
-            Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items()), name='source', id='history-source'), cls='field'),
+            Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items() if sid in pipeline.sources), name='source', id='history-source'), cls='field'),
                  Button('Show', cls='secondary'), method='get', action='/observations', cls='filters'),
             image_settings(selected, operator, configuring(request)) if selected else P('Select an input above to see whether image saving is on or off. Use Configure mode to change it.' if operator else 'Select an input above to see its image-saving setting.', cls='notice'),
             Div(P('Newest answers first.'),

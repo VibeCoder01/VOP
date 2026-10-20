@@ -18,7 +18,7 @@ def test_default_view_switch_and_configuration_guard(settings):
         token = sign_in(client)
         controls = app.state.store.source_control('synthetic-scene')
         home = client.get('/').text
-        assert 'View mode' in home and 'Configure workspace' in home
+        assert 'View mode' in home and 'Switch to Configure mode' in home
         assert 'Manage cameras' not in home and 'Run synthetic demo' not in home
         assert 'href="/engines"' not in home and 'href="/?view=questions"' not in home
         assert 'Capture once' in home
@@ -38,7 +38,8 @@ def test_default_view_switch_and_configuration_guard(settings):
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'invalid'}).status_code == 400
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'}).status_code == 200
         assert 'Configure mode' in client.get('/cameras').text
-        assert 'Manage cameras' in client.get('/').text
+        assert client.get('/').url.path == '/cameras'
+        assert 'Manage cameras' not in client.get('/').text
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'view'}).status_code == 200
         assert 'View mode' in client.get('/?view=metrics').text
         assert app.state.store.source_control('synthetic-scene') == controls
@@ -76,8 +77,35 @@ def test_view_keeps_observations_and_images_but_hides_deletion(settings):
 def test_viewer_cannot_enter_configure_and_launcher_defaults_to_view(settings):
     with TestClient(create_app(settings, token=OWNER, viewer_token=VIEWER)) as client:
         token = sign_in(client, VIEWER)
-        assert 'Configure workspace' not in client.get('/').text
+        assert 'Switch to Configure mode' not in client.get('/').text
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'}).status_code == 403
         assert client.get('/engines').status_code == 403
         ticket = client.post('/api/v1/browser-ticket', headers={'Authorization': 'Bearer '+OWNER}).json()['url']
         assert 'View mode' in client.get(ticket).text
+
+
+def test_one_mode_toggle_and_no_observe_in_configure_or_duplicate_history(settings):
+    from bs4 import BeautifulSoup
+    app = create_app(settings, token=OWNER)
+    app.state.pipeline.run('synthetic-scene')
+    with TestClient(app) as client:
+        token = sign_in(client)
+        def mode_form(path, label):
+            page = BeautifulSoup(client.get(path).text, 'html.parser')
+            forms = page.find_all('form', action='/ui/mode')
+            assert len(forms) == 1
+            assert forms[0].find('button').get_text() == label
+            return page
+        home = mode_form('/', 'Configure mode')
+        assert home.find('h1').get_text() == 'Observe'
+        assert 'Recent Individual Observations' not in home.get_text()
+        assert 'Individual Observations' in client.get('/observations').text
+        mode_form('/configure', 'Configure mode')
+        client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'})
+        configuration = mode_form('/cameras', 'View mode')
+        assert all(a.get_text() != 'Observe' for a in configuration.find('nav').find_all('a'))
+        assert configuration.find('a', class_='brand')['href'] == '/cameras'
+        assert client.get('/').url.path == '/cameras'
+        client.post('/ui/mode', data={'csrf': token, 'mode': 'view'})
+        assert client.get('/').url.path == '/'
+        mode_form('/', 'Configure mode')
