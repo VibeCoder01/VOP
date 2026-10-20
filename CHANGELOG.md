@@ -1,5 +1,11 @@
 # Specification change log
 
+## Monitoring controls in View mode — 20 October 2026
+
+- Restore Start/Pause monitoring on Observe in View mode for operators, including starting
+  a paused input. Keep setup and interval editing in Configure mode. Preserve viewer and
+  CSRF restrictions, saved sampling intervals and worker-session cleanup on pause.
+
 ## View and Configure modes — 20 October 2026
 
 - Default to View mode on sign-in. Put setup, monitoring controls, deletion and restart in

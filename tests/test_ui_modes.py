@@ -28,7 +28,7 @@ def test_default_view_switch_and_configuration_guard(settings):
             response = client.get(path, follow_redirects=False)
             assert response.status_code == 303 and response.headers['location'] == '/configure'
         assert 'Switch to Configure mode' in client.get('/configure').text
-        for path in ('/ui/replay', '/ui/restart', '/ui/sources/synthetic-scene/monitor',
+        for path in ('/ui/replay', '/ui/restart',
                      '/ui/questions/synthetic-scene/red_square'):
             response = client.post(path, data={'csrf': token})
             assert response.status_code == 403 and response.json()['error'] == 'configure_mode_required'

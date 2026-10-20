@@ -1,5 +1,6 @@
 """Automated desktop workflow without real SSH, model weights or cameras."""
 from types import SimpleNamespace
+import re
 
 import pytest
 from starlette.testclient import TestClient
@@ -201,11 +202,18 @@ def test_browser_ticket_can_open_while_capture_is_busy(app):
 
 def test_one_click_monitoring_persists_and_pause_keeps_manual_source_enabled(app):
     from vop.service import create_app
-    auto_app = create_app(app.state.pipeline.settings, token=OWNER, auto_recover=True)
+    auto_app = create_app(app.state.pipeline.settings, token=OWNER, viewer_token=VIEWER, auto_recover=True)
     with TestClient(auto_app) as client:
         csrf = login(client)
         auto_app.state.sampler.stop()
+        assert client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'}).status_code == 200
+        auto_app.state.store.update_source('synthetic-scene', enabled=False, retain_evidence=False, sample_interval_seconds=0)
+        home = client.get('/').text
+        assert 'View mode' in home and 'Start monitoring' in home
+        assert 'Manage cameras' not in home
+        assert client.post('/ui/sources/synthetic-scene/monitor', data={'mode': 'start'}).status_code == 403
         assert client.post('/ui/sources/synthetic-scene/monitor', data={'csrf': csrf, 'mode': 'start'}).status_code == 200
+        assert 'Pause monitoring' in client.get('/').text
         assert auto_app.state.store.source_control('synthetic-scene')['sample_interval_seconds'] == 10
         auto_app.state.store.update_source('synthetic-scene', enabled=True, retain_evidence=False, sample_interval_seconds=47)
         assert client.post('/ui/sources/synthetic-scene/monitor', data={'csrf': csrf, 'mode': 'pause'}).status_code == 200
@@ -214,6 +222,13 @@ def test_one_click_monitoring_persists_and_pause_keeps_manual_source_enabled(app
         assert client.post('/ui/sources/synthetic-scene/monitor', data={'csrf': csrf, 'mode': 'pause'}).status_code == 200
         control = auto_app.state.store.source_control('synthetic-scene')
         assert control['enabled'] and control['sample_interval_seconds'] == 0
+        assert 'Start monitoring' in client.get('/').text
+        client.cookies.clear()
+        login_page = client.get('/login').text
+        token = re.search(r'name="csrf"[^>]*value="([^"]+)"', login_page)[1]
+        client.post('/login', data={'csrf': token, 'access_key': VIEWER})
+        assert 'Start monitoring' not in client.get('/').text
+        assert client.post('/ui/sources/synthetic-scene/monitor', data={'csrf': token, 'mode': 'start'}).status_code == 403
     fresh = create_app(app.state.pipeline.settings, token=OWNER)
     assert fresh.state.store.source_control('synthetic-scene')['sample_interval_seconds'] == 0
 
