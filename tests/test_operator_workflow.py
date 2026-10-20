@@ -258,19 +258,22 @@ def test_monitoring_busy_is_normal_and_pause_remains_available(app):
         store, pipeline = auto_app.state.store, auto_app.state.pipeline
         store.update_source('synthetic-scene', enabled=True, retain_evidence=False, sample_interval_seconds=47)
         count = store.health()['observation_count']
+        idle = client.get('/').text
+        assert 'Monitoring is running' in idle and 'Ready to try' not in idle
         pipeline.busy.acquire()
         try:
             assert capture_dependencies(pipeline, 'synthetic-scene') == []
             html = client.get('/').text
-            assert 'Observing…' in html and 'Needs attention' not in html
+            assert 'Monitoring is running' in html and 'Needs attention' not in html
             assert 'Another capture is running' not in html
             document = BeautifulSoup(html, 'html.parser')
             observe = document.find('form', action='/ui/sources/synthetic-scene/capture').find('button')
             pause = document.find('form', action='/ui/sources/synthetic-scene/monitor').find('button')
-            assert observe.has_attr('disabled')
+            assert not observe.has_attr('disabled')
             assert pause.text == 'Pause monitoring' and not pause.has_attr('disabled')
             result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
-            assert 'Observation in progress' in result.text
+            assert 'Observation scheduled' in result.text
+            assert auto_app.state.sampler.requested('synthetic-scene')
             assert store.health()['observation_count'] == count
             # Real missing prerequisites still need attention during a capture.
             with store.connection() as db:
@@ -284,4 +287,60 @@ def test_monitoring_busy_is_normal_and_pause_remains_available(app):
         with store.connection() as db:
             db.execute('UPDATE query_controls SET enabled=1')
         html = client.get('/').text
-        assert 'Ready to try' in html and 'Observing…' not in html
+        assert 'Ready to try' in html and 'Monitoring is running' not in html
+        auto_app.state.sampler.stop_event.clear()
+        auto_app.state.sampler.tick(100)
+        assert not auto_app.state.sampler.requested('synthetic-scene')
+        assert store.health()['observation_count'] == count + 3
+        assert store.source_control('synthetic-scene')['sample_interval_seconds'] == 0
+
+
+def test_start_and_pause_second_camera_during_manual_capture(app, monkeypatch):
+    from dataclasses import replace
+    from threading import Event, Thread
+    from vop.service import create_app
+    settings = app.state.pipeline.settings
+    first = settings.sources[0]
+    second = replace(first, source_id='second-camera', name='Second camera')
+    auto_app = create_app(replace(settings, sources=(first, second)), token=OWNER, auto_recover=True)
+    entered, finish = Event(), Event()
+    original = auto_app.state.pipeline.run
+    def held_capture(source_id):
+        auto_app.state.pipeline.busy.acquire()
+        try:
+            entered.set()
+            assert finish.wait(10)
+        finally:
+            auto_app.state.pipeline.busy.release()
+        return original(source_id)
+    monkeypatch.setattr(auto_app.state.pipeline, 'run', held_capture)
+    with TestClient(auto_app) as client:
+        csrf = login(client)
+        auto_app.state.sampler.stop()
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
+        responses = []
+        thread = Thread(target=lambda: responses.append(client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})))
+        thread.start()
+        try:
+            assert entered.wait(3)
+            endpoint = '/ui/sources/second-camera/monitor'
+            assert client.post(endpoint, data={'mode': 'start'}).status_code == 403
+            assert client.post(endpoint, data={'csrf': csrf, 'mode': 'start'}).status_code == 200
+            assert auto_app.state.store.source_control('second-camera')['sample_interval_seconds'] == 10
+            html = client.get('/').text
+            assert 'Monitoring is running' in html
+            for _ in range(2):
+                response = client.post('/ui/sources/second-camera/capture', data={'csrf': csrf})
+                assert 'Observation scheduled' in response.text
+            assert auto_app.state.sampler.requested('second-camera')
+            assert client.post(endpoint, data={'csrf': csrf, 'mode': 'pause'}).status_code == 200
+            assert auto_app.state.store.source_control('second-camera')['sample_interval_seconds'] == 0
+        finally:
+            finish.set()
+            thread.join(10)
+        assert not thread.is_alive() and responses[0].status_code == 200
+        before = auto_app.state.store.health()['observation_count']
+        auto_app.state.sampler.stop_event.clear()
+        auto_app.state.sampler.tick(100)
+        assert auto_app.state.store.health()['observation_count'] == before + 3
+        assert not auto_app.state.sampler.requested('second-camera')

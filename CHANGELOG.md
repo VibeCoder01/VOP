@@ -1,5 +1,14 @@
 # Specification change log
 
+## Continuous session status and camera turns — 20 October 2026
+
+- Keep Monitoring is running visible between samples and during other camera turns.
+- Schedule due cameras round-robin, one fresh frame per turn, retaining intervals and
+  failure backoff. Permit Start/Pause monitoring while a manual capture occupies HTTP
+  admission; retain CSRF, viewer permissions and single-frame pipeline locking.
+- Keep Observe now available during automatic monitoring. Schedule one fresh observation
+  per camera when busy; combine repeated clicks without queuing images or enabling monitoring.
+
 ## Normal monitoring activity status — 20 October 2026
 
 - Show an active observation as neutral Observing status, rather than a setup failure.
