@@ -33,6 +33,8 @@ def test_default_view_switch_and_configuration_guard(settings):
             response = client.post(path, data={'csrf': token})
             assert response.status_code == 403 and response.json()['error'] == 'configure_mode_required'
         assert client.post('/ui/mode', data={'mode': 'configure'}).status_code == 403
+        stale = client.post('/ui/replay', data={'csrf': token}, headers={'Accept': 'text/html'})
+        assert 'No changes were saved.' in stale.text and 'Switch to Configure mode' in stale.text
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'invalid'}).status_code == 400
         assert client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'}).status_code == 200
         assert 'Configure mode' in client.get('/cameras').text

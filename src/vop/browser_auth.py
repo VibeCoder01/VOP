@@ -118,7 +118,7 @@ class BrowserAuth:
                                       (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
         if needs_configure:
-            response = RedirectResponse('/configure', status_code=303) if method in ('GET', 'HEAD') else JSONResponse(
+            response = RedirectResponse('/configure' if method in ('GET', 'HEAD') else '/configure?stale=1', status_code=303) if method in ('GET', 'HEAD') or wants_html else JSONResponse(
                 {'error': 'configure_mode_required', 'message': 'Switch to Configure mode to change this workspace.', 'remediation': '/configure'}, status_code=403)
             return await response(scope, receive, secured_send)
         admitted = method == "POST" and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')

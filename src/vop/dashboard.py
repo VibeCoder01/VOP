@@ -406,6 +406,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route('/configure', methods=['GET'])
     def configure_required(request):
         return page('Configure this workspace', request, [
+            P('No changes were saved. Switch to Configure mode, then reopen the form.', cls='notice') if request.query_params.get('stale') else None,
             P('Use Configure mode to manage cameras, engines, questions, monitoring and saved data. View mode keeps your current monitoring running.'),
             Form(hidden(request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))), Input(type='hidden', name='mode', value='configure'),
                  Button('Switch to Configure mode'), method='post', action='/ui/mode') if request.scope.get('auth_role') == 'operator' else
@@ -691,7 +692,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     pipeline.engine.allow_remote = True
         if problems:
             return page("Cannot observe", request, [dependency_panel(problems), P("No camera image was acquired and no inference was requested."),
-                        action('Enable camera and observe', f'/ui/sources/{source_id}/enable-observe', request.scope['session']['csrf']) if not store.source_control(source_id)['enabled'] else None,
+                        action('Enable camera and observe', f'/ui/sources/{source_id}/enable-observe', request.scope['session']['csrf']) if configuring(request) and not store.source_control(source_id)['enabled'] else None,
                         A("Back to Observe", href="/", cls="button secondary")], view="overview")
         try:
             result = await run_in_threadpool(pipeline.run, source_id)

@@ -17,16 +17,16 @@ and read permitted saved images in View mode. Viewer credentials retain their re
 and cannot enter Configure. Mode changes do not update source controls or worker sessions.
 
 Browser middleware gates direct setup links and configuration/deletion/lifecycle writes.
-A setup GET redirects to a page with a mode-switch button; a stale write returns HTTP 403
-with `configure_mode_required` and `/configure` remediation. Reads of observation results,
+A setup GET redirects to a page with a mode-switch button; a stale browser form redirects to the same page with a no-changes-saved notice. JSON clients
+receive HTTP 403 with `configure_mode_required` and `/configure` remediation. Reads of observation results,
 evidence and JSON API metadata remain available subject to existing role checks. Bearer
 API clients retain existing permissions. Duplicate view query parameters use the same
 parsing as the dashboard. Switching modes does not wait for the capture admission slot.
 
 Windows validation commands and actual results:
 
-- `.\.venv\Scripts\python.exe -m pytest tests/test_ui_modes.py -q`: 3 passed in 3.10 s
-  after the final duplicate-query regression was added. Covers default/fresh/launcher login,
+- `.\.venv\Scripts\python.exe -m pytest tests/test_ui_modes.py -q`: 3 passed in 2.29 s
+  after the final duplicate-query and stale-form remediation regressions were added. Covers default/fresh/launcher login,
   CSRF, mode persistence, configuration navigation and direct routes, denied writes,
   unchanged source controls, saved-image access, hidden deletion, explicit mock capture,
   viewer denial and bearer compatibility.
