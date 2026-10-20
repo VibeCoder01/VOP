@@ -815,6 +815,10 @@ deployment service. Without ensurepip, use `python3 -m venv --without-pip .venv`
 
 ## Evidence, decisions and limits
 
+History-deletion tests use explicit synthetic captures with background sampling and alert
+workers disabled. They exercise busy-lock rejection explicitly, so background scheduling
+does not make deletion assertions depend on runner timing.
+
 - `reports/phase0-report.json` / `.md`: Dell inventory and honest feasibility outcome.
 - `reports/phase0-validation.md`: commands, results, changed files and all ten acceptance criteria.
 - `decisions/ADR-0003-phase0-feasibility.md`: Phase 0 recommendation and real-engine decision.
