@@ -1,5 +1,11 @@
 # Specification change log
 
+## Normal monitoring activity status — 20 October 2026
+
+- Show an active observation as neutral Observing status, rather than a setup failure.
+  Disable manual capture while busy, keep Pause monitoring available, and preserve real
+  dependency warnings. A stale manual capture reports that no extra observation was started.
+
 ## Monitoring controls in View mode — 20 October 2026
 
 - Restore Start/Pause monitoring on Observe in View mode for operators, including starting

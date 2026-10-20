@@ -244,3 +244,44 @@ def test_enable_and_observe_is_one_action_without_resuming_saved_sampling(app):
         assert 'Observation complete' in result.text
         control = auto_app.state.store.source_control('synthetic-scene')
         assert control['enabled'] and control['sample_interval_seconds'] == 0
+
+
+def test_monitoring_busy_is_normal_and_pause_remains_available(app):
+    from bs4 import BeautifulSoup
+    from vop.service import create_app
+    from vop.ui_readiness import capture_dependencies
+    auto_app = create_app(app.state.pipeline.settings, token=OWNER, auto_recover=True)
+    with TestClient(auto_app) as client:
+        csrf = login(client)
+        auto_app.state.sampler.stop()
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
+        store, pipeline = auto_app.state.store, auto_app.state.pipeline
+        store.update_source('synthetic-scene', enabled=True, retain_evidence=False, sample_interval_seconds=47)
+        count = store.health()['observation_count']
+        pipeline.busy.acquire()
+        try:
+            assert capture_dependencies(pipeline, 'synthetic-scene') == []
+            html = client.get('/').text
+            assert 'Observing…' in html and 'Needs attention' not in html
+            assert 'Another capture is running' not in html
+            document = BeautifulSoup(html, 'html.parser')
+            observe = document.find('form', action='/ui/sources/synthetic-scene/capture').find('button')
+            pause = document.find('form', action='/ui/sources/synthetic-scene/monitor').find('button')
+            assert observe.has_attr('disabled')
+            assert pause.text == 'Pause monitoring' and not pause.has_attr('disabled')
+            result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
+            assert 'Observation in progress' in result.text
+            assert store.health()['observation_count'] == count
+            # Real missing prerequisites still need attention during a capture.
+            with store.connection() as db:
+                db.execute('UPDATE query_controls SET enabled=0')
+            assert 'Needs attention' in client.get('/').text
+            assert 'No enabled questions' in client.get('/').text
+            assert client.post('/ui/sources/synthetic-scene/monitor', data={'csrf': csrf, 'mode': 'pause'}).status_code == 200
+            assert store.source_control('synthetic-scene')['sample_interval_seconds'] == 0
+        finally:
+            pipeline.busy.release()
+        with store.connection() as db:
+            db.execute('UPDATE query_controls SET enabled=1')
+        html = client.get('/').text
+        assert 'Ready to try' in html and 'Observing…' not in html
