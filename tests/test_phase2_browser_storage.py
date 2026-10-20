@@ -44,7 +44,10 @@ def login(client, key=OWNER):
     value = csrf(client)
     response = client.post("/login", data={"csrf": value, "access_key": key})
     assert response.status_code == 200 and "Observe" in response.text
-    return csrf(client, "/")
+    value = csrf(client, "/")
+    if key == OWNER:
+        assert client.post("/ui/mode", data={"csrf": value, "mode": "configure"}).status_code == 200
+    return value
 
 
 def test_browser_login_cookie_csrf_logout_and_host_policy(settings):

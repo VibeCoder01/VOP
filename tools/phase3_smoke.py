@@ -57,6 +57,7 @@ def main():
                 return response.read().decode()
         try:
             form("/login", {"csrf": csrf("/login"), "access_key": token})
+            form("/ui/mode", {"csrf": csrf("/"), "mode": "configure"})
             form("/release/rules", {"csrf": csrf(), "id": "smoke-count", "source_id": "synthetic-scene", "question_id": "red_square", "kind": "count", "severity": "warning", "threshold": "0", "window_seconds": "3600", "enabled": "on"})
             form("/ui/sources/synthetic-scene/demo", {"csrf": csrf()})
             for _ in range(80):

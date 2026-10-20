@@ -11,6 +11,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
 
+def configuring(request):
+    """UI mode is per browser session; API credentials keep their existing role."""
+    return request.scope.get('auth_role') == 'operator' and (
+        request.headers.get('authorization', '').startswith('Bearer ') or
+        request.scope.get('session', {}).get('mode', 'view') == 'configure')
+
+
 class BrowserAuth:
     def __init__(self, app, *, token, store, pipeline, viewer_token=None):
         self.app, self.token, self.store, self.pipeline = app, token.encode("ascii"), store, pipeline
@@ -51,6 +58,16 @@ class BrowserAuth:
             response = RedirectResponse("/login", status_code=303) if wants_html and not path.startswith("/api/") else JSONResponse({"error": "authentication_required"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
             return await response(scope, receive, send)
         scope["auth_role"] = role
+        # Keep observation and evidence reads available in View mode. Configuration,
+        # deletion and lifecycle operations require an explicit browser mode switch.
+        read_page = (path in ('/', '/observations', '/configure') or
+                     path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/')) and not path.endswith('/delete') or
+                     path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js') or path.startswith('/api/'))
+        if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
+            read_page = False
+        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith('/capture')
+        needs_configure = not public and not bearer and role == 'operator' and session.get('mode', 'view') != 'configure' and (
+            not read_page if method in ('GET', 'HEAD') else not view_action)
         origin = headers.get(b"origin")
         expected_origin = f"{scope.get('scheme', 'http')}://{host}".encode()
         if origin and (bearer or origin != expected_origin):
@@ -100,7 +117,11 @@ class BrowserAuth:
                                       (b"x-content-type-options", b"nosniff"),
                                       (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
-        admitted = method == "POST" and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart')
+        if needs_configure:
+            response = RedirectResponse('/configure', status_code=303) if method in ('GET', 'HEAD') else JSONResponse(
+                {'error': 'configure_mode_required', 'message': 'Switch to Configure mode to change this workspace.', 'remediation': '/configure'}, status_code=403)
+            return await response(scope, receive, secured_send)
+        admitted = method == "POST" and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
         if admitted and not self.admission.acquire(blocking=False):
             self.pipeline.skipped += 1
             await run_in_threadpool(self.store.audit, "capture_skipped", "overload")

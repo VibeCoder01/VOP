@@ -1,5 +1,13 @@
 # Specification change log
 
+## View and Configure modes — 20 October 2026
+
+- Default to View mode on sign-in. Put setup, monitoring controls, deletion and restart in
+  Configure mode with an explicit sidebar switch. Keep enabled-input observations and
+  permitted saved images available in View mode; preserve running monitoring and saved setup.
+- Enforce browser mode on direct setup routes and writes. Keep viewer restrictions, CSRF
+  and existing bearer API permissions. No additional key or account is needed.
+
 ## Automatic Trends refresh — 16 October 2026
 
 - Refresh Trends every 10 seconds, retaining the current query/filter URL. Pause while the

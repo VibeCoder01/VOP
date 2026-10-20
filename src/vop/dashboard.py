@@ -16,7 +16,7 @@ from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text, ft_svg
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
-from vop.browser_auth import BrowserAuth
+from vop.browser_auth import BrowserAuth, configuring
 from vop.config import identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec, utcnow
 from vop.inference.mock import MockInferenceEngine
@@ -29,7 +29,7 @@ CSS = """
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
 .shell{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}.sidebar{padding:32px 18px;background:#ececf0;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:auto}
 .brand{font-size:28px;letter-spacing:-1.6px;font-weight:700;padding:0 12px;color:#1d1d1f}.sidebar .app-version{display:inline;margin:0 0 0 8px;font-size:12px;line-height:1}.subtitle{font-size:11px;color:var(--muted);padding:7px 12px;letter-spacing:.4px}
-.navigation{display:grid;gap:4px;margin:34px 0 auto}.navigation a{padding:11px 14px;border-radius:9px;font-weight:500;transition:background 150ms,color 150ms}.navigation a:hover{background:#e0e0e5}.navigation a.current{background:#dbeaff;color:#0055b3}.sidebar small{font-size:11px;line-height:1.7;margin:28px 12px 12px;color:var(--muted)}.sidebar small p{font-size:11px;margin:0}.sidebar form{margin:0 10px}
+.mode-label{padding:12px;font-weight:600;color:#0055b3}.navigation{display:grid;gap:4px;margin:34px 0 auto}.navigation a{padding:11px 14px;border-radius:9px;font-weight:500;transition:background 150ms,color 150ms}.navigation a:hover{background:#e0e0e5}.navigation a.current{background:#dbeaff;color:#0055b3}.sidebar small{font-size:11px;line-height:1.7;margin:28px 12px 12px;color:var(--muted)}.sidebar small p{font-size:11px;margin:0}.sidebar form{margin:0 10px}
 .sidebar .restart-control{margin:0 10px 10px}.workspace{padding:44px 5vw 72px;min-width:0;max-width:1450px;width:100%;animation:appear 180ms ease-out}.top{display:flex;justify-content:space-between;align-items:start;gap:24px;margin-bottom:36px}.top p{margin:10px 0 0;max-width:600px}.title-line{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.app-version{font-size:12px;font-weight:400;color:var(--muted);letter-spacing:0;white-space:nowrap}
 h1{font-size:34px;letter-spacing:-1.2px;line-height:1.15;margin:0;font-weight:650}h2{font-size:21px;letter-spacing:-.5px;margin:0 0 16px;line-height:1.3;font-weight:600}h3{font-size:16px;margin:22px 0 10px}p{line-height:1.6;margin:8px 0;color:var(--muted)}small,.muted{color:var(--muted);font-size:12px}section{margin:28px 0 36px}section[id]{scroll-margin-top:24px}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border:1px solid transparent;border-radius:9px;background:var(--accent);color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms,box-shadow 150ms,transform 150ms;line-height:1.3}.button:hover,button:hover{background:#0055b3}.button:active,button:active{transform:scale(.98)}.button.secondary,button.secondary{background:white;color:#0055b3;border-color:#d3d3d9}.button.secondary:hover,button.secondary:hover{background:#f0f5ff;border-color:#a8bfdf}.button.danger,button.danger{background:white;color:#a1252c;border-color:#e4c4c7}.button.danger:hover,button.danger:hover{background:#fff0f1}button:disabled,button:disabled:hover{background:#e8e8ed;color:#6a6a70;border-color:#d8d8df;cursor:not-allowed;transform:none}button[aria-busy=true]{background:#455d78;cursor:progress}.text-link{color:#0055b3;font-size:13px;font-weight:600}.text-link:hover{text-decoration:underline}.back{display:inline-block;color:#0055b3;margin-bottom:24px;font-size:13px}
@@ -219,6 +219,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         session = request.scope["session"]
         csrf = session.setdefault("csrf", secrets.token_urlsafe(24))
         role = request.scope.get("auth_role") or session.get("role")
+        configure = configuring(request)
         navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
                       ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", "Continuous Observations (Episodes)", "/?view=events"),
                       ("metrics", "Trends", "/?view=metrics"), ("settings", "Settings", "/?view=settings")]
@@ -228,15 +229,18 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href="/", cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
-                                         if role != "viewer" or key not in ("cameras", "engines")), cls="navigation", aria_label="Main"),
+                                         if configure or key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
+                                   P('Configure mode' if configure else 'View mode', cls='mode-label', role='status'),
+                                   Form(hidden(csrf), Input(type='hidden', name='mode', value='view' if configure else 'configure'),
+                                        Button('Switch to View' if configure else 'Configure workspace', cls='secondary'), method='post', action='/ui/mode') if role == 'operator' else None,
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
-                                   restart_control(csrf) if role == 'operator' and app.state.shutdown_request else None,
+                                   restart_control(csrf) if configure and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
-                                         A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and role == "operator" else None, cls="top"),
+                                         A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and configure else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
-                         Script(src='/ui/restart.js', defer=True) if role == 'operator' and app.state.shutdown_request else None,
+                         Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None))
 
     def recorded_label(source_id, answer):
@@ -249,12 +253,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         spec = json.loads(row[0]) if row else {}
         return answer_label(answer.get("value"), spec.get("levels", ()) if spec.get("kind") == "ordinal" else ())
 
-    def image_settings(source_id, operator):
+    def image_settings(source_id, operator, configure=True):
         enabled = store.source_control(source_id)['retain_evidence']
         return Div(P('Image saving is ' + ('ON. Future captures will keep a privacy-masked still image.' if enabled else 'OFF. Future captures keep answers without saving an image.'), role='status'),
                    P('This setting affects future captures only. It does not restore unsaved or deleted images, or delete images already saved.', cls='muted'),
-                   A('Change image-saving setting', href='/ui/sources/' + source_id + '#image-saving', cls='button secondary') if operator and source_id in pipeline.sources else
-                   P('Restore this input to change its settings.' if operator else 'An operator can change image saving.', cls='muted'), cls='readiness info')
+                   A('Change image-saving setting', href='/ui/sources/' + source_id + '#image-saving', cls='button secondary') if operator and configure and source_id in pipeline.sources else
+                   P('Use Configure mode to change image saving.' if operator and not configure else 'Restore this input to change its settings.' if operator else 'An operator can change image saving.', cls='muted'), cls='readiness info')
 
     def recorded_image_status(observation, operator):
         frame_id = observation['provenance']['frame_id']
@@ -280,22 +284,23 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 result.append({"source_id": source_id, **record, "summary": summary})
         return result
 
-    def capture_controls(source, csrf, operator):
+    def capture_controls(source, csrf, operator, configure):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
         automatic = bool(getattr(pipeline, 'auto_worker', None))
         monitoring = source['enabled'] and source['sample_interval_seconds'] > 0
         other_problems = [p for p in problems if p[1] != f'/ui/sources/{sid}']
         return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
+                   P('This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
                    dependency_panel(other_problems if automatic and not source['enabled'] else problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator else P("Capture controls require operator access."),
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(other_problems if automatic and not source['enabled'] else problems)),
-                            method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator else None,
+                            method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator and (configure or source['enabled']) else None,
                        Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
                             Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
                                    disabled=not monitoring and bool(other_problems)),
-                            method='post', action=f'/ui/sources/{sid}/monitor') if operator and automatic else None,
-                       action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if operator and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
+                            method='post', action=f'/ui/sources/{sid}/monitor') if configure and automatic else None,
+                       action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if configure and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
                        cls="actions"), cls="capture-source")
 
     @app.route('/ui/sources/{source_id}/monitor', methods=['POST'])
@@ -390,6 +395,22 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         await run_in_threadpool(store.audit, "browser_login", "accepted")
         return RedirectResponse("/", status_code=303)
 
+    @app.route('/ui/mode', methods=['POST'])
+    async def set_mode(request):
+        form = await request.form()
+        if form.get('mode') not in ('view', 'configure'):
+            raise ValueError('Choose View or Configure mode')
+        request.scope['session']['mode'] = form['mode']
+        return RedirectResponse('/cameras' if form['mode'] == 'configure' else '/', status_code=303)
+
+    @app.route('/configure', methods=['GET'])
+    def configure_required(request):
+        return page('Configure this workspace', request, [
+            P('Use Configure mode to manage cameras, engines, questions, monitoring and saved data. View mode keeps your current monitoring running.'),
+            Form(hidden(request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))), Input(type='hidden', name='mode', value='configure'),
+                 Button('Switch to Configure mode'), method='post', action='/ui/mode') if request.scope.get('auth_role') == 'operator' else
+            P('Configure mode requires operator access. Open Start VOP on this computer to sign in.')])
+
     @app.route("/logout", methods=["POST"])
     def logout(request):
         request.scope["session"].clear()
@@ -405,6 +426,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Unknown source")
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
         operator = request.scope.get("auth_role") == "operator"
+        configure = configuring(request)
         zone = request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
         timezone_for(zone)
         request.scope["session"]["timezone"] = zone
@@ -417,8 +439,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             active = sum(d["summary"]["state"] == "ACTIVE" for d in data)
             unknown = sum(d["summary"]["state"] == "UNKNOWN" for d in data)
             count = store.event_count(selected or None)
-            content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if operator else None, cls="section-heading"),
-                                *(capture_controls(s, csrf, operator) for s in sources)),
+            content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if configure else None, cls="section-heading"),
+                                *(capture_controls(s, csrf, operator, configure) for s in sources)),
                         Div(*(Div(Small(metric_label(label)), StrongText(number), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats"),
                         Section(H2("Latest answers"), table(["Question", "Source", "State", "Last answer", "Observed"],
@@ -502,15 +524,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             P('Image saving is off by default. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
             Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items()), name='source', id='history-source'), cls='field'),
                  Button('Show', cls='secondary'), method='get', action='/observations', cls='filters'),
-            image_settings(selected, operator) if selected else P('Select an input above to see whether image saving is on or off and change its setting.' if operator else 'Select an input above to see its image-saving setting.', cls='notice'),
+            image_settings(selected, operator, configuring(request)) if selected else P('Select an input above to see whether image saving is on or off. Use Configure mode to change it.' if operator else 'Select an input above to see its image-saving setting.', cls='notice'),
             Div(P('Newest answers first.'),
-                A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and operator else P('Select an input to delete its full history.', cls='muted') if operator else None, cls='section-heading'),
+                A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and configuring(request) else P('Use Configure mode to delete recorded data.', cls='muted') if operator else None, cls='section-heading'),
             table(['Question / input', 'Result', 'Time', 'Image', 'Actions'], [Tr(
                 Td(o['question_id'], Small(names.get(o['source_id']) or o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
                 Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
                 Td(recorded_image_status(o, operator)),
                 Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
-                       A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if operator else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
+                       A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if configuring(request) else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
             A('Older answers', href='/observations?' + urlencode({'source': selected or '', 'before': rows[-1]['sequence']}), cls='button secondary') if len(rows) == 100 else None
         ], view='observations', notice=request.query_params.get('notice'))
 
@@ -720,9 +742,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             if summary['frame_id']:
                 content.append(P('An image was saved with this capture.' if saved['image_saved'] else
                                  'Temporary preview only. No image was saved with this capture.', cls='notice'))
-                content.append(image_settings(source_id, True))
+                content.append(image_settings(source_id, True, configuring(request)))
             content.append(A('Open Individual Observation', href='/ui/observations/' + recorded[0], cls='button secondary'))
-            content.append(A('Delete capture…', href='/ui/observations/' + recorded[0] + '/delete', cls='button danger'))
+            if configuring(request):
+                content.append(A('Delete capture…', href='/ui/observations/' + recorded[0] + '/delete', cls='button danger'))
         return page("Observation", request, content, view="overview")
 
     @app.route("/ui/sources/{source_id}/demo", methods=["POST"])
@@ -797,15 +820,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content.append(Section(H2('Recorded image'),
                 evidence_image(url, "Retained privacy-masked evidence", (store.policy(observation["source_id"], observation["question_id"], observation["question_version"]).roi,)),
                 P('This is the saved still image for this capture. It is shared by all answers from the same capture.', cls='muted'),
-                action("Delete saved image", url + "/delete", request.scope["session"]["csrf"], secondary=True), id='recorded-image'))
+                action("Delete saved image", url + "/delete", request.scope["session"]["csrf"], secondary=True) if configuring(request) else None, id='recorded-image'))
         else:
             message = ('Recorded images require operator access. Sign in as an operator to view any saved image.' if not operator else
                        'No image was captured for this observation.' if not frame_id else
                        'No saved image is available. Image saving may have been off when this capture was taken, or its image may have been deleted manually or by a retention rule.')
             content.append(Section(H2('Recorded image'), P(message, cls='notice'), id='recorded-image'))
-        content.append(image_settings(observation['source_id'], operator))
+        content.append(image_settings(observation['source_id'], operator, configuring(request)))
         content.append(Details(Summary('Technical details'), Pre(json.dumps(observation['run'], indent=2))))
-        if operator:
+        if configuring(request):
             content.append(Section(H2('Delete this capture'), P('Review the answers and shared image that will be deleted.'),
                                    A('Delete capture…', href='/ui/observations/' + observation_id + '/delete', cls='button danger')))
         return page("Individual Observation", request, content, view="observations")
