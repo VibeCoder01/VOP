@@ -65,6 +65,4 @@ def capture_dependencies(pipeline, source_id):
         health = getattr(pipeline.engine, "last_health", None)
         if not automatic and health is not None and not health.get("ready"):
             problems.append(("Worker was unavailable at the last check. Start/check the worker and SSH tunnel, then test worker health again.", "/engines"))
-    if pipeline.busy.locked():
-        problems.append(("Another capture is running. Wait for it to finish, then refresh this page.", "/"))
     return problems

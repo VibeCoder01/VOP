@@ -287,14 +287,17 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def capture_controls(source, csrf, operator, configure):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
+        busy = pipeline.busy.locked()
         automatic = bool(getattr(pipeline, 'auto_worker', None))
         monitoring = source['enabled'] and source['sample_interval_seconds'] > 0
         other_problems = [p for p in problems if p[1] != f'/ui/sources/{sid}']
+        action_problems = other_problems if automatic and not source['enabled'] else problems
         return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
                    P('This input is paused. Choose Start monitoring to begin repeated observations.' if operator and automatic else 'This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
-                   dependency_panel(other_problems if automatic and not source['enabled'] else problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator else P("Capture controls require operator access."),
+                   dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not busy) else
+                   Div(StrongText('Observing…'), P('An observation is in progress. Monitoring continues automatically. You can pause monitoring at any time.' if monitoring else 'An observation is in progress. Wait for it to finish before observing again.'), cls='readiness info', role='status') if operator else P("Capture controls require operator access."),
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
-                                                disabled=bool(other_problems if automatic and not source['enabled'] else problems)),
+                                                disabled=busy or bool(action_problems)),
                             method="post", action=f"/ui/sources/{sid}/enable-observe" if automatic and not source['enabled'] else f"/ui/sources/{sid}/capture") if operator and (configure or source['enabled']) else None,
                        Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
                             Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
@@ -673,10 +676,17 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             engine.configure_source_answer(source_id, saved.question_id, saved.version, value)
         return RedirectResponse("/?view=questions&notice=Immutable+question+version+saved", status_code=303)
 
+    def observation_in_progress(request):
+        return page('Observation in progress', request, [
+            P('VOP is already observing. No extra observation was started. If monitoring is on, it continues automatically.', cls='readiness info'),
+            A('Back to Observe', href='/', cls='button secondary')], view='overview')
+
     @app.route("/ui/sources/{source_id}/capture", methods=["POST"])
     async def capture(source_id: str, request):
         if source_id not in pipeline.sources:
             raise ValueError("Unknown source")
+        if pipeline.busy.locked():
+            return observation_in_progress(request)
         problems = capture_dependencies(pipeline, source_id)
         if not problems and not getattr(pipeline, 'auto_worker', None):
             from vop.inference.remote import RemoteInferenceEngine
@@ -697,6 +707,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         try:
             result = await run_in_threadpool(pipeline.run, source_id)
         except ProviderError as exc:
+            if exc.code == 'overloaded':
+                return observation_in_progress(request)
             from vop.operator_workflow import recovery_message
             return page("Could not observe yet", request, [P(recovery_message(exc.code), cls='readiness warning'),
                         action('Retry automatically', f'/ui/sources/{source_id}/capture', request.scope['session']['csrf']),

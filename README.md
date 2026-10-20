@@ -35,6 +35,9 @@ Use **Start monitoring** for repeated observations (10 seconds by default, or yo
 interval) and **Pause monitoring** to stop them. Pause leaves manual observations available;
 when no other scheduled source is active and no capture is in flight, it also stops the owned
 Antec session and restores the previous workload. Interval and pause choices persist.
+During a capture, Observe shows **Observing…** rather than a setup warning. **Observe now**
+is temporarily unavailable; **Pause monitoring** remains available. **Needs attention**
+indicates a setup prerequisite such as a missing question or unavailable saved credentials.
 For the established Antec pilot, VOP checks/reconnects the worker, recovers its existing key over
 trusted SSH when needed, and starts or reuses a 15-minute GPU session automatically. The owner
 authorised temporarily pausing the existing workload for these on-demand sessions; it is
