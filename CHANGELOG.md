@@ -1,5 +1,14 @@
 # Specification change log
 
+## Simpler Observe and mode navigation — 20 October 2026
+
+- Hide Observe now while that camera is monitoring. Remove the recent-observation table
+  from Observe; use Individual Observations for recorded checks.
+- Rename Removed cameras to Retired Cameras and omit retired inputs from the Individual
+  Observations filter without deleting history. Restored cameras return to the filter.
+- Use one consistent sidebar mode toggle. Omit Observe navigation and shortcuts in Configure
+  mode, with Cameras as its landing page. Keep setup prompts on the same sidebar switch.
+
 ## Deterministic history-deletion tests — 20 October 2026
 
 - Stop unrelated background workers in deletion tests. Preserve explicit busy-lock tests

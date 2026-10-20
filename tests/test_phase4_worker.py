@@ -301,9 +301,10 @@ def test_disabled_source_explains_capture_dependency_without_acquisition(app, mo
     app.state.store.update_source('synthetic-scene', enabled=False, retain_evidence=False, sample_interval_seconds=0)
     with TestClient(app) as client:
         csrf = login(client)
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         page = client.get('/').text
         assert 'Source is disabled' in page and 'Source controls' in page
-        assert re.search(r'<button[^>]*disabled[^>]*>Capture once', page)
+        assert 'Capture once' not in page
         result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
         assert 'Cannot observe' in result.text and 'No camera image was acquired' in result.text
         assert app.state.store.health()['observation_count'] == 0
@@ -325,6 +326,7 @@ def test_unavailable_worker_is_checked_before_camera_and_health_failure_is_visib
         assert 'Worker check failed (worker_unavailable)' in result.text
         assert 'No camera image was acquired' in result.text
         assert app.state.store.health()['observation_count'] == 0
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         assert 'Worker was unavailable at the last check' in client.get('/').text
 
 

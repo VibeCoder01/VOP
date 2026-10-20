@@ -137,7 +137,8 @@ def test_camera_add_generates_id_enables_and_checks_once_without_inference(app, 
         assert 'Capture succeeded' in result.text
         assert captures == ['tapo-c200'] and auto_app.state.store.source_control('tapo-c200')['enabled']
         page = client.get('/cameras/tapo-c200').text
-        assert 'Use this camera' in page and 'Edit camera' in page
+        assert 'Questions' in page and 'Edit camera' in page
+        assert '>Observe</a>' not in page
         assert 'Worker access key' not in page
         assert auto_app.state.store.health()['observation_count'] == 0
 
@@ -239,7 +240,8 @@ def test_enable_and_observe_is_one_action_without_resuming_saved_sampling(app):
     auto_app.state.store.update_source('synthetic-scene', enabled=False, retain_evidence=False, sample_interval_seconds=47)
     with TestClient(auto_app) as client:
         csrf = login(client)
-        assert 'Enable and observe' in client.get('/').text
+        assert client.get('/').url.path == '/cameras'
+        assert 'Enable and observe' not in client.get('/').text
         result = client.post('/ui/sources/synthetic-scene/enable-observe', data={'csrf': csrf})
         assert 'Observation complete' in result.text
         control = auto_app.state.store.source_control('synthetic-scene')
@@ -267,9 +269,9 @@ def test_monitoring_busy_is_normal_and_pause_remains_available(app):
             assert 'Monitoring is running' in html and 'Needs attention' not in html
             assert 'Another capture is running' not in html
             document = BeautifulSoup(html, 'html.parser')
-            observe = document.find('form', action='/ui/sources/synthetic-scene/capture').find('button')
+            observe = document.find('form', action='/ui/sources/synthetic-scene/capture')
             pause = document.find('form', action='/ui/sources/synthetic-scene/monitor').find('button')
-            assert not observe.has_attr('disabled')
+            assert observe is None
             assert pause.text == 'Pause monitoring' and not pause.has_attr('disabled')
             result = client.post('/ui/sources/synthetic-scene/capture', data={'csrf': csrf})
             assert 'Observation scheduled' in result.text
@@ -288,6 +290,7 @@ def test_monitoring_busy_is_normal_and_pause_remains_available(app):
             db.execute('UPDATE query_controls SET enabled=1')
         html = client.get('/').text
         assert 'Ready to try' in html and 'Monitoring is running' not in html
+        assert 'Observe now' in html
         auto_app.state.sampler.stop_event.clear()
         auto_app.state.sampler.tick(100)
         assert not auto_app.state.sampler.requested('synthetic-scene')

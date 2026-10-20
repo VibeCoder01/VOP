@@ -142,7 +142,7 @@ def install_history_deletion(app, store, pipeline, reliable):
             P('All answers from this capture share one raw result and image. They are deleted together. A timestamp-only gap remains so charts do not join across deleted data.') if observation_id else P('This deletes all recorded captures for this input. Camera setup, questions and engine profiles remain.'),
             P(f"{counts['gap_markers']} timestamp-only gap markers will also be deleted.") if not observation_id else None,
             P('There is no Undo. Setup and audit records remain. Backups and messages already sent are not changed.', cls='readiness warning'),
-            P(A('Pause monitoring on Observe', href='/?source=' + sid), cls='readiness warning') if not observation_id and not paused else None,
+            P('Pause monitoring in View mode before deleting history. Use the sidebar mode switch.', cls='readiness warning') if not observation_id and not paused else None,
             Form(hidden(request.scope['session']['csrf']),
                  Input(type='hidden', name='expected', value=chosen['fingerprint']),
                  Button('Delete capture' if observation_id else 'Delete history', cls='danger', disabled=not observation_id and not paused), method='post', action=request.url.path),

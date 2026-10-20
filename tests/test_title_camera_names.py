@@ -45,6 +45,7 @@ def test_version_and_camera_names_in_observation_views_with_id_fallback(app):
             capture = client.post('/ui/sources/' + sid + '/capture', data={'csrf': csrf})
             assert '<p>Front &lt;door&gt;</p>' in capture.text
         observation = store.observations()[0]
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         for path in ('/', '/observations', '/?view=events', '/?view=metrics', '/ui/observations/' + observation['id']):
             page = client.get(path).text
             assert 'class="app-version"' in page and 'v' + version('vop') in page

@@ -30,7 +30,9 @@ resumes when the new server starts. This restart reloads application code as wel
 If restart cannot complete, open **Start VOP** to clear stale instances. Advanced servers
 started outside `tools/run_dashboard.py` do not expose an enabled restart control.
 
-Saved cameras, questions and the selected backend are reused. Click **Observe now** for a result.
+Saved cameras, questions and the selected backend are reused. Click **Observe now** on a
+paused camera for one result. While continuous monitoring is on, only **Pause monitoring**
+is shown; pause first if you want a one-shot observation.
 Use **Start monitoring** for repeated observations (10 seconds by default, or your saved custom
 interval) and **Pause monitoring** to stop them. Pause leaves manual observations available;
 when no other scheduled source is active and no capture is in flight, it also stops the owned
@@ -38,7 +40,8 @@ Antec session and restores the previous workload. Interval and pause choices per
 **Monitoring is running** stays visible throughout a monitoring session, including between
 samples and while another camera takes its turn. Enabled cameras are sampled round-robin,
 one fresh frame at a time, using their saved intervals without queuing old frames. You can
-start or pause another camera while a capture runs. **Observe now** takes an image immediately
+start or pause another camera while a capture runs. For cameras not continuously monitored,
+**Observe now** takes an image immediately
 when the worker is free; otherwise it schedules one observation for that camera’s turn.
 Repeated clicks combine into one pending request per camera. Only the camera request waits;
 its image is captured fresh when processed. Open Individual Observations to read its result.
@@ -61,15 +64,21 @@ the camera ID, connection, questions and recorded history stay the same.
 
 VOP opens in **View mode** after sign-in, including Start VOP. View mode shows Observe,
 Individual Observations, Continuous Observations (Episodes) and Trends. Operators can run
-**Observe now** on an enabled input, **Start monitoring** or **Pause monitoring**, and view
+**Observe now** on an enabled camera that is not monitoring, **Start monitoring** or
+**Pause monitoring**, and view
 permitted saved images. Start also enables a paused input. Existing monitoring continues
-when you switch modes. Choose **Configure workspace** in the sidebar to manage cameras,
-engines, questions, monitoring intervals, image saving, deletion and restart. Choose **Switch to View**
+when you switch modes. Choose **Configure mode** on the single sidebar mode switch to manage cameras,
+engines, questions, monitoring intervals, image saving, deletion and restart. Choose **View mode**
 when finished. No extra access key is required. The selected mode stays in this browser
 session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
-Old setup links show a Switch to Configure mode button. A stale form submitted in View mode
+Configure mode opens Cameras and omits Observe; use the same sidebar switch to return to View mode.
+Old setup links direct you to the single sidebar mode switch. A stale form submitted in View mode
 is refused; switch modes and reopen the form. Authenticated bearer API clients keep their
 existing permissions. Modes simplify the interface; they are not separate user accounts.
+
+Observe omits the duplicate recent-observations table. Retired cameras are omitted from the
+Individual Observations filter; their stored history remains available through All inputs
+and existing history links, and restoring a camera returns it to the filter.
 
 **Individual Observations** lists each recorded answer from a capture. **Continuous
 Observations (Episodes)** groups checks into confirmed episodes; it does not mean continuous
@@ -187,7 +196,7 @@ recoverable configuration removal, not permanent erasure of history or protected
 ### Remove setup or delete recorded data
 
 - **Cameras → Remove…** is visible on each camera row and its detail page. Removal stops using
-  that camera and keeps history and protected details. **Removed cameras → Restore** brings it
+  that camera and keeps history and protected details. **Retired Cameras → Restore** brings it
   back with monitoring and evidence retention off. **Questions → Remove…** remains recoverable.
 - **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
   if that profile is selected; VOP never chooses a fallback. Model files, protected keys and

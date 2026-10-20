@@ -23,7 +23,8 @@ class HelpParser(HTMLParser):
 
 def test_metric_help_is_available_on_overview_trends_and_history(app):
     with TestClient(app) as client:
-        login(client)
+        csrf = login(client)
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         parser = HelpParser()
         for path in ('/', '/?view=metrics', '/?view=events'):
             response = client.get(path)

@@ -192,7 +192,12 @@ def test_observations_page_lists_removed_source_history_and_remove_links(app):
         page = client.get('/observations?source=' + SID)
         assert page.status_code == 200 and 'Delete capture' in page.text and 'Delete input history' in page.text
         assert client.post('/ui/sources/' + SID + '/remove', data={'csrf': csrf}).status_code == 200
-        assert client.get('/observations?source=' + SID).status_code == 200
+        from bs4 import BeautifulSoup
+        history = client.get('/observations?source=' + SID)
+        assert history.status_code == 200
+        options = BeautifulSoup(history.text, 'html.parser').find('select', id='history-source').find_all('option')
+        assert SID not in [option.get('value') for option in options]
+        assert app.state.store.observations(SID)  # Retirement keeps the recorded history.
         assert 'Delete profile' in client.get('/engines/current/delete').text
 
 
@@ -207,10 +212,14 @@ def test_camera_remove_is_visible_and_restore_returns_to_cameras(app):
         preview = client.get(path)
         assert 'Protected camera details are retained' in preview.text
         removed = client.post(path, data={'csrf': csrf})
-        assert removed.url.path == '/cameras' and 'Removed cameras' in removed.text
+        assert removed.url.path == '/cameras' and 'Retired Cameras' in removed.text
+        from bs4 import BeautifulSoup
+        options = BeautifulSoup(client.get('/observations').text, 'html.parser').find('select', id='history-source').find_all('option')
+        assert 'tapo-c200' not in [option.get('value') for option in options]
         restored = client.post('/ui/sources/tapo-c200/restore', data={'csrf': csrf})
         assert restored.url.path == '/cameras' and 'tapo-c200' in restored.text
         assert app.state.store.source_control('tapo-c200')['enabled'] is False
+        assert 'value="tapo-c200"' in client.get('/observations').text
 
 
 def test_delete_only_capture_keeps_unknown_without_fake_answers_or_ids(app):
