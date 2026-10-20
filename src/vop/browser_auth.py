@@ -65,7 +65,7 @@ class BrowserAuth:
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False
-        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith('/capture')
+        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor'))
         needs_configure = not public and not bearer and role == 'operator' and session.get('mode', 'view') != 'configure' and (
             not read_page if method in ('GET', 'HEAD') else not view_action)
         origin = headers.get(b"origin")

@@ -291,7 +291,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         monitoring = source['enabled'] and source['sample_interval_seconds'] > 0
         other_problems = [p for p in problems if p[1] != f'/ui/sources/{sid}']
         return Div(StrongText(source['name']), Small(" · " + source['kind'] + " · " + source['status']),
-                   P('This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
+                   P('This input is paused. Choose Start monitoring to begin repeated observations.' if operator and automatic else 'This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
                    dependency_panel(other_problems if automatic and not source['enabled'] else problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator else P("Capture controls require operator access."),
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(other_problems if automatic and not source['enabled'] else problems)),
@@ -299,7 +299,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                        Form(hidden(csrf), Input(type='hidden', name='mode', value='pause' if monitoring else 'start'),
                             Button('Pause monitoring' if monitoring else 'Start monitoring', cls='secondary',
                                    disabled=not monitoring and bool(other_problems)),
-                            method='post', action=f'/ui/sources/{sid}/monitor') if configure and automatic else None,
+                            method='post', action=f'/ui/sources/{sid}/monitor') if operator and automatic else None,
                        action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if configure and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
                        cls="actions"), cls="capture-source")
 
@@ -407,7 +407,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def configure_required(request):
         return page('Configure this workspace', request, [
             P('No changes were saved. Switch to Configure mode, then reopen the form.', cls='notice') if request.query_params.get('stale') else None,
-            P('Use Configure mode to manage cameras, engines, questions, monitoring and saved data. View mode keeps your current monitoring running.'),
+            P('Use Configure mode to manage cameras, engines, questions, monitoring intervals and saved data. Use Observe in View mode to start or pause monitoring.'),
             Form(hidden(request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))), Input(type='hidden', name='mode', value='configure'),
                  Button('Switch to Configure mode'), method='post', action='/ui/mode') if request.scope.get('auth_role') == 'operator' else
             P('Configure mode requires operator access. Open Start VOP on this computer to sign in.')])
