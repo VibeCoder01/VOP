@@ -1,5 +1,15 @@
 # Specification change log
 
+## Deterministic history-deletion tests — 20 October 2026
+
+- Stop unrelated background workers in deletion tests. Preserve explicit busy-lock tests
+  and production guards. Fix an intermittent Windows CI 429 during history deletion.
+
+## Remove internal worker activity from Observe — 20 October 2026
+
+- Remove the shared-worker activity panel. Keep camera monitoring status, scheduled
+  observation acknowledgements and actionable setup warnings. Scheduling is unchanged.
+
 ## Continuous session status and camera turns — 20 October 2026
 
 - Keep Monitoring is running visible between samples and during other camera turns.

@@ -15,6 +15,15 @@ from vop.service import create_app
 SID = 'synthetic-scene'
 
 
+@pytest.fixture(autouse=True)
+def stop_unrelated_background_workers(app, monkeypatch):
+    # These tests create captures explicitly. Background alert evaluation can hold
+    # reliable.lock during deletion and turn a deterministic assertion into a race.
+    # Busy-lock behavior is exercised explicitly below with both locks held.
+    monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
+    monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
+
+
 def captures(app, count=3, sid=SID):
     app.state.store.update_source(sid, enabled=True, retain_evidence=True, sample_interval_seconds=0)
     now = utcnow()

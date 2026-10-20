@@ -43,6 +43,7 @@ when the worker is free; otherwise it schedules one observation for that cameraâ
 Repeated clicks combine into one pending request per camera. Only the camera request waits;
 its image is captured fresh when processed. Open Individual Observations to read its result.
 Pending one-shot requests are held in memory and do not survive a VOP restart.
+Observe shows camera monitoring and requested-observation status; routine internal activity is hidden.
 **Needs attention** indicates a setup prerequisite such as a missing question or unavailable saved credentials; monitoring status remains visible alongside it.
 For the established Antec pilot, VOP checks/reconnects the worker, recovers its existing key over
 trusted SSH when needed, and starts or reuses a 15-minute GPU session automatically. The owner
@@ -813,6 +814,10 @@ deployment service. Without ensurepip, use `python3 -m venv --without-pip .venv`
 `python3 -m pip --python .venv/bin/python install pip -r requirements-liquid-linux-cpu.lock.txt`.
 
 ## Evidence, decisions and limits
+
+History-deletion tests use explicit synthetic captures with background sampling and alert
+workers disabled. They exercise busy-lock rejection explicitly, so background scheduling
+does not make deletion assertions depend on runner timing.
 
 - `reports/phase0-report.json` / `.md`: Dell inventory and honest feasibility outcome.
 - `reports/phase0-validation.md`: commands, results, changed files and all ten acceptance criteria.
