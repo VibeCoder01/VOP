@@ -287,7 +287,6 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def capture_controls(source, csrf, operator, configure):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
-        busy = pipeline.busy.locked()
         automatic = bool(getattr(pipeline, 'auto_worker', None))
         monitoring = source['enabled'] and source['sample_interval_seconds'] > 0
         other_problems = [p for p in problems if p[1] != f'/ui/sources/{sid}']
@@ -296,8 +295,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    P('This input is paused. Choose Start monitoring to begin repeated observations.' if operator and automatic else 'This input is disabled. Use Configure mode to enable it.', cls='notice') if not source['enabled'] and not configure else None,
                    Div(StrongText('Monitoring is running'), P('This camera takes repeated observations. Cameras take turns; monitoring stays on between samples. Pause monitoring to stop.'),
                        P('Demo engine selected. Answers are synthetic.') if pipeline.engine.synthetic else None, cls='readiness success', role='status') if operator and monitoring else None,
-                   dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring and not busy) else
-                   Div(StrongText('Observation in progress'), P('Another observation is using the shared worker. A manual observation will be scheduled for this camera’s turn.'), cls='readiness info', role='status') if operator and busy and not monitoring else P("Capture controls require operator access.") if not operator else None,
+                   dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring) else P("Capture controls require operator access.") if not operator else None,
                    P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(action_problems)),

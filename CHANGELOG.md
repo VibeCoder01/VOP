@@ -1,5 +1,10 @@
 # Specification change log
 
+## Remove internal worker activity from Observe — 20 October 2026
+
+- Remove the shared-worker activity panel. Keep camera monitoring status, scheduled
+  observation acknowledgements and actionable setup warnings. Scheduling is unchanged.
+
 ## Continuous session status and camera turns — 20 October 2026
 
 - Keep Monitoring is running visible between samples and during other camera turns.

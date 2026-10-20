@@ -323,6 +323,8 @@ def test_start_and_pause_second_camera_during_manual_capture(app, monkeypatch):
         thread.start()
         try:
             assert entered.wait(3)
+            html = client.get('/').text
+            assert 'Observation in progress' not in html and 'shared worker' not in html
             endpoint = '/ui/sources/second-camera/monitor'
             assert client.post(endpoint, data={'mode': 'start'}).status_code == 403
             assert client.post(endpoint, data={'csrf': csrf, 'mode': 'start'}).status_code == 200

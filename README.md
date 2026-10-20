@@ -43,6 +43,7 @@ when the worker is free; otherwise it schedules one observation for that cameraâ
 Repeated clicks combine into one pending request per camera. Only the camera request waits;
 its image is captured fresh when processed. Open Individual Observations to read its result.
 Pending one-shot requests are held in memory and do not survive a VOP restart.
+Observe shows camera monitoring and requested-observation status; routine internal activity is hidden.
 **Needs attention** indicates a setup prerequisite such as a missing question or unavailable saved credentials; monitoring status remains visible alongside it.
 For the established Antec pilot, VOP checks/reconnects the worker, recovers its existing key over
 trusted SSH when needed, and starts or reuses a 15-minute GPU session automatically. The owner
