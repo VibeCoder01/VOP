@@ -49,3 +49,17 @@ def test_rule_condition_selection_generated_id_and_utc_picker_export(app):
         assert rule['enabled'] is False and rule['webhook'] is False
         assert client.get('/release/export?kind=events&format=json&start=2026-10-21T12:00&end=2026-10-22T12:00', headers=HEADERS).status_code == 200
         assert client.get('/release?start=invalid', headers=HEADERS).status_code == 400
+
+
+def test_question_names_do_not_leak_between_camera_ids(app):
+    from dataclasses import replace
+    camera = replace(app.state.pipeline.settings.sources[0], source_id='second-camera', name='Second camera')
+    camera = replace(camera, questions=(replace(camera.questions[0], text='Is the gate open?'),))
+    app.state.store.configure(replace(app.state.pipeline.settings, sources=(camera,)))
+    app.state.pipeline.sources[camera.source_id] = camera
+    with TestClient(app) as client:
+        response = client.get('/release?source=second-camera', headers=HEADERS)
+        options = BeautifulSoup(response.text, 'html.parser').select('select[name=question] option')
+        assert [o.text for o in options] == ['All questions', 'Is the gate open?']
+        response = client.get('/release?source=synthetic-scene', headers=HEADERS)
+        assert 'Is the gate open?' not in response.text

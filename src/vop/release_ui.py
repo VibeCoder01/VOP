@@ -56,13 +56,20 @@ def install_release(app, settings, store, pipeline, reliable):
             raise ValueError('Choose an available Settings tab.')
         with store.connection() as db:
             cameras = {r['id']: json.loads(r['configuration']).get('name', r['id']) for r in db.execute('SELECT id,configuration FROM sources')}
-            historical_questions = list(db.execute('SELECT source_id,question_id,specification FROM question_versions ORDER BY version'))
-        questions = {}
+            historical_questions = list(db.execute('SELECT source_id,question_id,version,specification FROM question_versions ORDER BY rowid'))
+        questions, versions = {}, {}
         for row in historical_questions:
-            questions[row['question_id']] = json.loads(row['specification'])['text']
+            text = json.loads(row['specification'])['text']
+            questions[row['source_id'], row['question_id']] = text
+            versions[row['source_id'], row['question_id'], row['version']] = text
         def filters():
+            choices = {}
+            for (sid, qid), text in questions.items():
+                if not params.get('source') or sid == params['source']:
+                    choices.setdefault(qid, set()).add(text)
+            options = [(qid, next(iter(texts)) if len(texts) == 1 else qid + ' (varies by camera)') for qid, texts in choices.items()]
             return [dropdown('Camera', 'source', list(cameras.items()), params.get('source', ''), empty='All cameras'),
-                    dropdown('Question', 'question', list(questions.items()), params.get('question', ''), empty='All questions')]
+                    dropdown('Question', 'question', options, params.get('question', ''), empty='All questions')]
         navigation = Nav(*(A(label, href='/release?' + urlencode({'tab': key}), aria_current='page' if key == tab else None)
                            for key, label in tabs), cls='settings-tabs', aria_label='Settings sections')
         content = [navigation]
@@ -74,7 +81,7 @@ def install_release(app, settings, store, pipeline, reliable):
                 *dates(params), Button('Filter notifications'), method='get', action='/release', cls='filters'),
                 Section(H2('Notifications'), app.state.table(['Created / rule', 'Condition', 'Severity / status', 'Delivery', 'Action'],
                     [Tr(Td(a['created_at_utc'], P(a['rule_id'])),
-                        Td(cameras.get(a['source_id'], a['source_id']), P(questions.get(a['question_id'], a['question_id'])),
+                        Td(cameras.get(a['source_id'], a['source_id']), P(versions.get((a['source_id'], a['question_id'], a['question_version']), a['question_id'])),
                            P('Synthetic test result') if a['payload'].get('synthetic') else None),
                         Td(badge(a['severity']), P(badge(a['status'])), P(a['note'])),
                         Td(*(P(d['channel'] + ': ', badge(d['status'])) for d in a['deliveries'])),
@@ -87,7 +94,7 @@ def install_release(app, settings, store, pipeline, reliable):
             chosen = next((r for r in rules if r['id'] == params.get('rule')), {})
             kinds = [('duration', 'Active longer than'), ('count', 'Episode count greater than'), ('source_offline', 'Camera offline'), ('processing_degraded', 'Processing degraded')]
             content += [Section(H2('Rules'), app.state.table(['Rule', 'Camera / question', 'Condition', 'Threshold', 'Status'],
-                [Tr(Td(r['id']), Td(cameras.get(r['source_id'], r['source_id']), P(questions.get(r['question_id'], r['question_id']))),
+                [Tr(Td(r['id']), Td(cameras.get(r['source_id'], r['source_id']), P(questions.get((r['source_id'], r['question_id']), r['question_id']))),
                     Td(dict(kinds).get(r['kind'], r['kind'])), Td(duration(r['threshold']) if r['kind'] == 'duration' else f"{r['threshold']:.1f}"),
                     Td('Enabled' if r['enabled'] else 'Paused')) for r in rules]))]
             if is_operator:

@@ -50,6 +50,7 @@
 - `.\.venv\Scripts\python.exe tools/restart_smoke.py`: PASS; fresh interpreter
   and instance, retained operator key and 3 synthetic observations, launcher replaced
   old instance, loopback only. Cameras not connected and model weights not loaded.
+- Final camera/question naming regression: `.\.venv\Scripts\python.exe -m pytest -q tests/test_settings_tabs.py tests/test_live_workspace.py tests/test_phase3_release.py`: 24 passed in 28.44s. Filters scope names to the selected camera; notifications use their recorded immutable question version.
 - `git diff --check`: passed.
 
 ## Actual application
