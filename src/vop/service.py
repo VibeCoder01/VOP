@@ -27,7 +27,7 @@ from vop.reliable import Reliable
 
 def create_app(settings: Settings, *, token: str | None = None,
                engine: InferenceEngine | None = None, capture=None, allow_live_sources: bool = False,
-               viewer_token: str | None = None, allow_remote_inference: bool = False, auto_recover: bool = False):
+               viewer_token: str | None = None, allow_remote_inference: bool = False, auto_recover: bool = False, live_workspace: bool = False):
     token = token if token is not None else os.environ.get("VOP_API_TOKEN", "")
     if not isinstance(token, str) or len(token) < 32 or len(token) > 256 or not token.isascii() or any(c.isspace() for c in token):
         raise ValueError("Set VOP_API_TOKEN to a 32–256 character ASCII secret without whitespace")
@@ -35,6 +35,9 @@ def create_app(settings: Settings, *, token: str | None = None,
     if viewer_token and (len(viewer_token) < 32 or len(viewer_token) > 256 or not viewer_token.isascii() or any(c.isspace() for c in viewer_token) or viewer_token == token):
         raise ValueError("Viewer key must be a distinct 32–256 character ASCII secret")
     store = Store(settings.database)
+    if live_workspace:
+        from vop.live_workspace import prepare
+        settings, cleanup = prepare(store, settings)
     store.configure(settings)
     saved_profile = None
     with store.connection() as db:
@@ -53,6 +56,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     capture = capture or SourceAdapters(allow_live_sources=allow_live_sources, timeout_seconds=settings.capture_timeout_seconds)
     pipeline = Pipeline(settings, engine, store, capture)
     pipeline.engine_profile = active_profile
+    pipeline.live_workspace = live_workspace
+    pipeline.workspace_cleanup = cleanup if live_workspace else {}
     from vop.worker_session import WorkerSession
     app_session = WorkerSession()
     from vop.integration_ui import restore_cameras

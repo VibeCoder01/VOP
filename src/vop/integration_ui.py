@@ -275,11 +275,12 @@ def install_integration(app, settings, store, pipeline):
             'kind': 'worker', 'id': 'liquid-d1-3b', 'version': CHECKPOINT_REVISION,
             'worker_id': 'antec-d1', 'url': 'http://127.0.0.1:8878', 'transport': 'ssh', 'secret_ref': 'antec-worker', 'synthetic': False}
         kind = value['kind'] if record else request.query_params.get('kind', 'worker')
+        if getattr(pipeline, 'live_workspace', False) and kind != 'worker': raise ValueError('Choose an AI worker.')
         if kind not in ('mock', 'worker'): raise ValueError('Choose a worker or demo engine.')
         return app.state.page('Edit engine' if record else 'Add engine', request, [
             A('‹ Engines', href='/engines', cls='back'),
             Div(A('AI worker', href='/engines/new?kind=worker', cls='button' if kind == 'worker' else 'button secondary'),
-                A('Demo', href='/engines/new?kind=mock', cls='button' if kind == 'mock' else 'button secondary'), cls='actions') if not record else None,
+                A('Demo', href='/engines/new?kind=mock', cls='button' if kind == 'mock' else 'button secondary'), cls='actions') if not record and not getattr(pipeline, 'live_workspace', False) else None,
             Form(hidden(csrf(request)), Input(type='hidden', name='kind', value=kind),
                  Div(H2('Engine profile'), field('Name', 'name', record['name'] if record else 'Antec AI' if kind == 'worker' else 'Demo', required=True, maxlength=80),
                      P('The Antec settings are filled in. Open Connection settings only to change them.') if kind == 'worker' and not record else None,
@@ -292,7 +293,7 @@ def install_integration(app, settings, store, pipeline):
                          Div(Label('Connection type', _for='worker-transport'), Select(Option('SSH tunnel', value='ssh', selected=value.get('transport') == 'ssh'), Option('Local worker', value='local', selected=value.get('transport') == 'local'), name='transport', id='worker-transport'), cls='field'),
                          field('Worker access key', 'worker_token', type='password', autocomplete='new-password'),
                          P('Leave empty to keep the saved key. VOP can recover the Antec key.', cls='muted'),
-                         field('Synthetic worker (test only)', 'synthetic', 'on', type='checkbox', checked=value.get('synthetic', False))) if kind == 'worker' else P('Demo answers are synthetic. This engine does not analyse images.', cls='readiness warning'), cls='surface'),
+                         field('Synthetic worker (test only)', 'synthetic', 'on', type='checkbox', checked=value.get('synthetic', False)) if not getattr(pipeline, 'live_workspace', False) else None) if kind == 'worker' else P('Demo answers are synthetic. This engine does not analyse images.', cls='readiness warning'), cls='surface'),
                  P('Save stores this profile. Use engine selects it for observations.', cls='muted'),
                  Div(Button('Save engine'), A('Cancel', href='/engines/' + eid if record else '/engines', cls='button secondary'), cls='actions'),
                  method='post', action='/engines/' + eid + '/save', cls='editor')
@@ -319,6 +320,7 @@ def install_integration(app, settings, store, pipeline):
             while eid in entries or eid == 'new':
                 number += 1
                 eid = base + '-' + str(number)
+        if getattr(pipeline, 'live_workspace', False) and (form['kind'] != 'worker' or 'synthetic' in form): raise ValueError('Choose a real AI worker.')
         if form['kind'] == 'mock':
             value = record['profile'] if record and record['profile']['kind'] == 'mock' else {'kind': 'mock', 'id': 'synthetic-mock', 'answers': {**settings.mock_answers, 'human_present': False}}
         elif form['kind'] == 'worker':
@@ -458,6 +460,7 @@ def install_integration(app, settings, store, pipeline):
     @app.route("/integration/engine", methods=["POST"])
     async def engine_edit(request):
         form = await request.form()
+        if getattr(pipeline, "live_workspace", False) and (form.get("kind") != "worker" or "synthetic" in form): raise ValueError("Choose a real AI worker.")
         if form.get("kind") == "mock":
             value = {"kind": "mock", "id": "synthetic-mock", "answers": {**settings.mock_answers, "human_present": False}}
         elif form.get("kind") == "worker":

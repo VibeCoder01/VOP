@@ -225,7 +225,7 @@ def main():
         print('Advanced operator/API key:')
         print(token, flush=True)
     print('Open Start VOP for automatic sign-in. Saved setup is reused; Antec connects when needed. Press Ctrl+C to stop.', flush=True)
-    app = create_app(settings, token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=True, auto_recover=not args.manual_worker)
+    app = create_app(settings, token=token, allow_live_sources=args.allow_live_sources, allow_remote_inference=True, auto_recover=not args.manual_worker, live_workspace=args.allow_live_sources)
     if args.open_browser:
         opener = Timer(1, open_when_ready, args=(args.port, token))
         opener.daemon = True

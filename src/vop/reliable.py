@@ -57,7 +57,7 @@ def validate_rule(body, store, source_ids):
     if result.get("kind") not in ("duration", "count", "source_offline", "processing_degraded"):
         raise ValueError("Unknown rule kind")
     if result["kind"] in ("duration", "count") and questions[result["question_id"]].kind != "binary":
-        raise ValueError("Detection rules require a binary question")
+        raise ValueError("Detection rules require a Yes/No question")
     for key, default, low, high in (("threshold", 3600, 0, 31536000), ("window_seconds", 3600, 1, 31536000)):
         value = result.get(key, default)
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not low <= value <= high:
