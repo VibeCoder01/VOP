@@ -184,3 +184,86 @@ def test_removed_camera_keeps_protected_setup_and_does_not_resurrect(app, monkey
         assert '192.168.1.100' in saved and 'offline-secret' not in saved
     assert protected == values
     client.close()
+
+
+def test_permanent_removed_question_delete_preserves_history_restart_and_backup(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
+    monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
+    store, pipeline = app.state.store, app.state.pipeline
+    pipeline.run(SID)
+    current = store.questions(SID)[0]['spec']
+    store.edit_question(SID, replace(current, text='Updated red square'), store.policy(SID, 'red_square', '1'), expected_version='1')
+    pipeline.run(SID)
+    app.state.reliable.save_rule({'id': 'deleted-question-rule', 'source_id': SID, 'question_id': 'red_square', 'kind': 'count', 'threshold': 1, 'enabled': True})
+    base = f'/ui/questions/{SID}/red_square'
+    with TestClient(app) as client:
+        csrf = login(client)
+        assert client.post(base+'/remove', data={'csrf': csrf}).status_code == 200
+        before = store.observations(limit=100)
+        events = store.events()
+        page = client.get('/?view=questions')
+        assert base+'/delete' in page.text
+        preview = client.get(base+'/delete')
+        assert 'It cannot be restored from the app' in preview.text
+        assert any(r['spec'].question_id == 'red_square' for r in store.questions(SID, include_removed=True))
+        assert client.post(base+'/delete', data={'csrf': csrf, 'expected_version': 'stale'}).status_code == 400
+        assert client.post(base+'/delete', data={'csrf': csrf, 'expected_version': '2'}).status_code == 200
+        assert base+'/delete' not in client.get('/?view=questions').text
+        assert base+'/restore' not in client.get('/?view=questions').text
+        assert all(r['spec'].question_id != 'red_square' for r in store.questions(SID, include_removed=True))
+        assert store.observations(limit=100) == before and store.events() == events
+        assert app.state.reliable.rules()[0]['enabled'] is False
+        app.state.reliable.evaluate()
+        assert client.post(base+'/restore', data={'csrf': csrf}).status_code == 400
+        assert client.get(base+'/delete').status_code == 400
+        # Explicit old IDs remain reserved; replacement questions can receive a new ID.
+        form = {'csrf': csrf, 'question_id': 'red_square', 'text': 'Red square', 'kind': 'binary', 'max_gap_seconds': '60'}
+        assert client.post(f'/ui/questions/{SID}/new', data=form).status_code == 400
+        form['question_id'] = ''
+        assert client.post(f'/ui/questions/{SID}/new', data=form).status_code == 200
+        assert 'red_square_2' in {r['spec'].question_id for r in store.questions(SID)}
+    with store.connection() as db:
+        assert db.execute('SELECT enabled,current_version FROM query_controls WHERE source_id=? AND question_id=?', (SID, 'red_square')).fetchone()[:] == (0, '2')
+        assert db.execute("SELECT 1 FROM release_settings WHERE id=?", ('deleted_question:'+SID+':red_square',)).fetchone()
+        assert db.execute('SELECT 1 FROM question_versions WHERE source_id=? AND question_id=?', (SID, 'red_square')).fetchone()
+        assert db.execute("SELECT 1 FROM audit WHERE action='question_delete'").fetchone()
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+    fresh = create_app(pipeline.settings, token=OWNER)
+    assert all(r['spec'].question_id != 'red_square' for r in fresh.state.store.questions(SID, include_removed=True))
+    assert fresh.state.store.observations(limit=100) == before
+    assert fresh.state.store.events() == events
+    config = configuration(pipeline.settings, store, app.state.reliable)
+    saved = backup(store, config, tmp_path/'deleted-question-backup')
+    restored = restore(saved, tmp_path/'deleted-question-restored')
+    recovered = create_app(load_config(restored), token=OWNER)
+    assert all(r['spec'].question_id != 'red_square' for r in recovered.state.store.questions(SID, include_removed=True))
+    assert recovered.state.store.observations(limit=100) == before
+    assert recovered.state.store.events() == events
+
+
+def test_permanent_question_delete_permissions_csrf_busy_and_active_guard(app, monkeypatch):
+    monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
+    monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
+    base = f'/ui/questions/{SID}/red_square'
+    with TestClient(app) as client:
+        assert client.get(base+'/delete').status_code == 401
+        assert client.post(base+'/delete', headers={'Authorization': 'Bearer '+VIEWER}).status_code == 403
+        csrf = login(client)
+        assert client.get(base+'/delete').status_code == 400  # Remove first.
+        client.post(base+'/remove', data={'csrf': csrf})
+        assert client.post(base+'/delete', data={'expected_version': '1'}).status_code == 403
+        form = {'csrf': csrf, 'expected_version': '1'}
+        for lock in (app.state.pipeline.busy, app.state.reliable.lock):
+            lock.acquire()
+            try:
+                assert client.post(base+'/delete', data=form).status_code == 429
+            finally:
+                lock.release()
+        assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID, include_removed=True))
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
+        assert client.post(base+'/delete', data=form).status_code == 403
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
+        # A restored question must not be deleted by an earlier confirmation form.
+        client.post(base+'/restore', data={'csrf': csrf})
+        assert client.post(base+'/delete', data=form).status_code == 400
+        assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID))

@@ -1,5 +1,13 @@
 # Specification change log
 
+## Setup-only Configure navigation and deleted questions — 21 October 2026
+
+- Show only Cameras, Engines, Questions and Settings in Configure navigation. Remove its
+  viewing shortcuts; keep recorded-data administration under Settings → Manage saved data.
+- Add a confirmed Delete permanently option for removed questions. Keep historical answers,
+  versions, images, episodes and disabled rules; prevent app restoration or seed-config
+  resurrection. Reserve historical IDs and generate unused IDs for replacement questions.
+
 ## Simpler Observe and mode navigation — 20 October 2026
 
 - Hide Observe now while that camera is monitoring. Remove the recent-observation table

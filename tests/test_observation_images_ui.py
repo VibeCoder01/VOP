@@ -14,7 +14,7 @@ def test_new_names_and_image_setting_are_clear_without_changing_it(app):
         csrf = login(client)
         page = client.get('/observations?source=' + SID).text
         assert '<h1>Individual Observations</h1>' in page
-        assert 'Continuous Observations (Episodes)' in page
+        assert 'Continuous Observations (Episodes)' not in page  # Configure has setup navigation only.
         assert 'Image saving is OFF' in page
         assert 'temporary capture preview is not a saved image' in page
         assert '/ui/sources/' + SID + '#image-saving' in page
@@ -78,7 +78,7 @@ def test_camera_detail_links_directly_to_image_setting(app):
         detail = client.get('/cameras/tapo-c200').text
         assert 'Image saving is OFF' in detail
         assert '/ui/sources/tapo-c200#image-saving' in detail
-        assert 'Individual Observations' in detail
+        assert 'href="/observations' not in detail
         assert app.state.store.source_control('tapo-c200') == before
 
 

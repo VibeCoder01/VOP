@@ -200,7 +200,7 @@ class Store:
 
     def questions(self, source_id: str, *, active_only: bool = False, include_removed: bool = False) -> list[dict]:
         with self.connection() as connection:
-            rows = connection.execute("SELECT v.specification,c.enabled,p.policy_json FROM query_controls c JOIN question_versions v ON v.source_id=c.source_id AND v.question_id=c.question_id AND v.version=c.current_version JOIN query_policies p ON p.source_id=v.source_id AND p.question_id=v.question_id AND p.version=v.version WHERE c.source_id=? AND (?=0 OR c.enabled=1) ORDER BY c.rowid", (source_id, active_only)).fetchall()
+            rows = connection.execute("SELECT v.specification,c.enabled,p.policy_json FROM query_controls c JOIN question_versions v ON v.source_id=c.source_id AND v.question_id=c.question_id AND v.version=c.current_version JOIN query_policies p ON p.source_id=v.source_id AND p.question_id=v.question_id AND p.version=v.version WHERE c.source_id=? AND (?=0 OR c.enabled=1) AND NOT EXISTS (SELECT 1 FROM release_settings WHERE id='deleted_question:' || c.source_id || ':' || c.question_id) ORDER BY c.rowid", (source_id, active_only)).fetchall()
         result = []
         for row in rows:
             body = json.loads(row["specification"])

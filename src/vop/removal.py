@@ -1,8 +1,8 @@
-"""Recoverable configuration removal; immutable observations remain available."""
+"""Configuration removal/deletion; historical observations and versions remain available."""
 from dataclasses import asdict, replace
 import json
 
-from fasthtml.components import A, Button, Form, H2, P, Section
+from fasthtml.components import A, Button, Form, H2, Input, P, Section
 from starlette.responses import RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
@@ -19,7 +19,8 @@ def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=
                 for sid in list(pipeline.sources) for r in store.questions(sid, include_removed=True)
                 if store.is_removed(sid, r['spec'].question_id)]
     return Section(H2(heading or "Removed " + view), P("Restore keeps monitoring disabled. History and protected camera details are retained."),
-                   *(Section(P(label), action("Restore", url, csrf, secondary=True)) for label, url in rows)) if rows else None
+                   *(Section(P(label), action("Restore", url, csrf, secondary=True),
+                             A('Delete permanently…', href=url.removesuffix('/restore') + '/delete', cls='button danger') if view == 'questions' else None) for label, url in rows)) if rows else None
 
 
 def install_removal(app, store, pipeline, reliable):
@@ -121,3 +122,44 @@ def install_removal(app, store, pipeline, reliable):
     def restore_question(source_id: str, question_id: str):
         change(source_id, question_id, restore=True)
         return RedirectResponse('/?view=questions&notice=Restored.+Question+disabled', status_code=303)
+
+    def delete_removed_question(source_id, question_id, expected_version):
+        if not pipeline.busy.acquire(False):
+            raise ProviderError('overloaded', 'An observation is running. Wait, then try deletion again')
+        try:
+            if not reliable.lock.acquire(False):
+                raise ProviderError('overloaded', 'Alert processing is running. Wait, then try deletion again')
+            try:
+                record = checked(source_id, question_id, removed=True)
+                if expected_version != record['spec'].version:
+                    raise ValueError('Question changed. Reopen the deletion page before confirming')
+                with store.connection() as db:
+                    db.execute('BEGIN IMMEDIATE')
+                    db.execute('INSERT INTO release_settings VALUES(?,?)',
+                               (f'deleted_question:{source_id}:{question_id}', dumps({'deleted_at_utc': utcnow().isoformat()})))
+                    # Retain disabled version controls and the removal marker so historical
+                    # replay stays identical and seed configuration cannot resurrect this ID.
+                    db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)',
+                               (utcnow().isoformat(), 'question_delete', dumps({'source_id': source_id, 'question_id': question_id})))
+            finally:
+                reliable.lock.release()
+        finally:
+            pipeline.busy.release()
+
+    @app.route('/ui/questions/{source_id}/{question_id}/delete', methods=['GET', 'POST'])
+    async def delete_question(request, source_id: str, question_id: str):
+        if request.scope.get('auth_role') != 'operator':
+            return Response('Operator required', status_code=403)
+        record = checked(source_id, question_id, removed=True)
+        if request.method == 'POST':
+            form = await request.form()
+            await run_in_threadpool(delete_removed_question, source_id, question_id, str(form.get('expected_version', '')))
+            return RedirectResponse('/?view=questions&notice=Question+deleted.+Recorded+history+kept.', status_code=303)
+        return app.state.page('Delete removed question', request, [
+            H2(record['spec'].text),
+            P('This permanently deletes the removed question from configuration. It cannot be restored from the app.'),
+            P('Recorded answers, images, episodes and the question details needed to read that history are kept. Previously disabled alert rules stay disabled.'),
+            P('The question ID stays reserved. Leave the ID blank when adding a replacement question.'),
+            Form(hidden(request.scope['session']['csrf']), Input(type='hidden', name='expected_version', value=record['spec'].version),
+                 Button('Delete permanently', cls='danger'), method='post', action=request.url.path),
+            A('Cancel', href='/?view=questions', cls='button secondary')], view='questions')

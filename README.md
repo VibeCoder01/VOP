@@ -71,7 +71,9 @@ when you switch modes. Choose **Configure mode** on the single sidebar mode swit
 engines, questions, monitoring intervals, image saving, deletion and restart. Choose **View mode**
 when finished. No extra access key is required. The selected mode stays in this browser
 session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
-Configure mode opens Cameras and omits Observe; use the same sidebar switch to return to View mode.
+Configure mode opens Cameras and lists only Cameras, Engines, Questions and Settings;
+Individual Observations, Continuous Observations (Episodes) and Trends stay in View mode.
+Saved-data deletion remains available through Settings → Manage saved data. Use the same sidebar switch to return to View mode.
 Old setup links direct you to the single sidebar mode switch. A stale form submitted in View mode
 is refused; switch modes and reopen the form. Authenticated bearer API clients keep their
 existing permissions. Modes simplify the interface; they are not separate user accounts.
@@ -189,6 +191,11 @@ Protected camera details are retained so setup can be recovered. Use **Removed s
 → Restore** on the corresponding listing to recover an item. Restore leaves that source or
 question disabled; source restore also stops sampling and switches evidence retention off.
 Alert rules remain disabled until explicitly edited. Restore a removed source before its questions.
+To discard a removed question, open **Questions → Removed questions → Delete permanently…**.
+Review and confirm the deletion. It then disappears from active and removed listings and
+cannot be restored from the app. Recorded answers, images, episodes and their historical
+question details remain. Its old ID stays reserved; leave the ID blank to create a replacement.
+The deletion survives restart and backup/restore. An older backup can still restore its older setup.
 Removing every source or question is supported. Configuration exports include current items only;
 full database backups preserve removal records, history and recovery information. Removal is
 recoverable configuration removal, not permanent erasure of history or protected credentials.
@@ -201,7 +208,7 @@ recoverable configuration removal, not permanent erasure of history or protected
 - **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
   if that profile is selected; VOP never chooses a fallback. Model files, protected keys and
   recorded observations are kept. Shared keys are not erased by profile deletion.
-- **Individual Observations → Delete capture…** previews deletion of every answer that shares that capture,
+- **Configure mode → Settings → Manage saved data → Delete capture…** previews deletion of every answer that shares that capture,
   its raw result and its retained image. It deletes related alerts/delivery records, pauses
   affected alert rules, and rebuilds episodes/metrics from remaining history. A timestamp-only
   gap marker remains to prevent charts from joining across deleted data; it is not a model
