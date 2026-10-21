@@ -9,7 +9,9 @@ from urllib.parse import urlsplit
 
 from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fasthtml.common import to_xml
+from vop.display import duration
 
 from vop.config import SourceSpec, identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec
@@ -237,6 +239,7 @@ def install_integration(app, settings, store, pipeline):
             Div(P(source_id), Div(A('Rename', href='/cameras/' + source_id + '/rename', cls='button secondary'),
                                  A('Edit camera', href='/cameras/' + source_id + '/edit', cls='button secondary'), cls='actions'), cls='section-heading'),
             Section(H2('Connection'), dependency_panel(problems, ready='Saved details are available. Test the connection to check the camera.'),
+                    P('Camera test scheduled. ', A('Open test result', href='/integration/cameras/' + source_id + '/test'), cls='notice') if app.state.sampler.camera_test_requested(source_id) else None,
                     P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
                     Form(hidden(csrf(request)), Button('Test camera', disabled=bool(problems)), method='post', action='/integration/cameras/' + source_id + '/test'),
                     P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
@@ -405,7 +408,7 @@ def install_integration(app, settings, store, pipeline):
                     *(worker_health_content(pipeline.engine.last_health) if active and getattr(pipeline.engine, 'last_health', None) else [])),
             Details(Summary('Session controls'), P('Antec sessions pause the other GPU workload. The workload returns when the session ends.'),
                     P('A VOP session is active.' if session['active'] else 'No VOP session is active.'),
-                    Form(hidden(csrf(request)), Select(*(Option(str(m) + ' minutes', value=str(m)) for m in (15, 30, 60)), name='minutes', aria_label='Session length'),
+                    Form(hidden(csrf(request)), Select(*(Option(duration(m * 60), value=str(m)) for m in (15, 30, 60)), name='minutes', aria_label='Session length'),
                          Button('Start session', disabled=session['active']), method='post', action='/integration/session/start'),
                     action('Stop session', '/integration/session/stop', csrf(request), secondary=True) if session['active'] else None) if active and antec_profile(pipeline.engine) else None,
             Details(Summary('Engine details'), Pre(dumps({k: v for k, v in value.items() if k not in ('secret_ref', 'answers')}))),
@@ -547,30 +550,63 @@ def install_integration(app, settings, store, pipeline):
     async def camera_save(request):
         return await camera_edit(request)
 
+    def run_camera_test(source_id):
+        source = pipeline.sources[source_id]
+        try:
+            frame = SourceAdapters(allow_live_sources=True, timeout_seconds=settings.capture_timeout_seconds).capture(source)
+            masked = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
+            pipeline.latest_preview = (source_id, frame.frame_id, masked.payload)
+            diagnostic = {"source_id": source_id, "status": "capture_success", "width": frame.width,
+                          "height": frame.height, "frame_id": frame.frame_id, "captured_at_utc": frame.captured_at_utc.isoformat()}
+        except ProviderError as exc:
+            diagnostic = {"source_id": source_id, "status": exc.code}
+        except Exception:
+            diagnostic = {"source_id": source_id, "status": "capture_failed"}
+        store.audit("camera_connection_test", dumps(diagnostic))
+        with store.connection() as db:
+            db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_test:" + source_id, dumps(diagnostic)))
+
+    @app.route("/integration/cameras/{source_id}/test", methods=["GET"])
+    def camera_test_result(source_id: str, request):
+        if denied(request): return denied(request)
+        camera_record(source_id)
+        pending = app.state.sampler.camera_test_requested(source_id)
+        content = []
+        if pending:
+            content = [P('Camera test scheduled. It will start as soon as the current observation finishes.', cls='notice', role='status'),
+                       P('This page updates automatically. No inference is requested and evidence is not retained.')]
+        else:
+            with store.connection() as db:
+                row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
+            diagnostic = json.loads(row[0]) if row else {}
+            if diagnostic.get('status') == 'capture_success':
+                content = [P(f"Capture succeeded: {diagnostic['width']} × {diagnostic['height']}. No inference was requested; evidence was not retained.", cls='readiness success')]
+                preview = pipeline.latest_preview
+                if preview and preview[:2] == (source_id, diagnostic.get('frame_id')):
+                    content.append(evidence_image(f'/ui/preview/{source_id}/{preview[1]}', 'Privacy-masked connection preview'))
+                else:
+                    content.append(P('The temporary preview has expired. Test again for a new image.', cls='muted'))
+            elif diagnostic:
+                from vop.operator_workflow import recovery_message
+                content = [P('The camera could not connect yet.', cls='readiness warning'), P(recovery_message(diagnostic['status'])),
+                           A('Correct camera details', href='/cameras/' + source_id + '/edit', cls='button secondary'),
+                           Details(Summary('Technical details'), Pre(diagnostic['status']))]
+            else:
+                content = [P('This camera has not been tested yet.')]
+            content.append(action('Test camera again', f'/integration/cameras/{source_id}/test', csrf(request)))
+        result = app.state.page('Camera connection test', request, [*content, A('Back to camera', href='/cameras/' + source_id)], view='cameras')
+        return HTMLResponse(to_xml(result), headers={'Refresh': '1'} if pending else {})
+
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])
     async def camera_test(source_id: str, request):
-        if source_id not in pipeline.sources or pipeline.sources[source_id].kind != "rtsp":
-            raise ValueError("Choose a saved camera before testing its connection")
-        busy()
-        try:
-            source = pipeline.sources[source_id]
+        if denied(request): return denied(request)
+        if source_id not in pipeline.sources or pipeline.sources[source_id].kind != 'rtsp':
+            raise ValueError('Choose a saved camera before testing its connection')
+        if app.state.sampler.camera_test_requested(source_id) or not pipeline.busy.acquire(False):
+            app.state.sampler.request_camera_test(source_id, lambda: run_camera_test(source_id))
+        else:
             try:
-                frame = await run_in_threadpool(SourceAdapters(allow_live_sources=True, timeout_seconds=settings.capture_timeout_seconds).capture, source)
-                masked = await run_in_threadpool(preprocess, frame, source.settings.get("privacy_masks", []), preview=True)
-                pipeline.latest_preview = (source_id, frame.frame_id, masked.payload)
-                content = [P(f"Capture succeeded: {frame.width} × {frame.height}. No inference was requested; evidence was not retained.", cls="readiness success"), evidence_image(f"/ui/preview/{source_id}/{frame.frame_id}", "Privacy-masked connection preview")]
-                diagnostic = {"source_id": source_id, "status": "capture_success", "width": frame.width, "height": frame.height, "captured_at_utc": frame.captured_at_utc.isoformat()}
-                store.audit("camera_connection_test", dumps(diagnostic))
-            except ProviderError as exc:
-                from vop.operator_workflow import recovery_message
-                content = [P('The camera could not connect yet.', cls='readiness warning'), P(recovery_message(exc.code)),
-                           action('Retry camera connection', f'/integration/cameras/{source_id}/test', request.scope['session']['csrf']),
-                           A('Correct camera details', href='/cameras/' + source_id + '/edit', cls='button secondary'),
-                           Details(Summary('Technical details'), Pre(exc.code))]
-                diagnostic = {"source_id": source_id, "status": exc.code}
-                store.audit("camera_connection_test", dumps(diagnostic))
-            with store.connection() as db:
-                db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_test:" + source_id, dumps(diagnostic)))
-        finally:
-            pipeline.busy.release()
-        return app.state.page("Camera connection test", request, [*content, A("Back to camera", href="/cameras/" + source_id)], view="cameras")
+                await run_in_threadpool(run_camera_test, source_id)
+            finally:
+                pipeline.busy.release()
+        return RedirectResponse(f'/integration/cameras/{source_id}/test', status_code=303)

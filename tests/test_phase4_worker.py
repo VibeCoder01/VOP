@@ -244,20 +244,47 @@ def test_camera_connection_form_uses_fixture_and_never_transmits_to_engine(app, 
         assert not app.state.store.source_control("tapo-c210")["enabled"]
 
 
-def test_busy_camera_test_renders_browser_guidance_and_keeps_api_json(app):
+def test_busy_camera_test_schedules_and_keeps_api_json(app, monkeypatch):
     with TestClient(app) as client:
         csrf = login(client)
         body = {"csrf": csrf, "source_id": "tapo-c200", "model": "C200", "endpoint": "rtsp://192.168.1.100:554/stream1", "username": "offline-user", "password": "offline-fake-password"}
         assert client.post("/integration/camera", data=body).status_code == 200
+        from vop.inputs.sources import SourceAdapters, capture_inline
+        app.state.sampler.stop()
+        app.state.sampler.stop_event.clear()
+        frame = capture_inline(app.state.pipeline.sources['synthetic-scene'])
+        calls = []
+        def capture(self, source):
+            calls.append(source.source_id)
+            return replace(frame, source_id=source.source_id)
+        monkeypatch.setattr(SourceAdapters, 'capture', capture)
+        monkeypatch.setattr(app.state.pipeline.engine, 'infer', lambda *_: pytest.fail('Test must not infer'))
+        control = app.state.store.source_control('tapo-c200')
+        from vop.browser_auth import BrowserAuth
+        middleware = app.middleware_stack
+        while not isinstance(middleware, BrowserAuth):
+            middleware = middleware.app
+        middleware.admission.acquire()
         app.state.pipeline.busy.acquire()
         try:
             page = client.post("/integration/cameras/tapo-c200/test", data={"csrf": csrf, "capture_consent": "on"}, headers={"Accept": "text/html"})
-            assert page.status_code == 429 and "text/html" in page.headers["content-type"]
-            assert "Another capture or inference is running" in page.text
+            assert page.status_code == 200 and "Camera test scheduled" in page.text
+            assert page.headers['refresh'] == '1'
+            client.post('/integration/cameras/tapo-c200/test', data={'csrf': csrf})
+            app.state.sampler.tick()
+            assert not calls
+            assert len(app.state.sampler.camera_tests) == 1
             response = client.post("/api/v1/sources/synthetic-scene/capture", headers={"Authorization": "Bearer " + OWNER})
             assert response.status_code == 429 and response.json() == {"error": "overloaded"}
         finally:
             app.state.pipeline.busy.release()
+            middleware.admission.release()
+        app.state.sampler.tick()
+        assert calls == ['tapo-c200']
+        page = client.get('/integration/cameras/tapo-c200/test')
+        assert 'Capture succeeded' in page.text and 'refresh' not in page.headers
+        assert app.state.store.source_control('tapo-c200') == control
+        assert app.state.store.health()['observation_count'] == 0
 
 
 def test_session_buttons_require_real_pilot_profile_without_permission_checkbox(app, monkeypatch):

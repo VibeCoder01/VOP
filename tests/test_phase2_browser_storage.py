@@ -188,7 +188,7 @@ def test_chart_marks_gaps_without_joining_unknown_intervals():
     assert len(lines) == 3
     assert [len(line['points'].split()) for line in lines] == [3, 1, 1]
     assert len(soup.select('circle')) == 5 and len(soup.select('rect.unobserved')) == 3
-    assert soup.select('circle')[-1].find('title').text == '20:22 · value 1'
+    assert soup.select('circle')[-1].find('title').text == '20:22 · value 1.0'
     assert 'points are intentionally not joined' in html
     contiguous = BeautifulSoup(to_xml(chart(points[:3], 'Contiguous samples')), 'html.parser')
     assert not contiguous.select('rect.unobserved') and len(contiguous.select('polyline')) == 1

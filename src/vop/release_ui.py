@@ -7,6 +7,7 @@ from fasthtml.components import A, Button, Div, Form, H2, Input, Option, P, Pre,
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
+from vop.display import duration, duration_input
 from vop.dashboard import field, hidden, badge
 from vop.reliable import configuration, csv_export
 from vop.storage import dumps
@@ -50,9 +51,9 @@ def install_release(app, settings, store, pipeline, reliable):
                 Form(hidden(csrf), field("Rule ID", "id", required=True),
                      Select(*(Option(sid, value=sid) for sid in pipeline.sources), name="source_id", aria_label="Source"),
                      field("Rule question ID", "question_id", required=True),
-                     Select(*(Option(label, value=k) for k, label in (("duration", "Active longer than (sampled seconds)"), ("count", "Episode count greater than"), ("source_offline", "Source offline"), ("processing_degraded", "Processing degraded"))), name="kind", aria_label="Rule kind"),
-                     field("Threshold", "threshold", "3600", type="number", min="0", max="31536000", step="any"),
-                     field("Count window (seconds)", "window_seconds", "3600", type="number", min="1", max="31536000"),
+                     Select(*(Option(label, value=k) for k, label in (("duration", "Active longer than (sampled duration)"), ("count", "Episode count greater than"), ("source_offline", "Source offline"), ("processing_degraded", "Processing degraded"))), name="kind", aria_label="Rule kind"),
+                     field("Threshold (H:M:S for duration; number for counts)", "threshold", "0", required=True, placeholder="00:01:00 or 2"),
+                     field("Count window (H:M:S)", "window_seconds", "01:00:00.0", required=True),
                      Select(*(Option(s, value=s) for s in ("info", "warning", "critical")), name="severity", aria_label="Severity"),
                      field("Enabled", "enabled", "on", type="checkbox", checked=True), field("Optional webhook (requires server environment configuration)", "webhook", "on", type="checkbox"),
                      P("Webhook delivery needs VOP_WEBHOOK_URL and VOP_WEBHOOK_ALLOWED_HOSTS in the server environment. They are not configured; dashboard notifications still work.", cls="readiness warning") if not os.environ.get('VOP_WEBHOOK_URL') or not os.environ.get('VOP_WEBHOOK_ALLOWED_HOSTS') else P("Webhook environment is present; endpoint authentication/reachability is checked at delivery.", cls="readiness info"),
@@ -68,7 +69,7 @@ def install_release(app, settings, store, pipeline, reliable):
             content.extend([Section(H2("Configuration and backup"), A("Export current configuration", href="/release/config", cls="button secondary"),
                             P("Configuration includes local file references and environment variable names, never their secret values. Backup, restore and import run offline with tools/release.py; stop VOP first. Backups contain evidence when retained and need the same access protection as the live database.")),
                             Section(H2("Retention preview"), P("No automatic deletion until a policy is explicitly applied. Applied policies run hourly while VOP is running. Raw detail, evidence and audit have separate windows. Normalized history, events and metrics remain for replay. Backups are managed separately by the operator."),
-                                    Form(hidden(csrf), *(field(label, k, "30" if k != "audit" else "365", type="number", min="1", max="36500") for k, label in (("evidence", "Evidence days"), ("raw", "Raw provider detail days"), ("audit", "Audit days"))),
+                                    Form(hidden(csrf), *(field(label, k, duration((30 if k != "audit" else 365) * 86400), required=True) for k, label in (("evidence", "Evidence retention (H:M:S; whole days)"), ("raw", "Raw detail retention (H:M:S; whole days)"), ("audit", "Audit retention (H:M:S; whole days)"))),
                                          Button("Preview deletion"), method="post", action="/release/retention/preview")),
                             Section(H2("Audit history"), Pre(dumps(audit_rows(store))))])
         return app.state.page("Alerts and release tools", request, content, view="settings", notice=params.get("notice"))
@@ -77,7 +78,7 @@ def install_release(app, settings, store, pipeline, reliable):
     async def rule_edit(request):
         form = await request.form()
         body = {k: str(form.get(k, "")) for k in ("id", "source_id", "question_id", "kind", "severity")}
-        body.update(threshold=float(form["threshold"]), window_seconds=float(form["window_seconds"]), enabled="enabled" in form, webhook="webhook" in form)
+        body.update(threshold=duration_input(form["threshold"]) if body["kind"] == "duration" else float(form["threshold"]), window_seconds=duration_input(form["window_seconds"]), enabled="enabled" in form, webhook="webhook" in form)
         await run_in_threadpool(reliable.save_rule, body)
         return RedirectResponse("/release?notice=Rule+revision+saved", status_code=303)
 
@@ -111,7 +112,13 @@ def install_release(app, settings, store, pipeline, reliable):
         if mode not in ("preview", "apply"):
             raise ValueError("Unknown maintenance action")
         form = await request.form()
-        days = {k: int(form[k]) for k in ("evidence", "raw", "audit")}
+        days = {}
+        for k in ('evidence', 'raw', 'audit'):
+            value = str(form[k])
+            seconds = duration_input(value) if ':' in value else int(value) * 86400
+            if seconds % 86400:
+                raise ValueError('Retention must be a whole number of days, for example 24:00:00.')
+            days[k] = int(seconds / 86400)
         result = await run_in_threadpool(reliable.retention, days, apply=mode == "apply")
         content = [Pre(dumps(result))]
         if mode == "preview":

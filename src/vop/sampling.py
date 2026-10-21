@@ -16,6 +16,15 @@ class Sampler:
         self.last_source = None
         self.pending = set()
         self.pending_lock = Lock()
+        self.camera_tests = {}
+
+    def request_camera_test(self, source_id, callback):
+        with self.pending_lock:
+            self.camera_tests.setdefault(source_id, callback)
+
+    def camera_test_requested(self, source_id):
+        with self.pending_lock:
+            return source_id in self.camera_tests
 
     def request(self, source_id):
         """Coalesce one pending intent per camera; acquire its fresh frame on its turn."""
@@ -41,6 +50,20 @@ class Sampler:
 
     def tick(self, now=None):
         now = monotonic() if now is None else now
+        # User-requested connection tests take the next free slot, before sampling.
+        with self.pending_lock:
+            self.camera_tests = {sid: task for sid, task in self.camera_tests.items() if sid in self.pipeline.sources}
+            test = next(iter(self.camera_tests.items()), None)
+        if test:
+            if self.stop_event.is_set() or not self.pipeline.busy.acquire(False):
+                return
+            try:
+                test[1]()
+            finally:
+                with self.pending_lock:
+                    self.camera_tests.pop(test[0], None)
+                self.pipeline.busy.release()
+            return
         source_ids = list(self.pipeline.sources)
         with self.pending_lock:
             self.pending.intersection_update(source_ids)

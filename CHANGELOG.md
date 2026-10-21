@@ -1,5 +1,14 @@
 # Specification change log
 
+## Clearer measurements and queued camera tests — 21 October 2026
+
+- Remove daily-count/choice-dwell panel; label Yes/No questions plainly.
+- Format durations as H:M:S with one decimal second, and rates, percentages and
+  numeric answers to one decimal without changing stored measurements.
+- Explain Observation coverage and Condition active, including the meaning of higher values.
+- Queue busy camera tests for the next free slot, before periodic observations;
+  update their result page automatically without inference or retained evidence.
+
 ## Optional recorded-data deletion with a removed question — 21 October 2026
 
 - Add an unchecked recorded-data deletion option and counts to the question confirmation.

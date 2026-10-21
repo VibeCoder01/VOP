@@ -860,3 +860,23 @@ real camera images or private network configuration are committed. Repository vi
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
 **Phase 4 is authorised; Phase 5 requires explicit new authorisation.**
+
+### Reading Trends and testing cameras
+
+Trends uses **Observation coverage** (higher means more complete timing evidence,
+not greater model accuracy) and **Condition active** (share of covered time with a
+Yes answer; whether higher is desirable depends on the question). Both have help
+on hover and keyboard focus. The daily-count/choice-dwell panel is removed.
+Durations use hours:minutes:seconds with one decimal second, for example
+`01:02:03.4`; hours can exceed 24. Duration form fields accept this format. Counts
+remain whole numbers; displayed rates, percentages and numeric answers use one
+decimal place. Stored values, technical JSON and downloads retain their precision.
+Question answer type `binary` is labelled **Yes/No** in the interface.
+
+**Test camera** runs immediately when free. Otherwise it schedules one connection
+test per camera for the next available slot, ahead of periodic observations, and
+opens a result page that updates automatically. The test does not require an
+active question or enabled monitoring, invoke inference, or retain image evidence.
+Its temporary preview can expire when a later capture replaces it. Pending tests
+are held in memory: after restarting VOP, request the test again. This does not
+change the overload behavior of the machine API.
