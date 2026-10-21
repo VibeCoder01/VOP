@@ -1,5 +1,14 @@
 # Specification change log
 
+## Settings tabs and live workspace cleanup — 21 October 2026
+
+- Split Settings into Notifications, Rules, Export, Configuration and backup, Retention
+  and Audit tabs. Use named selections, native date pickers and automatic rule IDs.
+- Fix shared filter-field margins and align new form controls in a responsive grid.
+- Remove the MOCK alerts banner. Live launches remove stored test equipment and
+  records, preserve real data and settings, and prevent test configuration from
+  returning after restart. Offline test fixtures remain available and labelled.
+
 ## Clearer measurements and queued camera tests — 21 October 2026
 
 - Remove daily-count/choice-dwell panel; label Yes/No questions plainly.

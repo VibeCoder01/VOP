@@ -880,3 +880,27 @@ active question or enabled monitoring, invoke inference, or retain image evidenc
 Its temporary preview can expire when a later capture replaces it. Pending tests
 are held in memory: after restarting VOP, request the test again. This does not
 change the overload behavior of the machine API.
+
+### Settings and the live workspace
+
+Open **Configure mode → Settings**. Each task has its own tab: **Notifications**,
+**Rules**, **Export**, **Configuration and backup**, **Retention**, and **Audit**.
+Camera and question selections show saved names and text. Choose an existing rule
+to revise it, or choose New rule and leave its ID empty for an automatic ID. Date
+pickers use UTC. Export format, timezone, severity, delivery and retention periods
+use dropdowns. Filter buttons align with the bottoms of their inputs across the app.
+
+Start VOP selects the live workspace (`--allow-live-sources`). It removes the sample
+input and stored test captures, images, alerts, delivery records, rules, presets,
+and saved test engines. Test-only source configuration and its audit entries are
+removed in the same transaction. Real camera details, protected keys, engine selection,
+rules and observations remain. Test answers embedded in real camera history become
+timestamp-only gaps, so Trends cannot infer coverage across deleted test results.
+The original sample file can no longer recreate test equipment in this workspace.
+Backups and files previously exported are separate and are not changed.
+
+Offline tests and explicit development launches without `--allow-live-sources` keep
+synthetic fixtures. They remain clearly labelled and do not access cameras or load
+models. The live engine editor offers real workers only. A fresh live workspace
+uses the approved Antec profile when no real engine has been saved; connection and
+GPU recovery still happen only when observation is requested or saved monitoring runs.

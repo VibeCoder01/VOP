@@ -2,8 +2,12 @@
 import json
 import secrets
 import os
+from datetime import datetime, timezone
+from uuid import uuid4
+from zoneinfo import available_timezones
+from urllib.parse import urlencode
 
-from fasthtml.components import A, Button, Div, Form, H2, Input, Option, P, Pre, Section, Select, Td, Tr
+from fasthtml.components import A, Button, Div, Form, H2, Input, Label, Nav, Option, P, Pre, Section, Select, Td, Tr
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
@@ -21,72 +25,133 @@ def install_release(app, settings, store, pipeline, reliable):
     def api_alerts(request):
         params = request.query_params
         return JSONResponse({"alerts": reliable.alerts(source_id=params.get("source_id") or None, severity=params.get("severity") or None,
-                                question_id=params.get("question_id") or None, start=params.get("start") or None, end=params.get("end") or None)})
+                                question_id=params.get("question_id") or None, start=utc_value(params.get("start")), end=utc_value(params.get("end")))})
 
-    @app.route("/release", methods=["GET"])
+    def dropdown(label, name, options, selected='', *, empty=None, **kwargs):
+        return Div(Label(label, _for=name), Select(
+            Option(empty, value='', selected=not selected) if empty is not None else None,
+            *(Option(text, value=value, selected=str(value) == str(selected)) for value, text in options),
+            name=name, id=name, **kwargs), cls='field')
+
+    def utc_value(value):
+        if not value: return None
+        stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return (stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp.astimezone(timezone.utc)).isoformat()
+
+    def dates(params):
+        return [field(label, key, utc_value(params.get(key))[:19] if params.get(key) else '', type='datetime-local', step='1')
+                for label, key in (('From (UTC)', 'start'), ('Before (UTC)', 'end'))]
+
+    @app.route('/release', methods=['GET'])
     def release(request):
-        csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
+        csrf = request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))
         is_operator = operator(request)
         params = request.query_params
-        rules = reliable.rules()
-        alerts = reliable.alerts(source_id=params.get("source") or None, severity=params.get("severity") or None,
-                                 question_id=params.get("question") or None, start=params.get("start") or None, end=params.get("end") or None)
-        content = [P("Notifications describe sampled observations. MOCK alerts are demonstrations, not physical detections."),
-                   Form(field("Filter source ID", "source", params.get("source", ""), id="filter-source"), field("Filter question ID", "question", params.get("question", ""), id="filter-question"),
-                        field("Severity", "severity", params.get("severity", "")), field("From UTC (ISO 8601)", "start", params.get("start", "")),
-                        field("Before UTC (ISO 8601)", "end", params.get("end", "")), Button("Filter alerts"), method="get", action="/release", cls="filters"),
-                   Section(H2("Notifications"), app.state.table(["Created / rule", "Condition", "Severity / status", "Delivery", "Operator action"],
-                    [Tr(Td(a["created_at_utc"], P(a["rule_id"] + f" · revision {a['rule_revision']}")),
-                        Td(a["source_id"] + " / " + a["question_id"], P(a["kind"]), P("MOCK" if a["payload"]["synthetic"] else "Model observation")),
-                        Td(badge(a["severity"]), P(badge(a["status"])), P(a["note"])),
-                        Td(*(P(d['channel'] + ': ', badge(d['status']), f" · {d['attempts']} attempts") for d in a["deliveries"])),
-                        Td(Form(hidden(csrf), field("Note", "note", a["note"], maxlength="4096", id="note-" + a["id"]),
-                                Select(*(Option(v, value=v) for v in ("acknowledged", "resolved", "note")), name="action", aria_label="Alert action"),
-                                Button("Save"), method="post", action=f"/release/alerts/{a['id']}") if is_operator else "Read only")) for a in alerts])),
-                   P("Latest 1,000 matching alerts; use a time filter for older records."),
-                   Section(H2("Rules"), Pre(dumps(rules)), P("Duration uses estimated, bounded sampled intervals; count uses confirmed episode starts. Acknowledgement does not imply the condition ended."))]
-        if is_operator:
-            content.append(Section(H2("Create or revise a rule"),
-                P("A rule needs a current source and question ID. Restore or add them before saving.", cls="readiness warning") if not any(store.questions(sid) for sid in pipeline.sources) else None,
-                Form(hidden(csrf), field("Rule ID", "id", required=True),
-                     Select(*(Option(sid, value=sid) for sid in pipeline.sources), name="source_id", aria_label="Source"),
-                     field("Rule question ID", "question_id", required=True),
-                     Select(*(Option(label, value=k) for k, label in (("duration", "Active longer than (sampled duration)"), ("count", "Episode count greater than"), ("source_offline", "Source offline"), ("processing_degraded", "Processing degraded"))), name="kind", aria_label="Rule kind"),
-                     field("Threshold (H:M:S for duration; number for counts)", "threshold", "0", required=True, placeholder="00:01:00 or 2"),
-                     field("Count window (H:M:S)", "window_seconds", "01:00:00.0", required=True),
-                     Select(*(Option(s, value=s) for s in ("info", "warning", "critical")), name="severity", aria_label="Severity"),
-                     field("Enabled", "enabled", "on", type="checkbox", checked=True), field("Optional webhook (requires server environment configuration)", "webhook", "on", type="checkbox"),
-                     P("Webhook delivery needs VOP_WEBHOOK_URL and VOP_WEBHOOK_ALLOWED_HOSTS in the server environment. They are not configured; dashboard notifications still work.", cls="readiness warning") if not os.environ.get('VOP_WEBHOOK_URL') or not os.environ.get('VOP_WEBHOOK_ALLOWED_HOSTS') else P("Webhook environment is present; endpoint authentication/reachability is checked at delivery.", cls="readiness info"),
-                     Button("Save rule revision", disabled=not any(store.questions(sid) for sid in pipeline.sources)), method="post", action="/release/rules")))
-        content.append(Section(H2("Export measured data"),
-            Form(Select(*(Option(k, value=k) for k in ("events", "metrics", "alerts")), name="kind", aria_label="Dataset"),
-                 Select(Option("JSON", value="json"), Option("CSV", value="csv"), name="format", aria_label="Format"),
-                 field("Export source ID", "source", params.get("source", ""), id="export-source"), field("Export question ID", "question", params.get("question", ""), id="export-question"),
-                 field("From UTC", "start", params.get("start", ""), id="export-start"), field("Before UTC", "end", params.get("end", ""), id="export-end"),
-                 field("Timezone", "timezone", settings.timezone_name), Button("Download"), method="get", action="/release/export"),
-            P("Includes timezone, question versions and provenance. Evidence pixels and credentials are excluded.")))
-        if is_operator:
-            content.extend([Section(H2("Configuration and backup"), A("Export current configuration", href="/release/config", cls="button secondary"),
-                            P("Configuration includes local file references and environment variable names, never their secret values. Backup, restore and import run offline with tools/release.py; stop VOP first. Backups contain evidence when retained and need the same access protection as the live database.")),
-                            Section(H2("Retention preview"), P("No automatic deletion until a policy is explicitly applied. Applied policies run hourly while VOP is running. Raw detail, evidence and audit have separate windows. Normalized history, events and metrics remain for replay. Backups are managed separately by the operator."),
-                                    Form(hidden(csrf), *(field(label, k, duration((30 if k != "audit" else 365) * 86400), required=True) for k, label in (("evidence", "Evidence retention (H:M:S; whole days)"), ("raw", "Raw detail retention (H:M:S; whole days)"), ("audit", "Audit retention (H:M:S; whole days)"))),
-                                         Button("Preview deletion"), method="post", action="/release/retention/preview")),
-                            Section(H2("Audit history"), Pre(dumps(audit_rows(store))))])
-        return app.state.page("Alerts and release tools", request, content, view="settings", notice=params.get("notice"))
+        tabs = [('notifications', 'Notifications'), ('rules', 'Rules'), ('export', 'Export'),
+                ('configuration', 'Configuration and backup'), ('retention', 'Retention'), ('audit', 'Audit')]
+        if not is_operator:
+            tabs = [tab for tab in tabs if tab[0] in ('notifications', 'rules', 'export')]
+        tab = params.get('tab', 'notifications')
+        if tab not in dict(tabs):
+            raise ValueError('Choose an available Settings tab.')
+        with store.connection() as db:
+            cameras = {r['id']: json.loads(r['configuration']).get('name', r['id']) for r in db.execute('SELECT id,configuration FROM sources')}
+            historical_questions = list(db.execute('SELECT source_id,question_id,specification FROM question_versions ORDER BY version'))
+        questions = {}
+        for row in historical_questions:
+            questions[row['question_id']] = json.loads(row['specification'])['text']
+        def filters():
+            return [dropdown('Camera', 'source', list(cameras.items()), params.get('source', ''), empty='All cameras'),
+                    dropdown('Question', 'question', list(questions.items()), params.get('question', ''), empty='All questions')]
+        navigation = Nav(*(A(label, href='/release?' + urlencode({'tab': key}), aria_current='page' if key == tab else None)
+                           for key, label in tabs), cls='settings-tabs', aria_label='Settings sections')
+        content = [navigation]
+        if tab == 'notifications':
+            alerts = reliable.alerts(source_id=params.get('source') or None, question_id=params.get('question') or None,
+                start=utc_value(params.get('start')), end=utc_value(params.get('end')), severity=params.get('severity') or None)
+            content += [Form(Input(type='hidden', name='tab', value=tab), *filters(),
+                dropdown('Severity', 'severity', [(v, v.capitalize()) for v in ('info', 'warning', 'critical')], params.get('severity', ''), empty='All severities'),
+                *dates(params), Button('Filter notifications'), method='get', action='/release', cls='filters'),
+                Section(H2('Notifications'), app.state.table(['Created / rule', 'Condition', 'Severity / status', 'Delivery', 'Action'],
+                    [Tr(Td(a['created_at_utc'], P(a['rule_id'])),
+                        Td(cameras.get(a['source_id'], a['source_id']), P(questions.get(a['question_id'], a['question_id'])),
+                           P('Synthetic test result') if a['payload'].get('synthetic') else None),
+                        Td(badge(a['severity']), P(badge(a['status'])), P(a['note'])),
+                        Td(*(P(d['channel'] + ': ', badge(d['status'])) for d in a['deliveries'])),
+                        Td(Form(hidden(csrf), field('Note', 'note', a['note'], maxlength=4096, id='note-' + a['id']),
+                            Select(*(Option(v.capitalize(), value=v) for v in ('acknowledged', 'resolved', 'note')), name='action', aria_label='Notification action'),
+                            Button('Save'), method='post', action='/release/alerts/' + a['id'], cls='form-grid') if is_operator else 'Read only')) for a in alerts])),
+                P('Latest 1,000 matching notifications. Use dates to find older records.', cls='muted')]
+        elif tab == 'rules':
+            rules = reliable.rules()
+            chosen = next((r for r in rules if r['id'] == params.get('rule')), {})
+            kinds = [('duration', 'Active longer than'), ('count', 'Episode count greater than'), ('source_offline', 'Camera offline'), ('processing_degraded', 'Processing degraded')]
+            content += [Section(H2('Rules'), app.state.table(['Rule', 'Camera / question', 'Condition', 'Threshold', 'Status'],
+                [Tr(Td(r['id']), Td(cameras.get(r['source_id'], r['source_id']), P(questions.get(r['question_id'], r['question_id']))),
+                    Td(dict(kinds).get(r['kind'], r['kind'])), Td(duration(r['threshold']) if r['kind'] == 'duration' else f"{r['threshold']:.1f}"),
+                    Td('Enabled' if r['enabled'] else 'Paused')) for r in rules]))]
+            if is_operator:
+                conditions = [(sid + '/' + r['spec'].question_id, source.name + ' — ' + r['spec'].text)
+                              for sid, source in pipeline.sources.items() for r in store.questions(sid)]
+                content += [Form(Input(type='hidden', name='tab', value='rules'),
+                    dropdown('Edit rule', 'rule', [(r['id'], r['id']) for r in rules], params.get('rule', ''), empty='New rule'),
+                    Button('Open rule'), method='get', action='/release', cls='filters'),
+                    Section(H2('Edit rule' if chosen else 'New rule'),
+                        P('Add a camera and question before creating a rule.', cls='notice') if not conditions else None,
+                        Form(hidden(csrf), field('Rule ID (leave empty to create one)', 'id', chosen.get('id', ''), readonly=bool(chosen)),
+                            dropdown('Camera and question', 'condition', conditions, chosen.get('source_id', '') + '/' + chosen.get('question_id', ''), required=True),
+                            dropdown('Condition', 'kind', kinds, chosen.get('kind', 'duration')),
+                            field('Threshold (H:M:S for duration; number for counts)', 'threshold', duration(chosen.get('threshold', 3600)) if chosen.get('kind', 'duration') == 'duration' else chosen.get('threshold', 0), required=True),
+                            field('Count window (H:M:S)', 'window_seconds', duration(chosen.get('window_seconds', 3600)), required=True),
+                            dropdown('Severity', 'severity', [(v, v.capitalize()) for v in ('info', 'warning', 'critical')], chosen.get('severity', 'warning')),
+                            dropdown('Status', 'enabled', [('on', 'Enabled'), ('', 'Paused')], 'on' if chosen.get('enabled', True) else ''),
+                            dropdown('Delivery', 'webhook', [('', 'Dashboard only'), ('on', 'Dashboard and webhook')], 'on' if chosen.get('webhook') else ''),
+                            P('Webhook delivery requires server configuration. Dashboard notifications work without it.', cls='muted'),
+                            Button('Save rule', disabled=not conditions), method='post', action='/release/rules', cls='form-grid'))]
+        elif tab == 'export':
+            zones = list(dict.fromkeys([settings.timezone_name, 'UTC', *sorted(available_timezones())]))
+            content += [Section(H2('Export'), Form(
+                dropdown('Data', 'kind', [('events', 'Episodes'), ('metrics', 'Trends'), ('alerts', 'Notifications')]),
+                dropdown('File format', 'format', [('csv', 'CSV'), ('json', 'JSON')]), *filters(), *dates(params),
+                dropdown('Timezone', 'timezone', [(z, z) for z in zones], settings.timezone_name), Button('Download'),
+                method='get', action='/release/export', cls='form-grid'),
+                P('Includes question versions and engine details. Images and credentials are excluded.', cls='muted'))]
+        elif tab == 'configuration':
+            content += [Section(H2('Configuration and backup'),
+                A('Export configuration', href='/release/config', cls='button'),
+                P('The export includes saved setup, without passwords or access keys.'),
+                P('For a full backup or restore, stop VOP and use tools/release.py. A full backup can contain saved images. Keep it private.'),
+                A('Workspace controls', href='/?view=settings', cls='button secondary'),
+                A('Manage recorded data', href='/observations', cls='button secondary'))]
+        elif tab == 'retention':
+            options = [(duration(d * 86400), f'{duration(d * 86400)} ({d} days)') for d in (1, 7, 30, 90, 365)]
+            content += [Section(H2('Retention'), P('Choose how long to keep images, engine details and audit records. Review the deletion preview before applying it. Answers and episodes remain.'),
+                Form(hidden(csrf), *(dropdown(label, key, options, duration((365 if key == 'audit' else 30) * 86400))
+                    for key, label in (('evidence', 'Images'), ('raw', 'Engine details'), ('audit', 'Audit records'))),
+                    Button('Preview deletion'), method='post', action='/release/retention/preview', cls='form-grid'))]
+        elif tab == 'audit':
+            content += [Section(H2('Audit'), app.state.table(['Time (UTC)', 'Action', 'Result'],
+                [Tr(Td(r['created_at_utc']), Td(r['action'].replace('_', ' ').capitalize()), Td(r['outcome'])) for r in audit_rows(store)]),
+                P('Latest 100 recorded actions.', cls='muted'))]
+        return app.state.page('Settings', request, content, view='settings', notice=params.get('notice'))
 
     @app.route("/release/rules", methods=["POST"])
     async def rule_edit(request):
         form = await request.form()
         body = {k: str(form.get(k, "")) for k in ("id", "source_id", "question_id", "kind", "severity")}
-        body.update(threshold=duration_input(form["threshold"]) if body["kind"] == "duration" else float(form["threshold"]), window_seconds=duration_input(form["window_seconds"]), enabled="enabled" in form, webhook="webhook" in form)
+        if form.get('condition'):
+            body['source_id'], body['question_id'] = str(form['condition']).split('/', 1)
+        if not body['id']:
+            body['id'] = 'rule-' + uuid4().hex[:12]
+        body.update(threshold=duration_input(form["threshold"]) if body["kind"] == "duration" else float(form["threshold"]), window_seconds=duration_input(form["window_seconds"]), enabled=bool(form.get("enabled")), webhook=bool(form.get("webhook")))
         await run_in_threadpool(reliable.save_rule, body)
-        return RedirectResponse("/release?notice=Rule+revision+saved", status_code=303)
+        return RedirectResponse("/release?tab=rules&notice=Rule+saved", status_code=303)
 
     @app.route("/release/alerts/{alert_id}", methods=["POST"])
     async def alert_edit(alert_id: str, request):
         form = await request.form()
         await run_in_threadpool(reliable.update_alert, alert_id, str(form.get("action", "")), str(form.get("note", "")))
-        return RedirectResponse("/release?notice=Alert+updated", status_code=303)
+        return RedirectResponse("/release?tab=notifications&notice=Notification+updated", status_code=303)
 
     @app.route("/release/export", methods=["GET"])
     def export(request):
@@ -96,7 +161,7 @@ def install_release(app, settings, store, pipeline, reliable):
             raise ValueError("Unsupported export format")
         body = reliable.export(params.get("kind", "events"), zone=params.get("timezone", settings.timezone_name),
                                source_id=params.get("source") or None, question_id=params.get("question") or None,
-                               start=params.get("start") or None, end=params.get("end") or None, severity=params.get("severity") or None)
+                               start=utc_value(params.get("start")), end=utc_value(params.get("end")), severity=params.get("severity") or None)
         return Response(csv_export(body) if fmt == "csv" else dumps(body), media_type="text/csv" if fmt == "csv" else "application/json",
                         headers={"Content-Disposition": f'attachment; filename="vop-export.{fmt}"'})
 
@@ -124,7 +189,7 @@ def install_release(app, settings, store, pipeline, reliable):
         if mode == "preview":
             content.append(Form(hidden(request.scope["session"]["csrf"]), *(Input(type="hidden", name=k, value=v) for k, v in days.items()),
                                 Button("Apply policy and delete eligible data", cls="danger"), method="post", action="/release/retention/apply"))
-        content.append(A("Return to release tools", href="/release"))
+        content.append(A("Return to Retention", href="/release?tab=retention"))
         return app.state.page("Retention " + mode, request, content, view="settings")
 
 
