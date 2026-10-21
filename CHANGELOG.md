@@ -1,5 +1,13 @@
 # Specification change log
 
+## Optional recorded-data deletion with a removed question — 21 October 2026
+
+- Add an unchecked recorded-data deletion option and counts to the question confirmation.
+  Recheck counts on POST and delete data atomically with configuration deletion.
+- Purge all versions’ answers, gaps, associated images, episodes, alerts and delivery records.
+  Preserve other normalised answers, remove shared opaque raw payloads and clearly show the
+  shared-image impact. Keep default history retention, audit and historical definitions.
+
 ## Setup-only Configure navigation and deleted questions — 21 October 2026
 
 - Show only Cameras, Engines, Questions and Settings in Configure navigation. Remove its
