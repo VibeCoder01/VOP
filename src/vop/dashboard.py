@@ -229,7 +229,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href='/cameras' if configure else '/', cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
-                                         if configure and key != 'overview' or not configure and key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
+                                         if configure and key in ('cameras', 'engines', 'questions', 'settings') or not configure and key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
                                    P('Configure mode' if configure else 'View mode', cls='mode-label', role='status'),
                                    Form(hidden(csrf), Input(type='hidden', name='mode', value='view' if configure else 'configure'),
                                         Button('View mode' if configure else 'Configure mode', cls='secondary', aria_label='Switch to View mode' if configure else 'Switch to Configure mode'), method='post', action='/ui/mode') if role == 'operator' else None,
@@ -502,14 +502,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         Section(H2('Restart VOP'), P('Finish the current observation, close the worker session and start VOP again. Saved settings and monitoring are restored.'),
                                 restart_control(csrf) if app.state.shutdown_request and operator else P('Open Start VOP to enable restart controls.')) if operator else None,
                         Section(H2("Evidence policy"), P("Retention is off by default. Enable it per source; retained frames are privacy-masked and restricted to operators.")),
+                        Section(H2('Saved data'), P('Review or delete stored observations and images.'),
+                                A('Manage saved data', href='/observations', cls='button secondary')),
                         Section(H2("Setup"), Div(A("Cameras", href="/cameras", cls="button secondary"), A("Engines", href="/engines", cls="button secondary"),
                                                 A("Other inputs", href="/?view=sources", cls="button secondary"), A("Alerts and release tools", href="/release", cls="button secondary"), cls="actions"))]
-        if view == "sources":
-            observations = store.observations(selected or None, limit=20)
-            content.append(Section(Div(H2("Recent Individual Observations"), A('All Individual Observations', href='/observations', cls='text-link'), cls='section-heading'), table(["Question", "Result", "Captured", "Image", "Provenance"],
-                [Tr(Td(o["question_id"], Small(source_name(o["source_id"]) + " · version " + o["question_version"])), Td(badge(o["status"]), Small(recorded_label(o["source_id"], o["answer"]))),
-                    Td(local_time(o["captured_at_utc"], zone)), Td(recorded_image_status(o, operator)),
-                    Td(A("Inspect native result", href="/ui/observations/" + o["id"]))) for o in reversed(observations)])))
         if operator and view in ("sources", "questions"):
             from vop.removal import removed_controls
             content.append(removed_controls(store, pipeline, csrf, view))
@@ -630,20 +626,21 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Unknown source")
         form = await request.form()
         requested_id = str(form.get('question_id', '')).strip()
+        with store.connection() as db:
+            used_ids = {r[0] for r in db.execute('SELECT DISTINCT question_id FROM question_versions WHERE source_id=?', (source_id,))}
         if not requested_id and question_id == 'new':
             base = re.sub(r'[^A-Za-z0-9_.-]+', '_', str(form['text']).lower()).strip('_.-')[:56] or 'question'
             if base == 'new': base = 'question_new'
             requested_id, number = base, 1
-            ids = {r['spec'].question_id for r in store.questions(source_id, include_removed=True)}
-            while requested_id in ids:
+            while requested_id in used_ids:
                 number += 1
                 requested_id = base + '_' + str(number)
         qid = identifier(requested_id)
         creating = question_id == "new" and not form.get("expected_version")
         if creating and qid == "new":
             raise ValueError("Question ID 'new' is reserved for the new-question form. Choose another ID.")
-        if creating and any(r['spec'].question_id == qid for r in store.questions(source_id, include_removed=True)):
-            raise ValueError("Question ID already exists for this source. Choose an unused ID, or edit/restore the existing question.")
+        if creating and qid in used_ids:
+            raise ValueError("Question ID was already used for this source. Choose an unused ID, or leave it blank for an automatic ID.")
         if not creating and qid != question_id:
             raise ValueError("Question ID cannot change")
         kind = AnswerKind(form["kind"])

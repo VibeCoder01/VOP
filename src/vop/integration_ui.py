@@ -244,8 +244,7 @@ def install_integration(app, settings, store, pipeline):
                     A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary')),
             Section(H2('Recorded images'), app.state.image_settings(source_id, True)),
             Section(H2('Observation settings'), P('Set the sample interval and image-saving setting.'),
-                    Div(A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary'),
-                        A('Individual Observations', href='/observations?source=' + source_id, cls='button secondary'), cls='actions')),
+                    A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary')),
             Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
                     A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
         return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))
