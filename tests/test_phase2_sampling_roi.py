@@ -16,6 +16,27 @@ from vop.service import create_app
 TOKEN = "sampling-offline-key-" + "s" * 32
 
 
+def test_camera_tests_take_priority_and_do_not_need_enabled_questions(settings):
+    app = create_app(settings, token=TOKEN)
+    pipeline = app.state.pipeline
+    sid = 'synthetic-scene'
+    pipeline.store.update_source(sid, enabled=True, retain_evidence=False, sample_interval_seconds=1)
+    sampler = Sampler(pipeline)
+    calls = []
+    sampler.request_camera_test(sid, lambda: calls.append(pipeline.busy.locked()))
+    sampler.request_camera_test(sid, lambda: pytest.fail('Duplicate test was not coalesced'))
+    sampler.tick(1)
+    assert calls == [True]
+    assert pipeline.store.health()['observation_count'] == 0
+    sampler.tick(2)
+    assert pipeline.store.health()['observation_count'] == 3
+    pipeline.store.update_source(sid, enabled=False, retain_evidence=False, sample_interval_seconds=0)
+    sampler.request_camera_test(sid, lambda: calls.append(True))
+    sampler.tick(3)
+    assert calls == [True, True]
+    assert not pipeline.busy.locked()
+
+
 @pytest.fixture
 def settings(tmp_path):
     body = json.loads((Path(__file__).resolve().parents[1] / "sample-config" / "phase1.json").read_text(encoding="utf-8"))

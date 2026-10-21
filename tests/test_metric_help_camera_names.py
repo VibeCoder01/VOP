@@ -30,7 +30,7 @@ def test_metric_help_is_available_on_overview_trends_and_history(app):
             response = client.get(path)
             assert response.status_code == 200
             parser.feed(response.text)
-        for label in ('Daily episode counts / choice dwell', 'Occupancy', 'Coverage', 'Covered time',
+        for label in ('Condition active', 'Observation coverage', 'Covered time',
                       'Valid samples', 'Unobserved gap', 'Estimated duration', 'Active conditions',
                       'Unknown conditions', 'Configured sources', 'Episodes recorded', 'Episode rate',
                       'Unobserved time', 'Estimated active time', 'UNKNOWN'):

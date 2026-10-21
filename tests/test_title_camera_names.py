@@ -57,8 +57,8 @@ def test_version_and_camera_names_in_observation_views_with_id_fallback(app):
             assert placement.brand_version and not placement.main_version
         assert '<small>Front &lt;door&gt;</small>' in client.get('/observations').text
         assert '<small>Front &lt;door&gt; · version 1</small>' in client.get('/?view=events').text
-        assert '<p>Front &lt;door&gt; · version 1 · binary</p>' in client.get('/?view=metrics').text
+        assert '<p>Front &lt;door&gt; · version 1 · Yes/No</p>' in client.get('/?view=metrics').text
         rename('')
         assert '<small>synthetic-scene</small>' in client.get('/observations').text
         assert '<p>synthetic-scene /' in client.get('/ui/observations/' + observation['id']).text
-        assert '<p>synthetic-scene · version 1 · binary</p>' in client.get('/?view=metrics').text
+        assert '<p>synthetic-scene · version 1 · Yes/No</p>' in client.get('/?view=metrics').text

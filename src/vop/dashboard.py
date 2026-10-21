@@ -17,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
 from vop.browser_auth import BrowserAuth, configuring
+from vop.display import duration, duration_input, answer_kind
 from vop.config import identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec, utcnow
 from vop.inference.mock import MockInferenceEngine
@@ -128,14 +129,13 @@ METRIC_HELP = {
     "PENDING": "A positive answer was received, but more positive confirmations are needed before an episode is confirmed.",
     "RECOVERING": "An episode is active, but negative answers are awaiting the required end confirmations.",
     "UNKNOWN": "There is no reliable current answer. Samples may be missing, failed or stale, or the input or question may be disabled. Unknown does not mean absent.",
-    "OBSERVED": "A valid choice or ordinal answer was received. Binary episode confirmation states do not apply to this answer type.",
+    "OBSERVED": "A valid choice or ordinal answer was received. Yes/No episode confirmation states do not apply to this answer type.",
     "DISABLED": "This input is disabled. Enable it before requesting new observations.",
     "CONNECTING": "The input is enabled, but a successful frame has not yet confirmed its connection.",
     "HEALTHY": "The latest recorded capture succeeded. This is not a live guarantee that the camera is still connected.",
     "DISCONNECTED": "The latest capture failed. Check the camera connection and saved setup, then retry.",
-    "Daily episode counts / choice dwell": "Daily episode counts show how many confirmed episodes started on each date in the selected time zone. Choice dwell estimates the seconds spent in each named answer, using the previous answer between valid samples. Gaps are excluded.",
-    "Occupancy": "Estimated active time divided by covered time, shown as a percentage. Applies to binary questions only. Unobserved gaps are excluded; this does not prove continuous presence.",
-    "Coverage": "Covered time divided by covered time plus unobserved time in the measured range, shown as a percentage. No interval data means there is not enough timing evidence to calculate it.",
+    "Condition active": "Estimated share of covered time in confirmed active episodes. Episode confirmation rules apply. Higher means the condition was active more often; whether that is desirable depends on the question. Unobserved gaps are excluded. This is a sampled estimate, not proof of continuous presence.",
+    "Observation coverage": "Share of the measured time supported by valid samples within the allowed gap. Higher means more complete timing evidence, not better model accuracy. No interval data means there is not enough timing evidence to calculate it.",
     "Covered time": "Time between consecutive valid samples that are no farther apart than the allowed gap. Failed samples and longer gaps are excluded. This is an estimate, not proof of continuous observation.",
     "Valid samples": "Number of successful answers with a usable value in the selected range. Failed, missing and temporally excluded answers are not counted.",
     "Unobserved gap": "Time within this episode for which VOP could not estimate the condition because samples failed or were too far apart. This time is excluded from estimated duration.",
@@ -157,8 +157,8 @@ def answer_label(value, levels=()):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= len(levels) - 1:
             return "Unknown"
         low, high = math.floor(value), math.ceil(value)
-        return "Expected level: " + (levels[low] if low == high else f"Between {levels[low]} and {levels[high]}") + f" ({value})"
-    return ("Yes" if value else "No") if type(value) is bool else str(value)
+        return "Expected level: " + (levels[low] if low == high else f"Between {levels[low]} and {levels[high]}") + f" ({value:.1f})"
+    return ("Yes" if value else "No") if type(value) is bool else (f"{value:.1f}" if isinstance(value, (int, float)) else str(value))
 
 
 def chart(points, label):
@@ -186,11 +186,11 @@ def chart(points, label):
         else:
             y = 125 - float(value) * 105 / maximum
             current.append((x, y))
-            dots.append(ft_svg('circle', Title(f"{stamp} · value {value}"), cx=x, cy=y, r=2.5))
+            dots.append(ft_svg('circle', Title(f"{stamp} · value {answer_label(value)}"), cx=x, cy=y, r=2.5))
     if current:
         segments.append(current)
     return Div(Svg(*gaps, *(Line(x1=18, y1=y, x2=658, y2=y) for y in (20, 72, 125)),
-               Text(f"{maximum:g}", x=2, y=20), Text("0", x=2, y=125),
+               Text(f"{maximum:.1f}", x=2, y=20), Text("0.0", x=2, y=125),
                *(Polyline(points=" ".join(f"{x:.2f},{y:.2f}" for x, y in segment)) for segment in segments),
                *dots,
                viewBox="0 0 680 150", role="img", aria_label=label + "; amber bands mark unobserved gaps; gaps are not connected", cls="chart"),
@@ -453,7 +453,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         [Tr(Td(StrongText(d["spec"].text), Small("Version " + d["spec"].version)), Td(pipeline.sources[d["source_id"]].name, Small(d["source_id"])),
                             Td(badge(d["summary"]["state"])), Td(answer_label(d["summary"]["latest_value"], d["spec"].levels)),
                             Td(local_time(d["summary"]["last_observed_at_utc"], zone))) for d in data]))]
-            content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {s['sample_interval_seconds']:g}s" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
+            content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode({"view": view, "source": selected, "timezone": zone}), cls="button secondary"), cls="muted"))
         elif view == "sources":
             content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Capture prerequisites", "Controls"],
@@ -463,8 +463,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     Td(Div(A("Edit source", href=f"/ui/sources/{s['source_id']}", cls="button secondary"), A("Remove…", href=f"/ui/sources/{s['source_id']}/remove", cls="button danger"), cls="actions") if operator else "Read only")) for s in sources]))]
         elif view == "questions":
             content += [Section(H2("Questions"), table(["Question", "Kind", "Version", "Enabled", "Policy", "Edit"],
-                [Tr(Td(StrongText(d["spec"].text), Small(d["source_id"] + " / " + d["spec"].question_id)), Td(d["spec"].kind), Td(d["spec"].version),
-                    Td("Yes" if d["enabled"] else "No"), Td(f"{d['policy'].positive_confirmations} positive / {d['policy'].negative_confirmations} negative", Small(f"Gap: {d['policy'].max_gap_seconds:g}s · {d['policy'].unknown_gap_policy}")),
+                [Tr(Td(StrongText(d["spec"].text), Small(d["source_id"] + " / " + d["spec"].question_id)), Td(answer_kind(d["spec"].kind)), Td(d["spec"].version),
+                    Td("Yes" if d["enabled"] else "No"), Td(f"{d['policy'].positive_confirmations} positive / {d['policy'].negative_confirmations} negative", Small(f"Gap: {duration(d['policy'].max_gap_seconds)} · {d['policy'].unknown_gap_policy}")),
                     Td(Div(A("Edit", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}", cls="button secondary"), A("Remove…", href=f"/ui/questions/{d['source_id']}/{d['spec'].question_id}/remove", cls="button danger"), cls="actions") if operator else "Read only")) for d in data])),
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
@@ -473,27 +473,26 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(source_name(e["source_id"]) + " · version " + e["question_version"])),
                     Td(local_time(e["started_at_utc"], zone)), Td(local_time(e["ended_at_utc"], zone) if e["ended_at_utc"] else "Not confirmed ended"),
-                    Td(badge(e["status"])), Td(f"{e['estimated_observed_seconds']:.1f} s"), Td(f"{e['unknown_seconds']:.1f} s")) for e in event_rows])),
+                    Td(badge(e["status"])), Td(duration(e["estimated_observed_seconds"])), Td(duration(e["unknown_seconds"]))) for e in event_rows])),
                 P("Latest 100 episodes. Durations estimate bounded sampled intervals; missing observations never close an episode.", cls="muted")]
         elif view == "metrics":
-            content += [P('Auto refresh: every 10 seconds. ', A('Refresh now', href=str(request.url), cls='text-link')),
+            content += [P('Auto refresh: every 00:00:10.0. ', A('Refresh now', href=str(request.url), cls='text-link')),
                         P('Updates recorded results; it does not start monitoring. Refresh pauses while you edit filters. Apply your changes to resume.', cls='muted'),
                         Noscript(P('Automatic refresh requires JavaScript. Use Refresh now to update the page.', cls='notice'))]
             for d in data:
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]
-                content.append(Section(H2(q.text), P(f"{source_name(d['source_id'])} · version {q.version} · {q.kind}"),
+                content.append(Section(H2(q.text), P(f"{source_name(d['source_id'])} · version {q.version} · {answer_kind(q.kind)}"),
                     Div(*(Div(Small(metric_label(label)), StrongText(value), cls="stat") for label, value in (
                         ("Episodes" if q.kind == "binary" else "Valid samples", ("No data" if summary["episode_count"] is None else str(summary["episode_count"])) if q.kind == "binary" else str(summary["valid_sample_count"])),
-                        ("Estimated active time" if q.kind == "binary" else "Covered time", f"{summary['estimated_active_seconds'] if q.kind == 'binary' else summary['covered_seconds']:.3f}s" if summary["covered_seconds"] > 0 else "No interval data"),
-                        ("Coverage", "No interval data" if summary["coverage_fraction"] is None else f"{summary['coverage_fraction']:.0%}"),
-                        ("Occupancy", "No eligible data" if occupancy is None else f"{occupancy:.0%}"))), cls="stats"),
+                        ("Estimated active time" if q.kind == "binary" else "Covered time", duration(summary["estimated_active_seconds"] if q.kind == "binary" else summary["covered_seconds"]) if summary["covered_seconds"] > 0 else "No interval data"),
+                        ("Observation coverage", "No interval data" if summary["coverage_fraction"] is None else f"{summary['coverage_fraction']:.1%}"),
+                        ("Condition active", "No eligible data" if occupancy is None else f"{occupancy:.1%}"))), cls="stats"),
                     chart(summary["trend"][-60:], q.text),
-                    P(metric_label("Episode rate"), ": " + (f"{summary['episodes_per_hour']:.3f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval"),
-                      " · ", metric_label("Unobserved time"), f": {summary['unknown_seconds']:.1f}s", cls="muted") if q.kind == "binary" else None,
+                    P(metric_label("Episode rate"), ": " + (f"{summary['episodes_per_hour']:.1f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval"),
+                      " · ", metric_label("Unobserved time"), f": {duration(summary['unknown_seconds'])}", cls="muted") if q.kind == "binary" else None,
                     P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". The score is an expected position and can fall between levels. It is not a physical unit or a selected category.", cls="muted") if q.kind == "ordinal" else None,
-                    Details(Summary(metric_label("Daily episode counts / choice dwell")), Pre(json.dumps({"daily_counts": summary["daily_episode_counts"], "choice_dwell_seconds": summary["choice_dwell_seconds"]}, indent=2))),
-                    Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {d['policy'].max_gap_seconds:g}s break the line. Hover over points for timestamps in " + zone)))
+                    Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {duration(d['policy'].max_gap_seconds)} break the line. Hover over points for timestamps in " + zone)))
         else:
             content += [Section(H2("Processing and access"), P("One inference slot; no queued frames. Live capture and model loading require explicit operator setup."),
                                 P("Current browser role: " + ("operator" if operator else "viewer")),
@@ -553,7 +552,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     Label(Input(type="checkbox", name="retain_evidence", checked=control["retain_evidence"]), " Save images for Individual Observations"),
                     P('Off by default. When on, VOP saves one privacy-masked still image per capture, shared by its answers. Open an Individual Observation to see its image.'),
                     P('Applies to future captures only. Turning this on cannot recover older unsaved or deleted images. Turning it off keeps images already saved. Retention rules or manual deletion can remove them.', cls='muted'), id='image-saving'),
-            field("Sample interval in seconds (0 stops sampling)", "sample_interval_seconds", control["sample_interval_seconds"], type="number", min=0, max=3600, step=1),
+            field("Sample interval (H:M:S; 00:00:00 stops sampling; maximum 01:00:00)", "sample_interval_seconds", duration(control["sample_interval_seconds"]), required=True),
             P("Saving a nonzero interval explicitly starts background sampling. Image saving is off by default.", cls="muted"), Button("Save settings"),
             method="post", action=f"/ui/sources/{source_id}", cls="editor")], view="sources")
 
@@ -565,7 +564,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         enabled = form.get("enabled") == "on"
         was_enabled = store.source_control(source_id)["enabled"]
         store.update_source(source_id, enabled=enabled, retain_evidence=form.get("retain_evidence") == "on",
-                            sample_interval_seconds=float(form.get("sample_interval_seconds", "0")))
+                            sample_interval_seconds=duration_input(form.get("sample_interval_seconds", "0")))
         if was_enabled and not enabled:
             pipeline.record_gap(source_id)
         return RedirectResponse(("/cameras/" + source_id if pipeline.sources[source_id].kind in ("rtsp", "usb") else "/?view=sources") + ("?" if pipeline.sources[source_id].kind in ("rtsp", "usb") else "&") + "notice=Settings+saved", status_code=303)
@@ -592,9 +591,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                   title="1–64 ASCII letters, digits, dots, underscores or hyphens; no spaces", aria_describedby="question-id-help", placeholder="human_present", readonly=bool(record)),
             P("Leave blank for an automatic ID. If set, use 1–64 ASCII letters (A–Z, a–z), digits (0–9), dots (.), underscores (_) or hyphens (-). No spaces. Choose an unused ID for this source; 'new' is reserved for this form. The ID cannot change after saving.", id="question-id-help", cls="muted")),
             field("Question", "text", q.text if record else '', required=True, maxlength=4096, placeholder='Is there a human in the picture?'),
-            Div(Label("Answer kind", _for="kind"), Select(*(Option(k.value, value=k.value, selected=k == selected_kind) for k in AnswerKind), name="kind", id="kind"), cls="field"),
-            Noscript(P("With JavaScript off, choose a type before entering the question: ", *(A(k.value + " ", href=request.url.path + "?kind=" + k.value) for k in AnswerKind))),
-            Div(Details(Summary('Advanced: detection and episode settings'), field("Binary threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01", disabled=not binary),
+            Div(Label("Answer kind", _for="kind"), Select(*(Option(answer_kind(k.value), value=k.value, selected=k == selected_kind) for k in AnswerKind), name="kind", id="kind"), cls="field"),
+            Noscript(P("With JavaScript off, choose a type before entering the question: ", *(A(answer_kind(k.value) + " ", href=request.url.path + "?kind=" + k.value) for k in AnswerKind))),
+            Div(Details(Summary('Advanced: detection and episode settings'), field("Yes/No threshold (uncalibrated)", "threshold", q.threshold, type="number", min=0, max=1, step="0.01", disabled=not binary),
                 Div(field("Positive confirmations", "positive_confirmations", policy.positive_confirmations, type="number", min=1, max=100, disabled=not binary),
                     field("Negative confirmations", "negative_confirmations", policy.negative_confirmations, type="number", min=1, max=100, disabled=not binary), cls="pair"),
                 Div(Label("After an unknown gap", _for="unknown_gap_policy"), Select(Option("Resume the episode after reconfirmation", value="resume", selected=policy.unknown_gap_policy == "resume"),
@@ -607,7 +606,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             Div(Label("Ordinal levels — one description per line, lowest first", _for="levels"), Textarea("\n".join(q.levels), name="levels", id="levels", disabled=selected_kind != AnswerKind.ORDINAL),
                 P("Enter 2–10 nonempty levels in increasing order, for example: Low, Medium, High (on separate lines).", cls="muted"),
                 data_answer_kind="ordinal", hidden=selected_kind != AnswerKind.ORDINAL),
-            Details(Summary('Advanced: observation settings'), field("Maximum observation gap (seconds)", "max_gap_seconds", policy.max_gap_seconds, type="number", min=1, max=86400),
+            Details(Summary('Advanced: observation settings'), field("Maximum observation gap (H:M:S; 00:00:01 to 24:00:00)", "max_gap_seconds", duration(policy.max_gap_seconds), required=True),
             field("ROI (optional: x, y, width, height in 0–1)", "roi", ",".join(str(v) for v in policy.roi) if policy.roi else ""),
             Label(Input(type="checkbox", name="enabled", checked=record["enabled"] if record else True), " Question enabled")),
             *(Div(field(label, "mock_answer", mock if k == q.kind else "", id="mock-" + k.value, disabled=k != selected_kind, placeholder=example),
@@ -652,7 +651,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Question text exceeds 4096 characters")
         roi_text = str(form.get("roi", "")).strip()
         policy = QueryPolicy(int(form.get("positive_confirmations", "2")) if binary else 2, int(form.get("negative_confirmations", "2")) if binary else 2,
-                             float(form["max_gap_seconds"]), str(form.get("unknown_gap_policy", "resume")) if binary else "resume",
+                             duration_input(form["max_gap_seconds"]), str(form.get("unknown_gap_policy", "resume")) if binary else "resume",
                              tuple(float(v) for v in roi_text.split(",")) if roi_text else None)
         mock = str(form.get("mock_answer", "")).strip()
         value = None
@@ -737,7 +736,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if error and not guidance:
             from vop.operator_workflow import recovery_message
             guidance = recovery_message(error.get('code'))
-        timing = (f"Inference time: {summary['elapsed_ms'] / 1000:.3f} seconds"
+        timing = (f"Inference time: {duration(summary['elapsed_ms'] / 1000)}"
                   if summary['elapsed_ms'] is not None else "Inference was not run. No image was available.")
         content = [P(source_name(source_id)), P("Observation complete" if summary["status"] == "success" else "No valid answer", role="status", cls="readiness success" if summary['status'] == 'success' else "readiness error"),
                    *answers, P(guidance, role="alert") if guidance else None,
@@ -772,7 +771,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             raise ValueError("Stop background sampling before running the scripted demo")
         q = next((q for q in source.questions if q.kind == AnswerKind.BINARY), None)
         if q is None:
-            raise ValueError("Enable a binary question for the episode demo")
+            raise ValueError("Enable a Yes/No question for the episode demo")
         key = (source_id, q.question_id, q.version)
         original = engine.source_answers.get(key)
         existed = key in engine.source_answers

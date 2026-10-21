@@ -123,7 +123,8 @@ class BrowserAuth:
             return await response(scope, receive, secured_send)
         monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
-        admitted = method == "POST" and not monitoring_control and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
+        camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
+        admitted = method == "POST" and not monitoring_control and not camera_test and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
         acquired = admitted and self.admission.acquire(blocking=False)
         if admitted and not acquired and scheduled_capture:
             scope['capture_schedule_only'] = True
