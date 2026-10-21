@@ -193,8 +193,14 @@ question disabled; source restore also stops sampling and switches evidence rete
 Alert rules remain disabled until explicitly edited. Restore a removed source before its questions.
 To discard a removed question, open **Questions → Removed questions → Delete permanently…**.
 Review and confirm the deletion. It then disappears from active and removed listings and
-cannot be restored from the app. Recorded answers, images, episodes and their historical
-question details remain. Its old ID stays reserved; leave the ID blank to create a replacement.
+cannot be restored from the app. Recorded data is kept by default. To erase it too, select
+**Also delete all recorded data for this question** on that confirmation page. Review its
+answer/image/episode/alert counts first. This deletes all versions’ answers, deletion-gap
+markers, associated saved images, episodes, alerts and delivery records. Images shared with
+other questions disappear from those results too; other normalised answers remain, but
+shared raw engine payloads are cleared. Unrelated captures and other cameras are kept.
+Question definitions and audit records stay; backups, exports and messages already sent
+are unchanged. There is no Undo. Its old ID stays reserved; leave the ID blank for a replacement.
 The deletion survives restart and backup/restore. An older backup can still restore its older setup.
 Removing every source or question is supported. Configuration exports include current items only;
 full database backups preserve removal records, history and recovery information. Removal is

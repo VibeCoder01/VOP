@@ -43,7 +43,7 @@ def selection(db, *, source_id=None, observation_id=None):
     return dict(source_id=source_id, runs=runs, answers=answers, keys=keys, alerts=alerts, rules=rules, counts=counts, fingerprint=fingerprint)
 
 
-def delete_selected(db, chosen, *, whole_source=False):
+def delete_related_alerts(db, chosen):
     for aid in chosen['alerts']:
         db.execute('DELETE FROM deliveries WHERE alert_id=?', (aid,))
         db.execute('DELETE FROM alerts WHERE id=?', (aid,))
@@ -55,6 +55,10 @@ def delete_selected(db, chosen, *, whole_source=False):
             db.execute('UPDATE rules SET revision=?,configuration=? WHERE id=?', (revision, dumps(config), rule['id']))
             db.execute('INSERT INTO rule_versions VALUES(?,?,?)', (rule['id'], revision, dumps(config)))
         db.execute('DELETE FROM rule_states WHERE substr(id,1,?)=?', (len(rule['id']) + 1, rule['id'] + ':'))
+
+
+def delete_selected(db, chosen, *, whole_source=False):
+    delete_related_alerts(db, chosen)
     for run in chosen['runs']:
         db.execute('DELETE FROM observations WHERE run_id=?', (run['id'],))
         db.execute('DELETE FROM runs WHERE id=?', (run['id'],))
@@ -86,6 +90,67 @@ def delete_selected(db, chosen, *, whole_source=False):
     db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)', (utcnow().isoformat(), 'history_delete', dumps(chosen['counts'])))
 
 
+def question_selection(db, source_id, question_id):
+    """Preview all versions of one question, without loading retained image bytes."""
+    params = (source_id, question_id)
+    answers = db.execute('SELECT sequence,status FROM observations WHERE source_id=? AND question_id=? ORDER BY sequence', params).fetchall()
+    runs = db.execute('SELECT id,frame_id,result_json FROM runs WHERE id IN (SELECT run_id FROM observations WHERE source_id=? AND question_id=?) ORDER BY id', params).fetchall()
+    alerts = [r[0] for r in db.execute('SELECT id FROM alerts WHERE source_id=? AND question_id=? ORDER BY id', params)]
+    events = [r[0] for r in db.execute('SELECT id FROM events WHERE source_id=? AND question_id=? ORDER BY id', params)]
+    rules = [dict(r) for r in db.execute('SELECT * FROM rules ORDER BY id') if (json.loads(r['configuration'])['source_id'], json.loads(r['configuration'])['question_id']) == params]
+    images = shared_images = other_answers = 0
+    for run in runs:
+        other = db.execute("SELECT count(*) FROM observations WHERE run_id=? AND question_id!=? AND status!='retention_gap'", (run['id'], question_id)).fetchone()[0]
+        image = bool(db.execute('SELECT 1 FROM frames WHERE source_id=? AND frame_id=? AND evidence_png IS NOT NULL', (source_id, run['frame_id'])).fetchone())
+        images += image
+        shared_images += image and other > 0
+        other_answers += other
+    counts = {'answers': sum(r['status'] != 'retention_gap' for r in answers), 'gap_markers': sum(r['status'] == 'retention_gap' for r in answers),
+              'images': images, 'shared_images': shared_images, 'other_answers': other_answers, 'episodes': len(events), 'alerts': len(alerts)}
+    fingerprint = sha256(dumps({'source_id': source_id, 'question_id': question_id, 'counts': counts, 'answers': [r['sequence'] for r in answers],
+                               'runs': [(r['id'], sha256(r['result_json'].encode()).hexdigest()) for r in runs], 'alerts': alerts, 'events': events, 'rules': rules}).encode()).hexdigest()
+    return dict(source_id=source_id, question_id=question_id, runs=runs, alerts=alerts, rules=rules, counts=counts, fingerprint=fingerprint)
+
+
+def delete_question_data(db, chosen):
+    """Purge one question; preserve other normalised answers from shared captures."""
+    sid, qid = chosen['source_id'], chosen['question_id']
+    delete_related_alerts(db, chosen)
+    db.execute('DELETE FROM observations WHERE source_id=? AND question_id=?', (sid, qid))
+    db.execute('DELETE FROM events WHERE source_id=? AND question_id=?', (sid, qid))
+    for run in chosen['runs']:
+        if not db.execute('SELECT 1 FROM observations WHERE run_id=?', (run['id'],)).fetchone():
+            db.execute('DELETE FROM runs WHERE id=?', (run['id'],))
+            if run['frame_id']:
+                db.execute('DELETE FROM frames WHERE source_id=? AND frame_id=?', (sid, run['frame_id']))
+            continue
+        body = json.loads(run['result_json'])
+        body['answers'] = [a for a in body['answers'] if a['question_id'] != qid]
+        # Opaque shared payloads can contain any answer. Keep typed answers and
+        # provenance, following the existing raw-retention policy for provider data.
+        body.update(raw_retained=False, provider_raw=None, usage=None, error=None)
+        for answer in body['answers']:
+            answer['raw_provider_fields'] = None
+            answer['usage'] = None
+        db.execute('UPDATE runs SET result_json=? WHERE id=?', (dumps(body), run['id']))
+        for row in db.execute('SELECT id,answer_json FROM observations WHERE run_id=?', (run['id'],)).fetchall():
+            answer = json.loads(row['answer_json'])
+            answer.update(raw_provider_fields=None, usage=None)
+            db.execute('UPDATE observations SET answer_json=? WHERE id=?', (dumps(answer), row['id']))
+        db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=? AND frame_id=?', (sid, run['frame_id']))
+    last = db.execute('SELECT MAX(captured_at_utc) FROM frames WHERE source_id=?', (sid,)).fetchone()[0]
+    db.execute('UPDATE sources SET last_frame_utc=? WHERE id=?', (last, sid))
+    db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)', (utcnow().isoformat(), 'question_data_delete', dumps({'source_id': sid, 'question_id': qid, **chosen['counts']})))
+
+
+def checkpoint(store):
+    try:
+        with store.connection() as db:
+            db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    except sqlite3.OperationalError:
+        logging.getLogger(__name__).warning('History deletion committed; database checkpoint deferred')
+
+
 def install_history_deletion(app, store, pipeline, reliable):
     def change(expected, *, source_id=None, observation_id=None):
         if not pipeline.busy.acquire(False):
@@ -107,11 +172,7 @@ def install_history_deletion(app, store, pipeline, reliable):
                         store._rebuild(db, *key)
                 if pipeline.latest_preview and pipeline.latest_preview[0] == chosen['source_id']:
                     pipeline.latest_preview = None
-                try:
-                    with store.connection() as db:
-                        db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-                except sqlite3.OperationalError:
-                    logging.getLogger(__name__).warning('History deletion committed; database checkpoint deferred')
+                checkpoint(store)
                 return chosen['source_id']
             finally:
                 reliable.lock.release()
