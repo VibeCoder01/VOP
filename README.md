@@ -949,5 +949,18 @@ On Observe, each camera has its own **Show answers** button below its controls.
 Open it to see that camera’s latest answers, states, question versions and observation
 times; **Hide answers** collapses it. Cameras open independently. Tables are hidden
 initially and reset to hidden on page reload. The source filter still limits which
-cameras appear. These native browser controls need no JavaScript and do not capture
-images or change monitoring. Refresh view updates the recorded answers as before.
+cameras appear. Opening a panel checks for new recorded answers immediately, then every
+00:00:00.2 while the panel and page are visible. Only changed table content is replaced;
+the panel, picture and page stay in place. Closed panels make no answer requests.
+Requests are read-only and do not capture images, invoke the model or change monitoring.
+Fresh answers still depend on completion of each scheduled observation; live pictures
+update independently. Without JavaScript, Refresh view updates the table.
+
+Each question includes a value bar with a text label and number. Yes/No uses the native
+Liquid Yes score where available, otherwise the returned Yes (1.0) or No (0.0) answer.
+Ordinal bars use 0 through the last configured level; level names and the numeric answer
+remain visible. Choice questions show each option's native score if available, otherwise
+which option was selected. Score percentages are model outputs, not calibrated accuracy
+or probabilities; hover over a bar for its meaning. Unknown, failed, disabled or stale
+answers show **No current value**, rather than a zero bar. Displayed values use one
+decimal place; stored values keep full precision.

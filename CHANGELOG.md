@@ -1,5 +1,14 @@
 # Specification change log
 
+## Live answer panels and value bars — 22 October 2026
+
+- Refresh open Observe answer panels every 0.2 seconds without reloading the page or
+  replacing camera images. Pause requests for closed panels and hidden tabs.
+- Use conditional responses to skip unchanged tables and full-history replays; refresh
+  state when answers expire, settings change or recorded data is deleted.
+- Add labelled Yes/No, ordinal and choice value bars with native score semantics,
+  numeric values and tooltips. Missing/stale results do not become zero values.
+
 ## Observe refresh and engine result layout — 22 October 2026
 
 - Allow same-origin background requests in the browser security policy so live preview
