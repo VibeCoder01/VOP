@@ -1,5 +1,13 @@
 # Specification change log
 
+## Observe image visibility — 22 October 2026
+
+- Add an independent Show image / Hide image disclosure per camera.
+- Show images when monitoring starts; hide them when it pauses. Respect manual
+  visibility choices until monitoring changes or the page reloads.
+- Stop image downloads and preview lease renewal while hidden; keep status checks
+  and existing answer updates. A hide during decoding does not reopen the image.
+
 ## Save cameras while monitoring — 22 October 2026
 
 - Wait automatically for an active observation or configuration request when adding

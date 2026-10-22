@@ -44,7 +44,7 @@ form.inline{display:inline-flex;gap:8px;align-items:center}.filters{display:flex
 table{border-collapse:collapse;width:100%;text-align:left}th{font-size:11px;color:var(--muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:18px 14px;border-bottom:1px solid #e8e8ed;vertical-align:top;font-size:13px}td strong{font-weight:600}td small{display:block;line-height:1.6;margin-top:5px}tr:hover td{background:#eeeef3}.table-wrap{overflow:auto}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:0 0 36px;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.stat strong{display:block;font-size:32px;font-weight:600;letter-spacing:-1px;margin-top:10px}.stat small{font-size:12px}.status,.tag{display:inline-block;padding:5px 9px;border-radius:6px;background:#e8e8ed;color:#4f4f58;font-size:11px;font-weight:600;line-height:1.4;white-space:nowrap}.tag{color:#0055b3;background:#e5efff}.status.ACTIVE,.status.HEALTHY,.status.success,.status.closed,.status.OBSERVED,.status.delivered,.status.resolved{background:#e0f1e9;color:#206146}.status.UNKNOWN,.status.PENDING,.status.RECOVERING,.status.interrupted,.status.CONNECTING,.status.warning,.status.open{background:#fff0d7;color:#7e520c}.status.DISCONNECTED,.status.model_failure,.status.capture_failure,.status.timeout,.status.error,.status.critical,.status.failed{background:#fbe6e6;color:#a1252c}.status.info,.status.acknowledged{background:#e5efff;color:#205a94}
 .readiness,.notice,.error{padding:14px 18px;border-radius:10px;margin:16px 0;font-size:13px;line-height:1.6;background:#eef1f5;color:#414854}.readiness p{color:inherit}.readiness ul{margin:5px 0;padding-left:18px}.readiness li{margin:4px 0}.readiness a{text-decoration:underline;text-underline-offset:3px}.readiness.success{background:#e5f2ec;color:#246147}.readiness.warning{background:#fff2df;color:#7a510e}.readiness.error,.error{background:#fbe9e9;color:#9a282f}.readiness.info,.notice{background:#e8f0fc;color:#285483}.readiness.success{padding:0;background:transparent}.readiness.success:before{content:'●';color:#26835b;margin-right:8px}
-details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.camera-test-result .evidence-box{display:block;width:fit-content;margin-bottom:24px}.camera-test-actions{margin-top:24px}.camera-test-actions .button{white-space:nowrap}.observe-image{border:4px solid #b77908;border-radius:16px;padding:8px;margin:18px 0;background:#fffaf0;max-width:800px}.observe-image.monitoring{border-color:#168153;background:#f0faf4}.observe-image img{max-width:100%;max-height:440px;object-fit:contain;border-radius:8px}.observe-image img:not([hidden]){display:block}.observe-image [data-monitoring-label]{font-weight:600}.observe-image p{margin:8px 0}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.answer-bar{display:grid;gap:5px;min-width:160px;margin-bottom:8px}.answer-bar span{font-size:12px}.answer-bar meter{width:100%;height:16px;accent-color:var(--accent)}.answer-bar meter::-webkit-meter-optimum-value{background:var(--accent)}.answer-bar meter::-moz-meter-bar{background:var(--accent)}.camera-answers{border:0;padding:0;margin:18px 0 0}.camera-answers>summary{display:inline-flex;padding:10px 18px;color:#0055b3;list-style:none}.camera-answers>summary::-webkit-details-marker{display:none}.camera-answers .hide-answers{display:none}.camera-answers[open] .hide-answers{display:inline}.camera-answers[open] .show-answers{display:none}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
+details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.camera-test-result .evidence-box{display:block;width:fit-content;margin-bottom:24px}.camera-test-actions{margin-top:24px}.camera-test-actions .button{white-space:nowrap}.observe-image{border:4px solid #b77908;border-radius:16px;padding:8px;margin:18px 0;background:#fffaf0;max-width:800px}.observe-image.monitoring{border-color:#168153;background:#f0faf4}.observe-image img{max-width:100%;max-height:440px;object-fit:contain;border-radius:8px}.observe-image img:not([hidden]){display:block}.observe-image [data-monitoring-label]{font-weight:600}.observe-image p{margin:8px 0}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.answer-bar{display:grid;gap:5px;min-width:160px;margin-bottom:8px}.answer-bar span{font-size:12px}.answer-bar meter{width:100%;height:16px;accent-color:var(--accent)}.answer-bar meter::-webkit-meter-optimum-value{background:var(--accent)}.answer-bar meter::-moz-meter-bar{background:var(--accent)}.image-disclosure{border:0;padding:0;margin:8px 0 0}.image-disclosure>summary{display:inline-flex;padding:10px 18px;list-style:none}.image-disclosure>summary::-webkit-details-marker{display:none}.image-disclosure .hide-image{display:none}.image-disclosure[open] .hide-image{display:inline}.image-disclosure[open] .show-image{display:none}.camera-answers{border:0;padding:0;margin:18px 0 0}.camera-answers>summary{display:inline-flex;padding:10px 18px;color:#0055b3;list-style:none}.camera-answers>summary::-webkit-details-marker{display:none}.camera-answers .hide-answers{display:none}.camera-answers[open] .hide-answers{display:inline}.camera-answers[open] .show-answers{display:none}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
 .chart{width:100%;height:150px;display:block;max-width:700px}.chart line{stroke:#dcdce0;stroke-width:1}.chart polyline{stroke:var(--accent);stroke-width:2;fill:none}.chart circle{fill:var(--accent)}.chart text{font-size:10px;fill:#626268}.chart .unobserved{fill:#fff0d7;stroke:none}.chart-legend{font-size:12px;color:#7e520c;margin:6px 0 12px}.chart-legend span{display:inline-block;background:#fff0d7;border:1px solid #ae7925;width:14px;height:10px;margin-right:6px}[hidden]{display:none!important}
 @keyframes appear{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(max-width:1000px){.object-row{align-items:start;flex-direction:column;gap:14px}.workspace{padding:36px 30px}.stats{gap:14px}.stat strong{font-size:27px}}
@@ -80,20 +80,26 @@ async function refreshPreview(card) {
   const empty = card.querySelector('[data-preview-empty]');
   const caption = card.querySelector('[data-preview-caption]');
   try {
-    if (card.dataset.leaseUrl && Date.now() >= Number(card.dataset.renewAt || 0)) {
-      const lease = await fetch(card.dataset.leaseUrl, {method:'POST', body:new URLSearchParams({csrf:card.dataset.csrf}), cache:'no-store'});
-      card.dataset.leaseFailed = lease.ok ? '' : 'true';
-      card.dataset.renewAt = Date.now() + 5000;
-    }
     const response = await fetch(card.dataset.imageUrl, {method:'HEAD', cache:'no-store'});
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) { image.hidden = true; empty.hidden = false; }
       return;
     }
     const monitoring = response.headers.get('X-VOP-Monitoring') === 'true';
+    const panel = card.querySelector('[data-image-panel]');
+    if (card.dataset.monitoring !== String(monitoring)) panel.open = monitoring;
+    card.dataset.monitoring = String(monitoring);
     const previewState = response.headers.get('X-VOP-Preview-State');
     card.classList.toggle('monitoring', monitoring);
     card.querySelector('[data-monitoring-label]').textContent = monitoring ? 'Monitoring' : 'Paused';
+    // Keep checking monitoring status while hidden, but do not fetch image pixels
+    // or renew the live decoder lease until the operator shows the image again.
+    if (!panel.open) return;
+    if (card.dataset.leaseUrl && Date.now() >= Number(card.dataset.renewAt || 0)) {
+      const lease = await fetch(card.dataset.leaseUrl, {method:'POST', body:new URLSearchParams({csrf:card.dataset.csrf}), cache:'no-store'});
+      card.dataset.leaseFailed = lease.ok ? '' : 'true';
+      card.dataset.renewAt = Date.now() + 5000;
+    }
     if (response.status === 204) {
       image.hidden = true; image.removeAttribute('src'); empty.hidden = false;
       empty.textContent = card.dataset.leaseFailed ? 'Live preview could not start. Check this camera in Configure mode.' : response.headers.get('X-VOP-Preview-Error') === 'preview_capacity' ? 'Use the camera filter to show no more than four live previews.' : previewState === 'connecting' ? 'Connecting to camera…' : previewState === 'reconnecting' ? 'Reconnecting to camera. Check its saved details if this continues.' : 'No image available. Start monitoring or use Observe now.';
@@ -106,6 +112,7 @@ async function refreshPreview(card) {
       replacement.alt = image.alt;
       replacement.src = card.dataset.imageUrl + '?frame=' + encodeURIComponent(frame);
       await replacement.decode();
+      if (!panel.open || document.hidden) return;
       image.replaceWith(replacement);
       empty.hidden = true;
       card.dataset.frame = frame;
@@ -384,12 +391,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         image = latest_image(sid)
         url = '/ui/live-preview/' + sid
         return Div(Span('Monitoring' if monitoring else 'Paused', data_monitoring_label=''),
-            Img(src=url if image else None, alt='Latest privacy-masked image from ' + source['name'], hidden=not image),
-            P('No image available. Start monitoring or use Observe now.', hidden=bool(image), data_preview_empty=''),
-            P(('Latest saved image: ' if image and image[3] == 'saved' else 'Latest image: ') + local_time(image[2], settings.timezone_name) if image else '',
-              data_preview_caption='', cls='muted'),
+            Details(Summary(Span('Show image', cls='show-image'), Span('Hide image', cls='hide-image'), cls='button secondary'),
+                Img(src=url if image and monitoring else None, alt='Latest privacy-masked image from ' + source['name'], hidden=not (image and monitoring)),
+                P('Loading image…' if image else 'No image available. Start monitoring or use Observe now.', hidden=bool(image and monitoring), data_preview_empty=''),
+                Noscript(P(A('Open latest image', href=url, cls='text-link'))) if image and not monitoring else None,
+                P(('Latest saved image: ' if image and image[3] == 'saved' else 'Latest image: ') + local_time(image[2], settings.timezone_name) if image else '',
+                  data_preview_caption='', cls='muted'),
+                open=monitoring, data_image_panel='', cls='image-disclosure', aria_label='Image from ' + source['name']),
             cls='observe-image monitoring' if monitoring else 'observe-image', data_observe_preview=sid,
-            data_image_url=url, data_frame=image[0] if image else '', data_csrf=csrf,
+            data_monitoring=str(monitoring).lower(), data_image_url=url, data_frame=image[0] if image else '', data_csrf=csrf,
             data_lease_url=url + '/keepalive' if pipeline.live_previews.allowed and source['kind'] in ('rtsp', 'usb') else None)
 
     def answer_graph(spec, value, native):

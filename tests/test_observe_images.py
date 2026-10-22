@@ -33,6 +33,14 @@ def test_observe_keeps_each_latest_masked_image_and_tracks_monitoring(app, monke
         assert len(cards) == 2
         assert 'monitoring' in cards[0]['class'] and 'monitoring' not in cards[1]['class']
         assert cards[0].select_one('img')['src'].endswith(first.source_id)
+        assert 'open' in cards[0].select_one('[data-image-panel]').attrs
+        assert 'open' not in cards[1].select_one('[data-image-panel]').attrs
+        assert 'src' not in cards[1].select_one('img').attrs
+        assert 'hidden' in cards[1].select_one('img').attrs
+        for card in cards:
+            assert card.select_one('summary .show-image').text == 'Show image'
+            assert card.select_one('summary .hide-image').text == 'Hide image'
+        assert cards[0]['data-monitoring'] == 'true' and cards[1]['data-monitoring'] == 'false'
         assert '/ui/observe-images.js' in str(soup)
         response = client.get('/ui/live-preview/' + first.source_id)
         assert response.status_code == 200 and response.headers['x-vop-frame-id'] == first_id
