@@ -873,6 +873,12 @@ remain whole numbers; displayed rates, percentages and numeric answers use one
 decimal place. Stored values, technical JSON and downloads retain their precision.
 Question answer type `binary` is labelled **Yes/No** in the interface.
 
+**Save camera** waits automatically for the current observation or configuration
+request to finish. Keep the page open while the button shows Working; monitoring
+can stay on. Protected address/account changes and saved configuration are applied
+under the observation lock, so waiting does not change a camera partway through
+acquisition. Saving alone does not connect to a camera or run inference.
+
 **Test camera** runs immediately when free. Otherwise it schedules one connection
 test per camera for the next available slot, ahead of periodic observations, and
 opens a result page that updates automatically. The test does not require an

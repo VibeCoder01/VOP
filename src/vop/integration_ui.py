@@ -185,6 +185,7 @@ def install_integration(app, settings, store, pipeline):
                      field('Camera username', 'username', username, autocomplete='username', required=not selected),
                      field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected),
                      P('Leave the password empty to keep the saved password.', cls='muted') if selected else None, cls='surface'),
+                 P('Saving waits for any current observation to finish. You do not need to stop monitoring.', cls='muted'),
                  Div(Button('Save camera'), A('Cancel', href='/cameras/' + source_id if selected else '/cameras', cls='button secondary'), cls='actions'),
                  method='post', action='/cameras/save', cls='editor')
         ], view='cameras')
@@ -531,12 +532,15 @@ def install_integration(app, settings, store, pipeline):
         if password:
             if not 1 <= len(username) <= 128 or not 1 <= len(password) <= 128 or any(ord(c) < 32 for c in username + password):
                 raise ValueError("Invalid camera account credentials")
-            await run_in_threadpool(secrets.set, record["credentials_ref"], json.dumps({"username": username, "password": password}))
-        else:
-            await run_in_threadpool(secrets.camera, record["credentials_ref"])
-        await run_in_threadpool(secrets.set, record["endpoint_ref"], str(form["endpoint"]))
-        busy()
+        # Serialize setup with acquisition before changing protected connection details.
+        # Wait off the event loop so monitoring and the rest of the UI stay responsive.
+        await run_in_threadpool(pipeline.busy.acquire)
         try:
+            if password:
+                await run_in_threadpool(secrets.set, record["credentials_ref"], json.dumps({"username": username, "password": password}))
+            else:
+                await run_in_threadpool(secrets.camera, record["credentials_ref"])
+            await run_in_threadpool(secrets.set, record["endpoint_ref"], str(form["endpoint"]))
             store.configure(replace(settings, sources=(source,)))
             with store.connection() as db:
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_profile:" + sid, dumps(record)))
