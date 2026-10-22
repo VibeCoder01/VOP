@@ -2,6 +2,8 @@
 from datetime import datetime, time, timedelta
 from importlib.metadata import version
 import json
+from dataclasses import asdict
+from hashlib import sha256
 import math
 import secrets
 import re
@@ -12,6 +14,8 @@ from fasthtml.components import (A, Aside, Body, Button, Details, Div, Form, H1,
                                 Header, Html, Img, Input, Label, Link, Main, Meta, Nav, Option, P, Pre,
                                 Section, Select, Small, Span, Summary, Table, Tbody, Td, Textarea, Th,
                                 Thead, Title, Tr, Ul, Li, Script, Noscript)
+from fasthtml.common import to_xml
+from fasthtml.components import Meter
 from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text, ft_svg
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
@@ -40,7 +44,7 @@ form.inline{display:inline-flex;gap:8px;align-items:center}.filters{display:flex
 table{border-collapse:collapse;width:100%;text-align:left}th{font-size:11px;color:var(--muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:18px 14px;border-bottom:1px solid #e8e8ed;vertical-align:top;font-size:13px}td strong{font-weight:600}td small{display:block;line-height:1.6;margin-top:5px}tr:hover td{background:#eeeef3}.table-wrap{overflow:auto}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:0 0 36px;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.stat strong{display:block;font-size:32px;font-weight:600;letter-spacing:-1px;margin-top:10px}.stat small{font-size:12px}.status,.tag{display:inline-block;padding:5px 9px;border-radius:6px;background:#e8e8ed;color:#4f4f58;font-size:11px;font-weight:600;line-height:1.4;white-space:nowrap}.tag{color:#0055b3;background:#e5efff}.status.ACTIVE,.status.HEALTHY,.status.success,.status.closed,.status.OBSERVED,.status.delivered,.status.resolved{background:#e0f1e9;color:#206146}.status.UNKNOWN,.status.PENDING,.status.RECOVERING,.status.interrupted,.status.CONNECTING,.status.warning,.status.open{background:#fff0d7;color:#7e520c}.status.DISCONNECTED,.status.model_failure,.status.capture_failure,.status.timeout,.status.error,.status.critical,.status.failed{background:#fbe6e6;color:#a1252c}.status.info,.status.acknowledged{background:#e5efff;color:#205a94}
 .readiness,.notice,.error{padding:14px 18px;border-radius:10px;margin:16px 0;font-size:13px;line-height:1.6;background:#eef1f5;color:#414854}.readiness p{color:inherit}.readiness ul{margin:5px 0;padding-left:18px}.readiness li{margin:4px 0}.readiness a{text-decoration:underline;text-underline-offset:3px}.readiness.success{background:#e5f2ec;color:#246147}.readiness.warning{background:#fff2df;color:#7a510e}.readiness.error,.error{background:#fbe9e9;color:#9a282f}.readiness.info,.notice{background:#e8f0fc;color:#285483}.readiness.success{padding:0;background:transparent}.readiness.success:before{content:'●';color:#26835b;margin-right:8px}
-details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.camera-test-result .evidence-box{display:block;width:fit-content;margin-bottom:24px}.camera-test-actions{margin-top:24px}.camera-test-actions .button{white-space:nowrap}.observe-image{border:4px solid #b77908;border-radius:16px;padding:8px;margin:18px 0;background:#fffaf0;max-width:800px}.observe-image.monitoring{border-color:#168153;background:#f0faf4}.observe-image img{max-width:100%;max-height:440px;object-fit:contain;border-radius:8px}.observe-image img:not([hidden]){display:block}.observe-image [data-monitoring-label]{font-weight:600}.observe-image p{margin:8px 0}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.camera-answers{border:0;padding:0;margin:18px 0 0}.camera-answers>summary{display:inline-flex;padding:10px 18px;color:#0055b3;list-style:none}.camera-answers>summary::-webkit-details-marker{display:none}.camera-answers .hide-answers{display:none}.camera-answers[open] .hide-answers{display:inline}.camera-answers[open] .show-answers{display:none}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
+details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.camera-test-result .evidence-box{display:block;width:fit-content;margin-bottom:24px}.camera-test-actions{margin-top:24px}.camera-test-actions .button{white-space:nowrap}.observe-image{border:4px solid #b77908;border-radius:16px;padding:8px;margin:18px 0;background:#fffaf0;max-width:800px}.observe-image.monitoring{border-color:#168153;background:#f0faf4}.observe-image img{max-width:100%;max-height:440px;object-fit:contain;border-radius:8px}.observe-image img:not([hidden]){display:block}.observe-image [data-monitoring-label]{font-weight:600}.observe-image p{margin:8px 0}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.answer-bar{display:grid;gap:5px;min-width:160px;margin-bottom:8px}.answer-bar span{font-size:12px}.answer-bar meter{width:100%;height:16px;accent-color:var(--accent)}.answer-bar meter::-webkit-meter-optimum-value{background:var(--accent)}.answer-bar meter::-moz-meter-bar{background:var(--accent)}.camera-answers{border:0;padding:0;margin:18px 0 0}.camera-answers>summary{display:inline-flex;padding:10px 18px;color:#0055b3;list-style:none}.camera-answers>summary::-webkit-details-marker{display:none}.camera-answers .hide-answers{display:none}.camera-answers[open] .hide-answers{display:inline}.camera-answers[open] .show-answers{display:none}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
 .chart{width:100%;height:150px;display:block;max-width:700px}.chart line{stroke:#dcdce0;stroke-width:1}.chart polyline{stroke:var(--accent);stroke-width:2;fill:none}.chart circle{fill:var(--accent)}.chart text{font-size:10px;fill:#626268}.chart .unobserved{fill:#fff0d7;stroke:none}.chart-legend{font-size:12px;color:#7e520c;margin:6px 0 12px}.chart-legend span{display:inline-block;background:#fff0d7;border:1px solid #ae7925;width:14px;height:10px;margin-right:6px}[hidden]{display:none!important}
 @keyframes appear{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(max-width:1000px){.object-row{align-items:start;flex-direction:column;gap:14px}.workspace{padding:36px 30px}.stats{gap:14px}.stat strong{font-size:27px}}
@@ -118,6 +122,34 @@ async function refreshPreviews() {
   setTimeout(refreshPreviews, 200);
 }
 refreshPreviews();
+"""
+
+
+OBSERVE_ANSWERS_JS = """const panels = document.querySelectorAll('[data-answer-url]');
+async function refreshAnswers(panel) {
+  if (!panel.open || document.hidden || panel.pending) return;
+  panel.pending = true;
+  try {
+    const response = await fetch(panel.dataset.answerUrl, {cache:'no-store',
+      headers: panel.dataset.etag ? {'If-None-Match':panel.dataset.etag} : {}});
+    if (response.status === 200) {
+      const html = await response.text();
+      if (panel.open && !document.hidden) {
+        panel.querySelector('[data-answer-content]').innerHTML = html;
+        panel.dataset.etag = response.headers.get('ETag') || '';
+      }
+    }
+  } catch (_) { /* Keep the last answers during a temporary connection failure. */ }
+  finally { panel.pending = false; }
+}
+for (const panel of panels) {
+  panel.addEventListener('toggle', () => { if (panel.open) refreshAnswers(panel); });
+  async function poll() {
+    await refreshAnswers(panel);
+    setTimeout(poll, 200);
+  }
+  poll();
+}
 """
 
 
@@ -293,6 +325,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
+                         Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None))
 
     def recorded_label(source_id, answer):
@@ -359,14 +392,79 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             data_image_url=url, data_frame=image[0] if image else '', data_csrf=csrf,
             data_lease_url=url + '/keepalive' if pipeline.live_previews.allowed and source['kind'] in ('rtsp', 'usb') else None)
 
+    def answer_graph(spec, value, native):
+        if value is None:
+            return Small('No current value', cls='muted')
+
+        def bar(label, amount, maximum, explanation):
+            return Div(Span(label), Meter(value=amount, min=0, max=maximum,
+                title=explanation, aria_label=label), cls='answer-bar')
+
+        if spec.kind == 'ordinal':
+            return bar(f'{float(value):.1f} / {len(spec.levels) - 1:.1f}', value, len(spec.levels) - 1,
+                       'Returned rating on the configured level scale. Higher means a later level, not necessarily better.')
+        if spec.kind == 'binary':
+            score = native.get('score')
+            if native.get('score_semantics') == 'Liquid noul: model score for yes' and isinstance(score, (int, float)) and not isinstance(score, bool) and math.isfinite(score) and 0 <= score <= 1:
+                return bar(f'Yes score: {score * 100:.1f}%', score, 1,
+                           'Model score for Yes. This is not a calibrated probability or a measure of accuracy.')
+            return bar('Yes (1.0)' if value else 'No (0.0)', int(value), 1,
+                       'Returned Yes/No answer: Yes fills the bar; No leaves it empty. No confidence score is implied.')
+        raw = native.get('raw_provider_fields')
+        probabilities = raw.get('probabilities', {}) if isinstance(raw, dict) else {}
+        scored = isinstance(probabilities, dict) and set(probabilities) == set(dict(spec.choices)) and all(
+            isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) and 0 <= n <= 1 for n in probabilities.values())
+        return Div(*(bar(f'{name}: {probabilities[name] * 100:.1f}%' if scored else f'{name}: ' + ('Selected' if name == value else 'Not selected'),
+                         probabilities[name] if scored else int(name == value), 1,
+                         'Native model option score; not a calibrated probability.' if scored else 'Selected category only; no option score was returned.')
+                     for name, _ in spec.choices), cls='answer-options')
+
+    def camera_answer_content(answers, zone):
+        rows = []
+        for d in answers:
+            summary, spec = d['summary'], d['spec']
+            with store.connection() as db:
+                row = db.execute('SELECT answer_json FROM observations WHERE id=?', (summary['last_observation_id'],)).fetchone()
+            native = json.loads(row[0]) if row else {}
+            rows.append(Tr(Td(StrongText(spec.text), Small('Version ' + spec.version)),
+                Td(badge(summary['state'])), Td(answer_label(summary['latest_value'], spec.levels)),
+                Td(answer_graph(spec, summary['latest_value'], native)),
+                Td(local_time(summary['last_observed_at_utc'], zone))))
+        return table(['Question', 'State', 'Last answer', 'Value', 'Observed'], rows) if answers else P('No questions are configured for this camera.', cls='muted')
+
     def camera_answers(source, answers, zone):
         return Details(Summary(Span('Show answers', cls='show-answers'), Span('Hide answers', cls='hide-answers'), cls='button secondary'),
-            table(['Question', 'State', 'Last answer', 'Observed'],
-                [Tr(Td(StrongText(d['spec'].text), Small('Version ' + d['spec'].version)),
-                    Td(badge(d['summary']['state'])), Td(answer_label(d['summary']['latest_value'], d['spec'].levels)),
-                    Td(local_time(d['summary']['last_observed_at_utc'], zone))) for d in answers])
-                if answers else P('No questions are configured for this camera.', cls='muted'),
-            cls='camera-answers', aria_label='Latest answers for ' + source['name'])
+            P('Answers update after each observation. Live images update separately.', cls='muted'),
+            Div(camera_answer_content(answers, zone), data_answer_content=''),
+            cls='camera-answers', aria_label='Latest answers for ' + source['name'],
+            data_answer_url='/ui/camera-answers/' + source['source_id'] + '?' + urlencode({'zone': zone}))
+
+    @app.route('/ui/observe-answers.js', methods=['GET'])
+    def observe_answers_script(request):
+        return Response(OBSERVE_ANSWERS_JS, media_type='application/javascript')
+
+    @app.route('/ui/camera-answers/{source_id}', methods=['GET'])
+    def current_camera_answers(source_id: str, request):
+        if source_id not in pipeline.sources:
+            return Response(status_code=404)
+        zone = request.query_params.get('zone', settings.timezone_name)
+        timezone_for(zone)
+        records = store.questions(source_id)
+        # Cheap change checks avoid replaying the full history on every 0.2-second poll.
+        revision = [app.state.instance_id, zone, store.source_control(source_id), records]
+        with store.connection() as db:
+            revision.append(tuple(db.execute("SELECT count(*),max(sequence) FROM observations WHERE source_id=? AND status!='retention_gap'", (source_id,)).fetchone()))
+            for record in records:
+                spec = record['spec']
+                last = db.execute('SELECT captured_at_utc,processed_at_utc,answer_json FROM observations WHERE source_id=? AND question_id=? AND question_version=? AND temporal_eligible=1 ORDER BY sequence DESC LIMIT 1',
+                                  (source_id, spec.question_id, spec.version)).fetchone()
+                revision.append(tuple(last) if last else None)
+                revision.append(bool(last and (utcnow() - utc(last[0] or last[1])).total_seconds() > record['policy'].max_gap_seconds))
+        etag = '"' + sha256(json.dumps(revision, default=lambda obj: asdict(obj), sort_keys=True).encode()).hexdigest() + '"'
+        if request.headers.get('if-none-match') == etag:
+            return Response(status_code=304, headers={'ETag': etag})
+        content = camera_answer_content(summaries(source_id, zone=zone), zone)
+        return Response(to_xml(content), media_type='text/html', headers={'ETag': etag})
 
     def capture_controls(source, csrf, operator, configure, answers=(), zone=None):
         sid = source['source_id']
