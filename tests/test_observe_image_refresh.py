@@ -22,10 +22,10 @@ global.Image = class {
   replaceWith(replacement) { image = replacement; }
 };
 let image = new Image(); image.hidden = true; image.naturalWidth = 0;
-const empty = {hidden:false}, caption = {}, label = {};
-const card = {dataset:{imageUrl:'/ui/live-preview/fixture', frame:''},
+const empty = {hidden:false}, caption = {}, label = {}, panel = {open:true};
+const card = {dataset:{imageUrl:'/ui/live-preview/fixture', frame:'', monitoring:'true'},
   classList:{toggle(name,value) { card.monitoring = value; }},
-  querySelector(selector) { return selector === 'img' ? image : selector === '[data-preview-empty]' ? empty : selector === '[data-preview-caption]' ? caption : label; }};
+  querySelector(selector) { return selector === '[data-image-panel]' ? panel : selector === 'img' ? image : selector === '[data-preview-empty]' ? empty : selector === '[data-preview-caption]' ? caption : label; }};
 global.document = {hidden:false, querySelectorAll() { return [card]; }};
 global.setTimeout = (callback, delay) => { assert.equal(delay, 200); };
 global.fetch = async (url, options) => {
@@ -51,6 +51,10 @@ global.fetch = async (url, options) => {
   await refreshPreview(card); assert.equal(writes, previous);
   next = {status:200, frame:'second', monitoring:'false'};
   const oldImage = image;
+  await refreshPreview(card);
+  assert.equal(panel.open, false); assert.equal(writes, previous);
+  assert.equal(card.monitoring, false); // Pausing hides automatically.
+  panel.open = true; // Manual Show while paused is respected by unchanged polls.
   const pending = refreshPreview(card); await new Promise(setImmediate);
   assert.equal(image, oldImage); assert.equal(image.hidden, false);
   assert.equal(card.dataset.frame, 'first');
@@ -72,8 +76,25 @@ global.fetch = async (url, options) => {
   card.dataset.renewAt = '0'; await refreshPreview(card); assert.equal(leaseCount, 2);
   next.status = 204; await refreshPreview(card);
   assert.equal(image.hidden, true); assert.equal(empty.hidden, false);
+  next.status = 200;
+  panel.open = false;
+  const hiddenWrites = writes; card.dataset.renewAt = '0';
+  await refreshPreview(card);
+  assert.equal(leaseCount, 2); assert.equal(writes, hiddenWrites);
+  // Resuming monitoring automatically opens a manually hidden image.
+  next.monitoring = 'true'; next.frame = 'resumed';
+  const resumed = refreshPreview(card); await new Promise(setImmediate);
+  assert.equal(panel.open, true); assert.equal(leaseCount, 3);
+  finishDecode(); await resumed;
+  // A manual hide during download must not be undone when decoding completes.
+  next.frame = 'in-flight';
+  const inFlight = refreshPreview(card); await new Promise(setImmediate);
+  panel.open = false; const shown = image;
+  finishDecode(); await inFlight;
+  assert.equal(image, shown); assert.equal(card.dataset.frame, 'resumed');
+  await refreshPreview(card); assert.equal(panel.open, false);
   const count = requestCount; document.hidden = true; await refreshPreviews();
-  assert.equal(requestCount, count); assert.equal(leaseCount, 2);
+  assert.equal(requestCount, count); assert.equal(leaseCount, 3);
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """
     result = subprocess.run([node], input='\n'.join((harness, OBSERVE_IMAGES_JS, checks)), capture_output=True, text=True)

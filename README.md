@@ -916,7 +916,11 @@ GPU recovery still happen only when observation is requested or saved monitoring
 Observe shows privacy-masked live previews for configured RTSP and USB cameras,
 independently of the interval used to answer questions. A **green ring** and Monitoring
 label mean question monitoring is enabled; an **amber ring** and Paused label mean it
-is not. A paused camera can still have a live preview while you view it.
+is not. Each camera has a **Show image / Hide image** control. Images start shown
+when monitoring is running and hidden when paused. Starting monitoring shows the
+image automatically; pausing hides it. You can show or hide it manually in either
+state. That choice lasts until the next monitoring change or page reload. Answer
+panels stay independent. Showing a paused camera does not start question monitoring.
 
 The preview decoder keeps one camera connection open and continuously drains frames,
 publishing only the newest image at a target of 5 frames per second. JPEG previews
@@ -928,12 +932,14 @@ origin. After installing this fix, refresh Observe once to load the updated scri
 This is a latency target, not a measured guarantee of camera-to-screen
 latency. Camera encoding, network conditions and laptop load still affect it.
 
-Opening Observe starts transient previews with the signed-in operator's CSRF-protected
-viewing request; it does not start monitoring, record answers/images or invoke the
+Showing an image on Observe starts transient previews with the signed-in
+operator's CSRF-protected viewing request; it does not start monitoring, record answers/images or invoke the
 engine. Multiple tabs share one decoder per camera. Up to four cameras can have live
-previews at once; use the camera filter to view fewer when needed. Hidden/closed tabs
-stop renewing their viewing lease and connections close within 00:00:15.0 after the
-last renewal. Preview errors retry automatically with bounded backoff; stale images
+previews at once; use the camera filter to view fewer when needed. Hidden images and
+hidden/closed tabs stop renewing their viewing lease and connections close within 00:00:15.0 after the
+last renewal. Hidden images keep only lightweight monitoring-status checks; image
+downloads stop (an in-flight request can finish). Another tab showing the same camera
+can keep its shared preview alive. Preview errors retry automatically with bounded backoff; stale images
 are labelled as reconnecting rather than presented as current. Viewers still cannot
 access image pixels. Endpoints remain authenticated, loopback-only and no-store.
 
