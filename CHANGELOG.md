@@ -1,5 +1,15 @@
 # Specification change log
 
+## Near-real-time Observe previews — 22 October 2026
+
+- Separate visible-page RTSP/USB previews from model sampling, using persistent
+  supervised decoders and latest-frame replacement instead of repeated reconnects.
+- Target 5 fps with masked 960 × 540 JPEG frames and 0.2-second browser checks;
+  pause hidden-page renewal and close idle connections after 15 seconds.
+- Keep preview frames memory-only and operator-protected. Reconnect stalled cameras,
+  bound the active decoder count, and release exclusive USB devices for observations.
+- Add an offline synthetic process smoke check to Windows/Linux CI and the release.
+
 ## Per-camera answers on Observe — 22 October 2026
 
 - Move the shared Latest answers table into each camera’s Observe section.

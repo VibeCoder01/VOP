@@ -45,6 +45,20 @@ class NoRedirect(HTTPRedirectHandler):
         raise ProviderError("redirect_denied", "Snapshot redirects are disabled")
 
 
+def camera_locator(source):
+    if source.kind == 'usb':
+        return source.settings['device']
+    locator = camera_endpoint(source)
+    if source.settings.get('secret_ref'):
+        from vop.secrets import SecretStore
+        from urllib.parse import quote, urlunsplit
+        credentials = SecretStore().camera(source.settings['secret_ref'])
+        parsed = urlsplit(locator)
+        authority = quote(credentials['username'], safe='') + ':' + quote(credentials['password'], safe='') + '@' + parsed.netloc
+        locator = urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, ''))
+    return locator
+
+
 def capture_inline(source: SourceSpec, timeout: float = 10) -> FrameEnvelope:
     adapter = FileImageAdapter()
     if source.kind == "file":
@@ -68,14 +82,7 @@ def capture_inline(source: SourceSpec, timeout: float = 10) -> FrameEnvelope:
             raise ProviderError("snapshot_failed", "Snapshot acquisition failed") from exc
         return adapter.from_bytes(payload, source.source_id)
     if source.kind in ("usb", "rtsp"):
-        locator = source.settings["device"] if source.kind == "usb" else camera_endpoint(source)
-        if source.kind == "rtsp" and source.settings.get("secret_ref"):
-            from vop.secrets import SecretStore
-            from urllib.parse import quote, urlunsplit
-            credentials = SecretStore().camera(source.settings["secret_ref"])
-            parsed = urlsplit(locator)
-            authority = quote(credentials["username"], safe="") + ":" + quote(credentials["password"], safe="") + "@" + parsed.netloc
-            locator = urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, ""))
+        locator = camera_locator(source)
         try:
             import cv2
         except ImportError as exc:

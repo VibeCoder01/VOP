@@ -21,6 +21,12 @@ exposes recoverable setup removal and explicit, previewed retention deletion (OP
 Observed answers remain append-only except this documented operator-confirmed retention path;
 there is no automatic data purge, model uninstall, secret erasure or Phase 5 expansion.
 
+22 October preview update: the owner requested Observe images as near real-time as
+possible. This authorises transient, privacy-masked RTSP/USB preview decoding while
+an operator views Observe, independent of sampled inference. It does not authorise
+recording preview video, changing inference cadence, OS autostart or unattended
+preview services. Existing camera provisioning and access rules remain in force.
+
 ## Outcome
 
 A local browser dashboard can evaluate captured images using the explicitly selected backend:

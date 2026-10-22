@@ -46,6 +46,8 @@ class Pipeline:
         if value is None:
             self.previews.clear()
             self._latest_preview = None
+            if hasattr(self, 'live_previews'):
+                self.live_previews.clear(None)
         else:
             self.remember_preview(*value)
 
@@ -54,6 +56,8 @@ class Pipeline:
         self._latest_preview = (source_id, frame_id, payload)
 
     def clear_preview(self, source_id, frame_id=None):
+        if frame_id is None and hasattr(self, 'live_previews'):
+            self.live_previews.clear(source_id)
         item = self.previews.get(source_id)
         if item and (frame_id is None or frame_id == item[0]):
             self.previews.pop(source_id, None)
@@ -89,7 +93,8 @@ class Pipeline:
                     raise
             if frame is None:
                 try:
-                    frame = self.capture_adapter.capture(source)
+                    frame = (self.live_previews.capture(source, self.capture_adapter.capture)
+                             if hasattr(self, 'live_previews') else self.capture_adapter.capture(source))
                 except ProviderError as exc:
                     return self.save_capture_error(source, exc)
                 except Exception:

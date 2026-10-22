@@ -9,14 +9,20 @@ from vop.contracts import FrameEnvelope
 from vop.measurements import rectangle
 
 
-def preprocess(frame: FrameEnvelope, masks: list | tuple = (), roi=None, *, preview: bool = False) -> FrameEnvelope:
-    with Image.open(BytesIO(frame.payload)) as original:
-        image = original.convert("RGB")
+def mask_image(image, masks):
+    """Apply the same source privacy policy to inference, stills and live previews."""
     for mask in masks:
         x, y, width, height = rectangle(mask)
         ImageDraw.Draw(image).rectangle((int(x * image.width), int(y * image.height),
                                         min(image.width, int((x + width) * image.width + 0.999)),
                                         min(image.height, int((y + height) * image.height + 0.999))), fill="black")
+    return image
+
+
+def preprocess(frame: FrameEnvelope, masks: list | tuple = (), roi=None, *, preview: bool = False) -> FrameEnvelope:
+    with Image.open(BytesIO(frame.payload)) as original:
+        image = original.convert("RGB")
+    mask_image(image, masks)
     if roi is not None:
         x, y, width, height = rectangle(roi)
         box = (int(x * image.width), int(y * image.height),
