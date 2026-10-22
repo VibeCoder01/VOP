@@ -47,6 +47,7 @@
   over actual loopback HTTP, three synthetic observations persisted after restart,
   disconnect behavior and real Windows DPAPI checked. Cameras not connected and
   model weights not loaded.
+- Final HEAD metadata/header and image-script regressions: 4 passed in 10.59s.
 - `git diff --check`: passed.
 
 ## Application and limits

@@ -869,6 +869,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             return Response(status_code=204 if request.method == 'HEAD' else 404, headers=headers)
         frame_id, payload, captured_at, kind = image
         headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
+        headers['Content-Length'] = str(len(payload))
         return Response(b'' if request.method == 'HEAD' else payload, media_type='image/png', headers=headers)
 
     @app.route("/ui/preview/{source_id}/{frame_id}", methods=["GET"])

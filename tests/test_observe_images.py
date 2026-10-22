@@ -42,6 +42,7 @@ def test_observe_keeps_each_latest_masked_image_and_tracks_monitoring(app, monke
         assert store.evidence(first.source_id, first_id) is None
         head = client.head('/ui/live-preview/' + second.source_id)
         assert head.status_code == 200 and not head.content
+        assert int(head.headers['content-length']) == len(client.get('/ui/live-preview/' + second.source_id).content)
         assert head.headers['x-vop-frame-id'] == second_id and head.headers['x-vop-monitoring'] == 'false'
         assert client.get('/ui/preview/' + first.source_id + '/' + first_id).status_code == 200
         count = store.health()['observation_count']
