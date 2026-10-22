@@ -915,7 +915,11 @@ is not. A paused camera can still have a live preview while you view it.
 The preview decoder keeps one camera connection open and continuously drains frames,
 publishing only the newest image at a target of 5 frames per second. JPEG previews
 are limited to 960 × 540. The visible page checks every 00:00:00.2 and downloads changed
-frames only. This is a latency target, not a measured guarantee of camera-to-screen
+frames only, without reloading the page or closing the answer panels. Each new image
+is decoded before replacing the current image; a failed download leaves the last
+image visible and retries automatically. Background requests stay on the same VOP
+origin. After installing this fix, refresh Observe once to load the updated script.
+This is a latency target, not a measured guarantee of camera-to-screen
 latency. Camera encoding, network conditions and laptop load still affect it.
 
 Opening Observe starts transient previews with the signed-in operator's CSRF-protected

@@ -87,3 +87,22 @@ def test_camera_test_actions_are_separate_from_the_image(app):
         assert footer.select_one('a.button.secondary').text == 'Back to camera'
         assert not footer.select('img')
         assert footer.find_previous_sibling()['class'] == ['camera-test-result']
+
+
+def test_observe_policy_allows_same_origin_refresh_and_engine_actions_are_grouped(app):
+    with TestClient(app) as client:
+        csrf = login(client)
+        response = client.post('/integration/health', data={'csrf': csrf})
+        soup = BeautifulSoup(response.text, 'html.parser')
+        back = soup.find('a', string='Back to Engines')
+        assert 'secondary' in back['class'] and 'button' in back['class']
+        assert 'actions' in back.parent['class']
+        assert back.parent.select_one('form button').text == 'Check again'
+        client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
+        response = client.get('/')
+        policy = dict(part.strip().split(' ', 1) for part in response.headers['content-security-policy'].split(';'))
+        assert policy['connect-src'] == "'self'"
+        assert policy['default-src'] == "'none'"
+        assert policy['img-src'] == "'self'"
+        assert policy['script-src'] == "'self'"
+        assert '/ui/observe-images.js' in response.text

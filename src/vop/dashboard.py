@@ -97,8 +97,13 @@ async function refreshPreview(card) {
     }
     const frame = response.headers.get('X-VOP-Frame-Id');
     if (card.dataset.frame !== frame || image.hidden || !image.naturalWidth) {
-      image.onload = () => { image.hidden = false; empty.hidden = true; };
-      image.src = card.dataset.imageUrl + '?frame=' + encodeURIComponent(frame);
+      // Decode off-screen; keep the displayed pixels until the replacement is ready.
+      const replacement = new Image();
+      replacement.alt = image.alt;
+      replacement.src = card.dataset.imageUrl + '?frame=' + encodeURIComponent(frame);
+      await replacement.decode();
+      image.replaceWith(replacement);
+      empty.hidden = true;
       card.dataset.frame = frame;
     }
     const stamp = new Date(response.headers.get('X-VOP-Captured-At')).toLocaleString();
