@@ -924,3 +924,12 @@ No image available until you run Observe now or monitoring captures again. It do
 not automatically capture from paused cameras. Deletion/retention also clears the
 matching temporary images. Camera-test actions are grouped below the image in a
 separate row so Back to camera cannot wrap beside the picture.
+
+### Answers under each camera
+
+On Observe, each camera has its own **Show answers** button below its controls.
+Open it to see that camera’s latest answers, states, question versions and observation
+times; **Hide answers** collapses it. Cameras open independently. Tables are hidden
+initially and reset to hidden on page reload. The source filter still limits which
+cameras appear. These native browser controls need no JavaScript and do not capture
+images or change monitoring. Refresh view updates the recorded answers as before.
