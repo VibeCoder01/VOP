@@ -170,8 +170,7 @@ def install_history_deletion(app, store, pipeline, reliable):
                     delete_selected(db, chosen, whole_source=not observation_id)
                     for key in chosen['keys']:
                         store._rebuild(db, *key)
-                if pipeline.latest_preview and pipeline.latest_preview[0] == chosen['source_id']:
-                    pipeline.latest_preview = None
+                pipeline.clear_preview(chosen['source_id'])
                 checkpoint(store)
                 return chosen['source_id']
             finally:

@@ -877,7 +877,7 @@ Question answer type `binary` is labelled **Yes/No** in the interface.
 test per camera for the next available slot, ahead of periodic observations, and
 opens a result page that updates automatically. The test does not require an
 active question or enabled monitoring, invoke inference, or retain image evidence.
-Its temporary preview can expire when a later capture replaces it. Pending tests
+Its temporary preview can expire when a later capture from that same camera replaces it. Pending tests
 are held in memory: after restarting VOP, request the test again. This does not
 change the overload behavior of the machine API.
 
@@ -904,3 +904,23 @@ synthetic fixtures. They remain clearly labelled and do not access cameras or lo
 models. The live engine editor offers real workers only. A fresh live workspace
 uses the approved Antec profile when no real engine has been saved; connection and
 GPU recovery still happen only when observation is requested or saved monitoring runs.
+
+### Latest images on Observe
+
+Observe shows each camera’s latest privacy-masked image. A **green ring** and
+Monitoring label mean continuous monitoring is enabled; an **amber ring** and Paused
+label mean it is not. The ring reflects monitoring between samples, not only the
+instant a capture is active. The capture time is shown below the image.
+
+The page checks every 00:00:05.0 while visible and downloads changed images only.
+These reads do not acquire camera frames or invoke the engine. Each configured
+camera keeps at most one downscaled preview in memory, including while paused;
+another camera cannot replace it. Images remain operator-only and are not cached
+by the browser. Image-saving settings are unchanged.
+
+After restart, Observe uses the latest retained image if one exists and labels it
+Latest saved image. If image saving was off and no image is available, it shows
+No image available until you run Observe now or monitoring captures again. It does
+not automatically capture from paused cameras. Deletion/retention also clears the
+matching temporary images. Camera-test actions are grouped below the image in a
+separate row so Back to camera cannot wrap beside the picture.

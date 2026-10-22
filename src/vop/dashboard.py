@@ -40,7 +40,7 @@ form.inline{display:inline-flex;gap:8px;align-items:center}.filters{display:flex
 table{border-collapse:collapse;width:100%;text-align:left}th{font-size:11px;color:var(--muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:18px 14px;border-bottom:1px solid #e8e8ed;vertical-align:top;font-size:13px}td strong{font-weight:600}td small{display:block;line-height:1.6;margin-top:5px}tr:hover td{background:#eeeef3}.table-wrap{overflow:auto}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:0 0 36px;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.stat strong{display:block;font-size:32px;font-weight:600;letter-spacing:-1px;margin-top:10px}.stat small{font-size:12px}.status,.tag{display:inline-block;padding:5px 9px;border-radius:6px;background:#e8e8ed;color:#4f4f58;font-size:11px;font-weight:600;line-height:1.4;white-space:nowrap}.tag{color:#0055b3;background:#e5efff}.status.ACTIVE,.status.HEALTHY,.status.success,.status.closed,.status.OBSERVED,.status.delivered,.status.resolved{background:#e0f1e9;color:#206146}.status.UNKNOWN,.status.PENDING,.status.RECOVERING,.status.interrupted,.status.CONNECTING,.status.warning,.status.open{background:#fff0d7;color:#7e520c}.status.DISCONNECTED,.status.model_failure,.status.capture_failure,.status.timeout,.status.error,.status.critical,.status.failed{background:#fbe6e6;color:#a1252c}.status.info,.status.acknowledged{background:#e5efff;color:#205a94}
 .readiness,.notice,.error{padding:14px 18px;border-radius:10px;margin:16px 0;font-size:13px;line-height:1.6;background:#eef1f5;color:#414854}.readiness p{color:inherit}.readiness ul{margin:5px 0;padding-left:18px}.readiness li{margin:4px 0}.readiness a{text-decoration:underline;text-underline-offset:3px}.readiness.success{background:#e5f2ec;color:#246147}.readiness.warning{background:#fff2df;color:#7a510e}.readiness.error,.error{background:#fbe9e9;color:#9a282f}.readiness.info,.notice{background:#e8f0fc;color:#285483}.readiness.success{padding:0;background:transparent}.readiness.success:before{content:'●';color:#26835b;margin-right:8px}
-details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
+details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#45454c;padding:10px 0}details[open]>summary{margin-bottom:12px}pre{font:12px/1.6 Consolas,monospace;overflow:auto;background:#ececf1;padding:18px;border-radius:9px;white-space:pre-wrap;word-break:break-word}.preview{max-width:100%;max-height:480px;object-fit:contain;border-radius:12px;background:#e8e8ed}.evidence-box{display:inline-block;position:relative;max-width:100%}.evidence-box .preview{display:block}.camera-test-result .evidence-box{display:block;width:fit-content;margin-bottom:24px}.camera-test-actions{margin-top:24px}.camera-test-actions .button{white-space:nowrap}.observe-image{border:4px solid #b77908;border-radius:16px;padding:8px;margin:18px 0;background:#fffaf0;max-width:800px}.observe-image.monitoring{border-color:#168153;background:#f0faf4}.observe-image img{max-width:100%;max-height:440px;object-fit:contain;border-radius:8px}.observe-image img:not([hidden]){display:block}.observe-image [data-monitoring-label]{font-weight:600}.observe-image p{margin:8px 0}.roi-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.roi-overlay rect{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}.login{max-width:440px;margin:12vh auto;padding:32px}.login .brand{padding:0}
 .chart{width:100%;height:150px;display:block;max-width:700px}.chart line{stroke:#dcdce0;stroke-width:1}.chart polyline{stroke:var(--accent);stroke-width:2;fill:none}.chart circle{fill:var(--accent)}.chart text{font-size:10px;fill:#626268}.chart .unobserved{fill:#fff0d7;stroke:none}.chart-legend{font-size:12px;color:#7e520c;margin:6px 0 12px}.chart-legend span{display:inline-block;background:#fff0d7;border:1px solid #ae7925;width:14px;height:10px;margin-right:6px}[hidden]{display:none!important}
 @keyframes appear{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(max-width:1000px){.object-row{align-items:start;flex-direction:column;gap:14px}.workspace{padding:36px 30px}.stats{gap:14px}.stat strong{font-size:27px}}
@@ -68,6 +68,42 @@ WORKSPACE_JS = """document.addEventListener('submit', (event) => {
   button.setAttribute('aria-busy', 'true');
   button.textContent = 'Working…';
 });"""
+
+
+OBSERVE_IMAGES_JS = """const previews = document.querySelectorAll('[data-observe-preview]');
+async function refreshPreview(card) {
+  const image = card.querySelector('img');
+  const empty = card.querySelector('[data-preview-empty]');
+  const caption = card.querySelector('[data-preview-caption]');
+  try {
+    const response = await fetch(card.dataset.imageUrl, {method:'HEAD', cache:'no-store'});
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) { image.hidden = true; empty.hidden = false; }
+      return;
+    }
+    const monitoring = response.headers.get('X-VOP-Monitoring') === 'true';
+    card.classList.toggle('monitoring', monitoring);
+    card.querySelector('[data-monitoring-label]').textContent = monitoring ? 'Monitoring' : 'Paused';
+    if (response.status === 204) {
+      image.hidden = true; image.removeAttribute('src'); empty.hidden = false;
+      card.dataset.frame = ''; caption.textContent = ''; return;
+    }
+    const frame = response.headers.get('X-VOP-Frame-Id');
+    if (card.dataset.frame !== frame || image.hidden || !image.naturalWidth) {
+      image.onload = () => { image.hidden = false; empty.hidden = true; };
+      image.src = card.dataset.imageUrl + '?frame=' + encodeURIComponent(frame);
+      card.dataset.frame = frame;
+    }
+    const stamp = new Date(response.headers.get('X-VOP-Captured-At')).toLocaleString();
+    caption.textContent = (response.headers.get('X-VOP-Preview-Kind') === 'saved' ? 'Latest saved image: ' : 'Latest image: ') + stamp;
+  } catch (_) { /* Keep the last received image during a temporary connection failure. */ }
+}
+async function refreshPreviews() {
+  if (!document.hidden) for (const card of previews) await refreshPreview(card);
+  setTimeout(refreshPreviews, 5000);
+}
+refreshPreviews();
+"""
 
 
 TRENDS_REFRESH_JS = """const filters = document.querySelector('form.filters');
@@ -241,6 +277,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace", id="workspace"), cls="shell"),
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
+                         Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None))
 
     def recorded_label(source_id, answer):
@@ -284,6 +321,25 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 result.append({"source_id": source_id, **record, "summary": summary})
         return result
 
+    def latest_image(source_id):
+        cached = pipeline.previews.get(source_id)
+        if cached:
+            return (*cached, 'temporary')
+        saved = store.latest_evidence(source_id)
+        return (*saved, 'saved') if saved else None
+
+    def observe_image(source, monitoring):
+        sid = source['source_id']
+        image = latest_image(sid)
+        url = '/ui/live-preview/' + sid
+        return Div(Span('Monitoring' if monitoring else 'Paused', data_monitoring_label=''),
+            Img(src=url if image else None, alt='Latest privacy-masked image from ' + source['name'], hidden=not image),
+            P('No image available. Start monitoring or use Observe now.', hidden=bool(image), data_preview_empty=''),
+            P(('Latest saved image: ' if image and image[3] == 'saved' else 'Latest image: ') + local_time(image[2], settings.timezone_name) if image else '',
+              data_preview_caption='', cls='muted'),
+            cls='observe-image monitoring' if monitoring else 'observe-image', data_observe_preview=sid,
+            data_image_url=url, data_frame=image[0] if image else '')
+
     def capture_controls(source, csrf, operator, configure):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
@@ -296,6 +352,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    Div(StrongText('Monitoring is running'), P('This camera takes repeated observations. Cameras take turns; monitoring stays on between samples. Pause monitoring to stop.'),
                        P('Demo engine selected. Answers are synthetic.') if pipeline.engine.synthetic else None, cls='readiness success', role='status') if operator and monitoring else None,
                    dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring) else P("Capture controls require operator access.") if not operator else None,
+                   observe_image(source, monitoring) if operator and not configure else None,
                    P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(action_problems)),
@@ -745,7 +802,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    Details(Summary("Technical details"), Pre(json.dumps(summary, indent=2))),
                    action("Observe again" if getattr(pipeline, 'auto_worker', None) else "Capture again", f"/ui/sources/{source_id}/capture", request.scope["session"]["csrf"]),
                    A("Back to Observe", href="/", cls="button secondary")]
-        if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, summary["frame_id"]):
+        if pipeline.previews.get(source_id) and pipeline.previews[source_id][0] == summary["frame_id"]:
             content.insert(1, evidence_image(f"/ui/preview/{source_id}/{summary['frame_id']}", "Privacy-masked source frame; inspect recorded engine provenance",
                                              tuple(r["policy"].roi for r in store.questions(source_id))))
         with store.connection() as db:
@@ -795,13 +852,34 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         await run_in_threadpool(store.replay_all)
         return RedirectResponse("/?view=events&notice=Stored+observations+replayed", status_code=303)
 
+    @app.route('/ui/observe-images.js', methods=['GET'])
+    def observe_images_script():
+        return Response(OBSERVE_IMAGES_JS, media_type='application/javascript')
+
+    @app.route('/ui/live-preview/{source_id}', methods=['GET', 'HEAD'])
+    def live_preview(source_id: str, request):
+        if request.scope.get('auth_role') != 'operator':
+            return Response('Images require operator permission', status_code=403)
+        if source_id not in pipeline.sources:
+            return Response('Camera not available', status_code=404)
+        control = store.source_control(source_id)
+        headers = {'X-VOP-Monitoring': str(bool(control['enabled'] and control['sample_interval_seconds'] > 0)).lower()}
+        image = latest_image(source_id)
+        if not image:
+            return Response(status_code=204 if request.method == 'HEAD' else 404, headers=headers)
+        frame_id, payload, captured_at, kind = image
+        headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
+        headers['Content-Length'] = str(len(payload))
+        return Response(b'' if request.method == 'HEAD' else payload, media_type='image/png', headers=headers)
+
     @app.route("/ui/preview/{source_id}/{frame_id}", methods=["GET"])
     def preview(source_id: str, frame_id: str, request):
         if request.scope.get("auth_role") != "operator":
             return Response("Evidence requires operator permission", status_code=403)
-        if not pipeline.latest_preview or pipeline.latest_preview[:2] != (source_id, frame_id):
+        image = pipeline.previews.get(source_id)
+        if not image or image[0] != frame_id:
             return Response("Preview is no longer in memory", status_code=404)
-        return Response(pipeline.latest_preview[2], media_type="image/png")
+        return Response(image[1], media_type="image/png")
 
     @app.route("/ui/evidence/{source_id}/{frame_id}", methods=["GET"])
     def evidence(source_id: str, frame_id: str, request):
@@ -813,8 +891,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route("/ui/evidence/{source_id}/{frame_id}/delete", methods=["POST"])
     def delete_evidence(source_id: str, frame_id: str, request):
         store.delete_evidence(source_id, frame_id)
-        if pipeline.latest_preview and pipeline.latest_preview[:2] == (source_id, frame_id):
-            pipeline.latest_preview = None
+        pipeline.clear_preview(source_id, frame_id)
         return RedirectResponse("/?notice=Evidence+deleted", status_code=303)
 
     @app.route("/ui/observations/{observation_id}", methods=["GET"])
