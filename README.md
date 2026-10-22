@@ -905,25 +905,39 @@ models. The live engine editor offers real workers only. A fresh live workspace
 uses the approved Antec profile when no real engine has been saved; connection and
 GPU recovery still happen only when observation is requested or saved monitoring runs.
 
-### Latest images on Observe
+### Live images on Observe
 
-Observe shows each camera’s latest privacy-masked image. A **green ring** and
-Monitoring label mean continuous monitoring is enabled; an **amber ring** and Paused
-label mean it is not. The ring reflects monitoring between samples, not only the
-instant a capture is active. The capture time is shown below the image.
+Observe shows privacy-masked live previews for configured RTSP and USB cameras,
+independently of the interval used to answer questions. A **green ring** and Monitoring
+label mean question monitoring is enabled; an **amber ring** and Paused label mean it
+is not. A paused camera can still have a live preview while you view it.
 
-The page checks every 00:00:05.0 while visible and downloads changed images only.
-These reads do not acquire camera frames or invoke the engine. Each configured
-camera keeps at most one downscaled preview in memory, including while paused;
-another camera cannot replace it. Images remain operator-only and are not cached
-by the browser. Image-saving settings are unchanged.
+The preview decoder keeps one camera connection open and continuously drains frames,
+publishing only the newest image at a target of 5 frames per second. JPEG previews
+are limited to 960 × 540. The visible page checks every 00:00:00.2 and downloads changed
+frames only. This is a latency target, not a measured guarantee of camera-to-screen
+latency. Camera encoding, network conditions and laptop load still affect it.
 
-After restart, Observe uses the latest retained image if one exists and labels it
-Latest saved image. If image saving was off and no image is available, it shows
-No image available until you run Observe now or monitoring captures again. It does
-not automatically capture from paused cameras. Deletion/retention also clears the
-matching temporary images. Camera-test actions are grouped below the image in a
-separate row so Back to camera cannot wrap beside the picture.
+Opening Observe starts transient previews with the signed-in operator's CSRF-protected
+viewing request; it does not start monitoring, record answers/images or invoke the
+engine. Multiple tabs share one decoder per camera. Up to four cameras can have live
+previews at once; use the camera filter to view fewer when needed. Hidden/closed tabs
+stop renewing their viewing lease and connections close within 00:00:15.0 after the
+last renewal. Preview errors retry automatically with bounded backoff; stale images
+are labelled as reconnecting rather than presented as current. Viewers still cannot
+access image pixels. Endpoints remain authenticated, loopback-only and no-store.
+
+USB previews release exclusive devices during an observation's one-shot acquisition,
+then resume. RTSP previews use a separate connection from sampled inference. No
+inference sampling rates or saved setup are changed. Other input types keep their
+latest captured still image. After restart, saved images can appear while a camera
+connects; no frame is invented if nothing is available yet. Recorded-image retention
+settings remain independent of these memory-only previews.
+
+Offline process verification: `.\.venv\Scripts\python.exe tools/preview_smoke.py`.
+This uses explicit synthetic pixels, requires no camera/OpenCV/model weights, verifies
+masks and releases the preview process after its lease expires.
+
 
 ### Answers under each camera
 

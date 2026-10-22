@@ -540,6 +540,7 @@ def install_integration(app, settings, store, pipeline):
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_profile:" + sid, dumps(record)))
                 db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
             pipeline.sources[sid] = source
+            pipeline.clear_preview(sid)
             if is_new and form.get('connect') == '1':
                 store.update_source(sid, enabled=True, retain_evidence=False, sample_interval_seconds=0)
             store.audit("camera_setup", "saved_protected_references")

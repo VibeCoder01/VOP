@@ -65,7 +65,8 @@ class BrowserAuth:
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False
-        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor'))
+        preview_control = path.startswith('/ui/live-preview/') and path.endswith('/keepalive')
+        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor')) or preview_control
         needs_configure = not public and not bearer and role == 'operator' and session.get('mode', 'view') != 'configure' and (
             not read_page if method in ('GET', 'HEAD') else not view_action)
         origin = headers.get(b"origin")
@@ -124,7 +125,7 @@ class BrowserAuth:
         monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
         camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
-        admitted = method == "POST" and not monitoring_control and not camera_test and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
+        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
         acquired = admitted and self.admission.acquire(blocking=False)
         if admitted and not acquired and scheduled_capture:
             scope['capture_schedule_only'] = True

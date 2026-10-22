@@ -26,6 +26,7 @@ jobs:
       - run: python tools/phase2_smoke.py
       - run: python tools/phase3_smoke.py
       - run: python tools/phase4_smoke.py
+      - run: python tools/preview_smoke.py
       - run: python tools/restart_smoke.py
       - run: python tools/build_release.py
       - uses: actions/upload-artifact@v4

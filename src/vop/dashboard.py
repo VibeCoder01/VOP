@@ -76,16 +76,23 @@ async function refreshPreview(card) {
   const empty = card.querySelector('[data-preview-empty]');
   const caption = card.querySelector('[data-preview-caption]');
   try {
+    if (card.dataset.leaseUrl && Date.now() >= Number(card.dataset.renewAt || 0)) {
+      const lease = await fetch(card.dataset.leaseUrl, {method:'POST', body:new URLSearchParams({csrf:card.dataset.csrf}), cache:'no-store'});
+      card.dataset.leaseFailed = lease.ok ? '' : 'true';
+      card.dataset.renewAt = Date.now() + 5000;
+    }
     const response = await fetch(card.dataset.imageUrl, {method:'HEAD', cache:'no-store'});
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) { image.hidden = true; empty.hidden = false; }
       return;
     }
     const monitoring = response.headers.get('X-VOP-Monitoring') === 'true';
+    const previewState = response.headers.get('X-VOP-Preview-State');
     card.classList.toggle('monitoring', monitoring);
     card.querySelector('[data-monitoring-label]').textContent = monitoring ? 'Monitoring' : 'Paused';
     if (response.status === 204) {
       image.hidden = true; image.removeAttribute('src'); empty.hidden = false;
+      empty.textContent = card.dataset.leaseFailed ? 'Live preview could not start. Check this camera in Configure mode.' : response.headers.get('X-VOP-Preview-Error') === 'preview_capacity' ? 'Use the camera filter to show no more than four live previews.' : previewState === 'connecting' ? 'Connecting to camera…' : previewState === 'reconnecting' ? 'Reconnecting to camera. Check its saved details if this continues.' : 'No image available. Start monitoring or use Observe now.';
       card.dataset.frame = ''; caption.textContent = ''; return;
     }
     const frame = response.headers.get('X-VOP-Frame-Id');
@@ -95,12 +102,15 @@ async function refreshPreview(card) {
       card.dataset.frame = frame;
     }
     const stamp = new Date(response.headers.get('X-VOP-Captured-At')).toLocaleString();
-    caption.textContent = (response.headers.get('X-VOP-Preview-Kind') === 'saved' ? 'Latest saved image: ' : 'Latest image: ') + stamp;
+    const kind = response.headers.get('X-VOP-Preview-Kind');
+    const state = response.headers.get('X-VOP-Preview-State');
+    const note = response.headers.get('X-VOP-Preview-Error') === 'preview_capacity' ? 'Show fewer cameras for live previews. ' : card.dataset.leaseFailed ? 'Live preview unavailable; check camera setup. ' : state === 'connecting' ? 'Connecting. ' : state === 'reconnecting' ? 'Reconnecting. ' : '';
+    caption.textContent = note + (kind === 'live' ? (state === 'live' ? 'Live preview: ' : 'Last preview: ') : kind === 'saved' ? 'Latest saved image: ' : 'Latest image: ') + stamp;
   } catch (_) { /* Keep the last received image during a temporary connection failure. */ }
 }
 async function refreshPreviews() {
-  if (!document.hidden) for (const card of previews) await refreshPreview(card);
-  setTimeout(refreshPreviews, 5000);
+  if (!document.hidden) await Promise.all(Array.from(previews, refreshPreview));
+  setTimeout(refreshPreviews, 200);
 }
 refreshPreviews();
 """
@@ -322,13 +332,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return result
 
     def latest_image(source_id):
+        live = pipeline.live_previews.image(source_id)
         cached = pipeline.previews.get(source_id)
+        if live and (not cached or live[2] >= cached[2]):
+            return live
         if cached:
-            return (*cached, 'temporary')
+            return (*cached, 'temporary', 'image/png')
         saved = store.latest_evidence(source_id)
-        return (*saved, 'saved') if saved else None
+        return (*saved, 'saved', 'image/png') if saved else None
 
-    def observe_image(source, monitoring):
+    def observe_image(source, monitoring, csrf):
         sid = source['source_id']
         image = latest_image(sid)
         url = '/ui/live-preview/' + sid
@@ -338,7 +351,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             P(('Latest saved image: ' if image and image[3] == 'saved' else 'Latest image: ') + local_time(image[2], settings.timezone_name) if image else '',
               data_preview_caption='', cls='muted'),
             cls='observe-image monitoring' if monitoring else 'observe-image', data_observe_preview=sid,
-            data_image_url=url, data_frame=image[0] if image else '')
+            data_image_url=url, data_frame=image[0] if image else '', data_csrf=csrf,
+            data_lease_url=url + '/keepalive' if pipeline.live_previews.allowed and source['kind'] in ('rtsp', 'usb') else None)
 
     def camera_answers(source, answers, zone):
         return Details(Summary(Span('Show answers', cls='show-answers'), Span('Hide answers', cls='hide-answers'), cls='button secondary'),
@@ -361,7 +375,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    Div(StrongText('Monitoring is running'), P('This camera takes repeated observations. Cameras take turns; monitoring stays on between samples. Pause monitoring to stop.'),
                        P('Demo engine selected. Answers are synthetic.') if pipeline.engine.synthetic else None, cls='readiness success', role='status') if operator and monitoring else None,
                    dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring) else P("Capture controls require operator access.") if not operator else None,
-                   observe_image(source, monitoring) if operator and not configure else None,
+                   observe_image(source, monitoring, csrf) if operator and not configure else None,
                    P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(action_problems)),
@@ -862,6 +876,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def observe_images_script():
         return Response(OBSERVE_IMAGES_JS, media_type='application/javascript')
 
+    @app.route('/ui/live-preview/{source_id}/keepalive', methods=['POST'])
+    async def preview_keepalive(source_id: str, request):
+        if request.scope.get('auth_role') != 'operator':
+            return Response('Images require operator permission', status_code=403)
+        await run_in_threadpool(pipeline.live_previews.request, source_id)
+        return Response(status_code=202)
+
     @app.route('/ui/live-preview/{source_id}', methods=['GET', 'HEAD'])
     def live_preview(source_id: str, request):
         if request.scope.get('auth_role') != 'operator':
@@ -869,14 +890,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if source_id not in pipeline.sources:
             return Response('Camera not available', status_code=404)
         control = store.source_control(source_id)
-        headers = {'X-VOP-Monitoring': str(bool(control['enabled'] and control['sample_interval_seconds'] > 0)).lower()}
+        headers = {'X-VOP-Monitoring': str(bool(control['enabled'] and control['sample_interval_seconds'] > 0)).lower(),
+                   'X-VOP-Preview-State': pipeline.live_previews.state(source_id),
+                   'X-VOP-Preview-Error': pipeline.live_previews.error(source_id)}
         image = latest_image(source_id)
         if not image:
             return Response(status_code=204 if request.method == 'HEAD' else 404, headers=headers)
-        frame_id, payload, captured_at, kind = image
+        frame_id, payload, captured_at, kind, content_type = image
         headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
         headers['Content-Length'] = str(len(payload))
-        return Response(b'' if request.method == 'HEAD' else payload, media_type='image/png', headers=headers)
+        return Response(b'' if request.method == 'HEAD' else payload, media_type=content_type, headers=headers)
 
     @app.route("/ui/preview/{source_id}/{frame_id}", methods=["GET"])
     def preview(source_id: str, frame_id: str, request):
