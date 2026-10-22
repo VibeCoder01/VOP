@@ -558,7 +558,7 @@ def install_integration(app, settings, store, pipeline):
         try:
             frame = SourceAdapters(allow_live_sources=True, timeout_seconds=settings.capture_timeout_seconds).capture(source)
             masked = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
-            pipeline.latest_preview = (source_id, frame.frame_id, masked.payload)
+            pipeline.remember_preview(source_id, frame.frame_id, masked.payload, frame.captured_at_utc)
             diagnostic = {"source_id": source_id, "status": "capture_success", "width": frame.width,
                           "height": frame.height, "frame_id": frame.frame_id, "captured_at_utc": frame.captured_at_utc.isoformat()}
         except ProviderError as exc:
@@ -584,9 +584,9 @@ def install_integration(app, settings, store, pipeline):
             diagnostic = json.loads(row[0]) if row else {}
             if diagnostic.get('status') == 'capture_success':
                 content = [P(f"Capture succeeded: {diagnostic['width']} × {diagnostic['height']}. No inference was requested; evidence was not retained.", cls='readiness success')]
-                preview = pipeline.latest_preview
-                if preview and preview[:2] == (source_id, diagnostic.get('frame_id')):
-                    content.append(evidence_image(f'/ui/preview/{source_id}/{preview[1]}', 'Privacy-masked connection preview'))
+                preview = pipeline.previews.get(source_id)
+                if preview and preview[0] == diagnostic.get('frame_id'):
+                    content.append(evidence_image(f'/ui/preview/{source_id}/{preview[0]}', 'Privacy-masked connection preview'))
                 else:
                     content.append(P('The temporary preview has expired. Test again for a new image.', cls='muted'))
             elif diagnostic:
@@ -596,8 +596,9 @@ def install_integration(app, settings, store, pipeline):
                            Details(Summary('Technical details'), Pre(diagnostic['status']))]
             else:
                 content = [P('This camera has not been tested yet.')]
-            content.append(action('Test camera again', f'/integration/cameras/{source_id}/test', csrf(request)))
-        result = app.state.page('Camera connection test', request, [*content, A('Back to camera', href='/cameras/' + source_id)], view='cameras')
+        footer = Div(action('Test camera again', f'/integration/cameras/{source_id}/test', csrf(request)) if not pending else None,
+                     A('Back to camera', href='/cameras/' + source_id, cls='button secondary'), cls='actions camera-test-actions')
+        result = app.state.page('Camera connection test', request, [Div(*content, cls='camera-test-result'), footer], view='cameras')
         return HTMLResponse(to_xml(result), headers={'Refresh': '1'} if pending else {})
 
     @app.route("/integration/cameras/{source_id}/test", methods=["POST"])

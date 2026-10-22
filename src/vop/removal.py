@@ -81,7 +81,7 @@ def install_removal(app, store, pipeline, reliable):
                 if question_id is None:
                     source, target = (pipeline.removed_sources, pipeline.sources) if restore else (pipeline.sources, pipeline.removed_sources)
                     target[source_id] = source.pop(source_id)
-                pipeline.latest_preview = None
+                pipeline.clear_preview(source_id)
             finally:
                 reliable.lock.release()
         finally:
@@ -148,8 +148,7 @@ def install_removal(app, store, pipeline, reliable):
                     db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)',
                                (utcnow().isoformat(), 'question_delete', dumps({'source_id': source_id, 'question_id': question_id})))
                 if delete_data:
-                    if pipeline.latest_preview and pipeline.latest_preview[0] == source_id:
-                        pipeline.latest_preview = None
+                    pipeline.clear_preview(source_id)
                     checkpoint(store)
                 return True
             finally:

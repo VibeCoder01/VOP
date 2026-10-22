@@ -33,8 +33,32 @@ class Pipeline:
                 target.setdefault(source.source_id, source)
         self.busy = Lock()
         self.skipped = 0
-        self.latest_preview = None  # One privacy-masked, downscaled preview; never an unbounded cache.
+        self.previews = {}  # One masked/downscaled image per configured input (maximum 32).
+        self._latest_preview = None
         self.stopping = False
+
+    @property
+    def latest_preview(self):
+        return self._latest_preview
+
+    @latest_preview.setter
+    def latest_preview(self, value):
+        if value is None:
+            self.previews.clear()
+            self._latest_preview = None
+        else:
+            self.remember_preview(*value)
+
+    def remember_preview(self, source_id, frame_id, payload, captured_at=None):
+        self.previews[source_id] = (frame_id, payload, (captured_at or utcnow()).isoformat())
+        self._latest_preview = (source_id, frame_id, payload)
+
+    def clear_preview(self, source_id, frame_id=None):
+        item = self.previews.get(source_id)
+        if item and (frame_id is None or frame_id == item[0]):
+            self.previews.pop(source_id, None)
+        if self._latest_preview and self._latest_preview[0] == source_id and (frame_id is None or self._latest_preview[1] == frame_id):
+            self._latest_preview = None
 
     def source(self, source_id: str):
         if source_id not in self.sources:
@@ -79,6 +103,8 @@ class Pipeline:
                 if previous.pop("sha256") != frame.sha256:
                     raise ProviderError("frame_conflict", "Frame ID was reused for different content")
                 return {**previous, "duplicate": True}
+            preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
+            self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
             request = InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=self.settings.inference_timeout_seconds))
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
@@ -123,8 +149,6 @@ class Pipeline:
             except (TypeError, ValueError):
                 outcome = failed(request, self.engine, ProviderError("provider_contract", "Provider fields are not finite JSON values"))
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
-            preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
-            self.latest_preview = (source_id, frame.frame_id, preview.payload)
             result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
                                        "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi]}
             return self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)

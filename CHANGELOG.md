@@ -1,5 +1,14 @@
 # Specification change log
 
+## Observe images and camera-test layout — 22 October 2026
+
+- Show the latest masked image per camera on Observe, with green monitoring and
+  amber paused rings, timestamps and automatic refresh without additional captures.
+- Keep one temporary preview per configured camera; use clearly labelled retained
+  images after restart where available. Preserve operator access and evidence settings.
+- Keep camera-test buttons together below the picture and clear each camera’s
+  cached image when its recorded data is deleted.
+
 ## Settings tabs and live workspace cleanup — 21 October 2026
 
 - Split Settings into Notifications, Rules, Export, Configuration and backup, Retention

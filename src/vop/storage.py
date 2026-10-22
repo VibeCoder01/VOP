@@ -292,6 +292,11 @@ class Store:
             row = connection.execute("SELECT evidence_png FROM frames WHERE source_id=? AND frame_id=?", (source_id, frame_id)).fetchone()
         return bytes(row[0]) if row and row[0] is not None else None
 
+    def latest_evidence(self, source_id):
+        with self.connection() as connection:
+            row = connection.execute('SELECT frame_id,evidence_png,captured_at_utc FROM frames WHERE source_id=? AND evidence_png IS NOT NULL ORDER BY captured_at_utc DESC LIMIT 1', (source_id,)).fetchone()
+        return tuple(row) if row else None
+
     def delete_evidence(self, source_id: str, frame_id: str):
         with self.connection() as connection:
             connection.execute("UPDATE frames SET evidence_png=NULL WHERE source_id=? AND frame_id=?", (source_id, frame_id))
