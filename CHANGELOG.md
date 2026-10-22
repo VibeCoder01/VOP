@@ -1,5 +1,13 @@
 # Specification change log
 
+## Observe refresh and engine result layout — 22 October 2026
+
+- Allow same-origin background requests in the browser security policy so live preview
+  leases and image checks can run. Keep other origins blocked.
+- Decode replacement images before swapping them into Observe, preserve the displayed
+  image on failed loads, and retry without reloading the page or closing answer panels.
+- Group Check again and Back to Engines as spaced, consistently styled buttons.
+
 ## Near-real-time Observe previews — 22 October 2026
 
 - Separate visible-page RTSP/USB previews from model sampling, using persistent

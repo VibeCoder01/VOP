@@ -116,7 +116,7 @@ class BrowserAuth:
             if message["type"] == "http.response.start":
                 message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
                                       (b"x-content-type-options", b"nosniff"),
-                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
         if needs_configure:
             response = RedirectResponse('/configure' if method in ('GET', 'HEAD') else '/configure?stale=1', status_code=303) if method in ('GET', 'HEAD') or wants_html else JSONResponse(

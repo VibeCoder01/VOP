@@ -489,7 +489,9 @@ def install_integration(app, settings, store, pipeline):
         else:
             health = {"ready": True, "device": "mock", "synthetic": True, "engine_id": pipeline.engine.engine_id}
         store.audit("engine_health", "ready" if health.get("ready") else "unavailable")
-        return app.state.page("Engine connection", request, [*worker_health_content(health), action('Check again', '/integration/health', csrf(request)), A("Back to Engines", href="/engines", cls='back')], view="engines")
+        return app.state.page("Engine connection", request, [*worker_health_content(health),
+            Div(action('Check again', '/integration/health', csrf(request)),
+                A("Back to Engines", href="/engines", cls='button secondary'), cls='actions')], view="engines")
 
     @app.route("/integration/camera", methods=["POST"])
     async def camera_edit(request):
