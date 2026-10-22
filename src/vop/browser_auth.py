@@ -126,7 +126,9 @@ class BrowserAuth:
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
         camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
         admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
-        acquired = admitted and self.admission.acquire(blocking=False)
+        camera_save = path in ('/cameras/save', '/integration/camera')
+        acquired = admitted and (await run_in_threadpool(self.admission.acquire) if camera_save
+                                 else self.admission.acquire(blocking=False))
         if admitted and not acquired and scheduled_capture:
             scope['capture_schedule_only'] = True
         elif admitted and not acquired:

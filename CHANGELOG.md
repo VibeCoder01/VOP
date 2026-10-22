@@ -1,5 +1,14 @@
 # Specification change log
 
+## Save cameras while monitoring — 22 October 2026
+
+- Wait automatically for an active observation or configuration request when adding
+  or editing a camera, instead of rejecting the form as overloaded.
+- Defer protected address/account writes until the observation finishes, keeping the
+  saved source and connection details consistent while the request waits.
+- Keep the UI responsive and monitoring enabled; retain existing scheduled connection
+  tests and machine API overload behavior.
+
 ## Live answer panels and value bars — 22 October 2026
 
 - Refresh open Observe answer panels every 0.2 seconds without reloading the page or
