@@ -1,5 +1,11 @@
 # Specification change log
 
+## Per-camera answers on Observe — 22 October 2026
+
+- Move the shared Latest answers table into each camera’s Observe section.
+- Add independent Show answers / Hide answers controls, initially collapsed, using
+  native browser disclosures. Preserve states, question versions, values and times.
+
 ## Observe images and camera-test layout — 22 October 2026
 
 - Show the latest masked image per camera on Observe, with green monitoring and
