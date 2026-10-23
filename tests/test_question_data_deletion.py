@@ -84,7 +84,7 @@ def test_delete_purges_question_versions_and_images_but_preserves_other_answers(
         other_events = [e for e in store.events() if e['source_id'] != SID or e['question_id'] != QID]
         pipeline.latest_preview = (SID, shared_frame.frame_id, b'cached-synthetic-preview')
         preview = client.get(URL)
-        assert 'permanently deletes the removed question and its recorded data' in preview.text
+        assert 'permanently deletes the question and its recorded data' in preview.text
         assert '1 saved image is shared' in preview.text
         assert 'Those images will disappear from their results too' in preview.text
         assert 'name="delete_data"' not in preview.text

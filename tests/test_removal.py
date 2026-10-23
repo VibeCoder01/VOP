@@ -36,37 +36,20 @@ def login(client, key=OWNER):
     return csrf
 
 
-def test_question_removal_history_restart_restore_and_alert_rules(app):
-    store, pipeline, reliable = app.state.store, app.state.pipeline, app.state.reliable
-    pipeline.run(SID)
-    original = store.observations()
-    reliable.save_rule({'id': 'red-rule', 'source_id': SID, 'question_id': 'red_square', 'kind': 'duration', 'threshold': 1,
-                        'window_seconds': 60, 'severity': 'warning', 'enabled': True, 'webhook': False})
+def test_old_question_remove_restore_links_only_open_delete_confirmation(app):
+    store = app.state.store
+    app.state.pipeline.run(SID)
+    before = store.observations()
     with TestClient(app) as client:
         csrf = login(client)
-        url = f'/ui/questions/{SID}/red_square/remove'
-        assert url in client.get('/?view=questions').text
-        assert 'immutable versions remain' in client.get(url).text
-        assert not store.is_removed(SID, 'red_square')  # GET is confirmation only.
-        assert client.post(url, data={'csrf': csrf}).status_code == 200
-        assert store.is_removed(SID, 'red_square')
-        assert [q['spec'].question_id for q in store.questions(SID)] == ['background', 'brightness']
-        assert all(store.observation(o['id'])['answer'] == o['answer'] for o in original)
-        assert reliable.rules()[0]['enabled'] is False
-        assert reliable.rules()[0]['revision'] == 2
-        reliable.evaluate()  # Removed questions do not crash the rule worker.
-        with pytest.raises(ValueError, match='Restore'):
-            store.edit_question(SID, pipeline.sources[SID].questions[0], store.policy(SID, 'red_square', '1'))
-    restarted = create_app(pipeline.settings, token=OWNER)
-    assert restarted.state.store.is_removed(SID, 'red_square')
-    assert 'red_square' not in [q['spec'].question_id for q in restarted.state.store.questions(SID)]
-    with TestClient(restarted) as client:
-        csrf = login(client)
-        assert 'Removed questions' in client.get('/?view=questions').text
-        assert client.post(f'/ui/questions/{SID}/red_square/restore', data={'csrf': csrf}).status_code == 200
-        record = next(q for q in store.questions(SID) if q['spec'].question_id == 'red_square')
-        assert record['enabled'] is False and record['spec'].version == '1'
-        assert reliable.rules()[0]['enabled'] is False
+        base = f'/ui/questions/{SID}/red_square'
+        for route in ('remove', 'restore'):
+            response = client.post(base+'/'+route, data={'csrf':csrf})
+            assert response.url.path == base+'/delete'
+            assert 'Delete question and data' in response.text
+            assert not store.is_removed(SID, 'red_square')
+            assert store.observations() == before
+        assert base+'/remove' not in client.get('/?view=questions').text
 
 
 def test_remove_all_sources_backup_restart_and_safe_restore(app, tmp_path, monkeypatch):
@@ -109,7 +92,9 @@ def test_remove_all_questions_valid_empty_export_and_no_capture(app, tmp_path):
     with TestClient(app) as client:
         csrf = login(client)
         for qid in ('red_square', 'background', 'brightness'):
-            assert client.post(f'/ui/questions/{SID}/{qid}/remove', data={'csrf': csrf}).status_code == 200
+            from test_question_data_deletion import fields
+            url = f'/ui/questions/{SID}/{qid}/delete'
+            assert client.post(url, data=fields(client.get(url))).status_code == 200
         assert app.state.store.questions(SID) == []
         with pytest.raises(ProviderError, match='Enable at least one'):
             pipeline.run(SID)
@@ -145,10 +130,10 @@ def test_removal_cancels_pending_webhook_without_rewriting_alert(app):
     # No lifespan worker: inspect the queued delivery deterministically.
     client = TestClient(app)
     csrf = login(client)
-    assert client.post(f'/ui/questions/{SID}/red_square/remove', data={'csrf': csrf}).status_code == 200
-    after = reliable.alerts()[0]
-    assert before['payload'] == after['payload'] and before['id'] == after['id']
-    assert any(d['status'] == 'cancelled' for d in after['deliveries'])
+    from test_question_data_deletion import fields
+    url = f'/ui/questions/{SID}/red_square/delete'
+    assert client.post(url, data=fields(client.get(url))).status_code == 200
+    assert reliable.alerts() == []
     def must_not_send(*args):
         pytest.fail('Removed question must not send queued webhooks')
     reliable.sender = must_not_send
@@ -248,7 +233,7 @@ def test_permanent_question_delete_permissions_csrf_and_active_guard(app, monkey
         assert client.get(base+'/delete').status_code == 401
         assert client.post(base+'/delete', headers={'Authorization': 'Bearer '+VIEWER}).status_code == 403
         csrf = login(client)
-        assert client.get(base+'/delete').status_code == 400  # Remove first.
+        assert client.get(base+'/delete').status_code == 200  # Active questions delete directly.
         client.post(base+'/remove', data={'csrf': csrf})
         assert client.post(base+'/delete', data={'expected_version': '1'}).status_code == 403
         form = {'csrf': csrf, 'expected_version': '1'}
@@ -256,7 +241,6 @@ def test_permanent_question_delete_permissions_csrf_and_active_guard(app, monkey
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         assert client.post(base+'/delete', data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
-        # A restored question must not be deleted by an earlier confirmation form.
-        client.post(base+'/restore', data={'csrf': csrf})
-        assert client.post(base+'/delete', data=form).status_code == 400
+        # Missing data confirmation must never delete a question.
+        assert 'Recorded data changed' in client.post(base+'/delete', data=form).text
         assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID))
