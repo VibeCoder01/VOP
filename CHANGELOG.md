@@ -1,5 +1,13 @@
 # Specification change log
 
+## Queued removal and simpler camera controls — 23 October 2026
+
+- Wait for current observation/alert work when removing or restoring questions/cameras.
+  Recheck the item after waiting and keep the dashboard responsive.
+- Replace Observe source/timezone filters with multi-select camera-name buttons.
+  Apply selection to camera cards and summary totals, and preserve it on refresh.
+- Make Camera setup Edit a button matching Open camera/Remove; reduce row padding.
+
 ## Wait for question deletion — 23 October 2026
 
 - Single and bulk permanent question deletion wait for request admission, the current

@@ -40,7 +40,7 @@ h1{font-size:34px;letter-spacing:-1.2px;line-height:1.15;margin:0;font-weight:65
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.button,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border:1px solid transparent;border-radius:9px;background:var(--accent);color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background 150ms,box-shadow 150ms,transform 150ms;line-height:1.3}.button:hover,button:hover{background:#0055b3}.button:active,button:active{transform:scale(.98)}.button.secondary,button.secondary{background:white;color:#0055b3;border-color:#d3d3d9}.button.secondary:hover,button.secondary:hover{background:#f0f5ff;border-color:#a8bfdf}.button.danger,button.danger{background:white;color:#a1252c;border-color:#e4c4c7}.button.danger:hover,button.danger:hover{background:#fff0f1}button:disabled,button:disabled:hover{background:#e8e8ed;color:#6a6a70;border-color:#d8d8df;cursor:not-allowed;transform:none}button[aria-busy=true]{background:#455d78;cursor:progress}.text-link{color:#0055b3;font-size:13px;font-weight:600}.text-link:hover{text-decoration:underline}.back{display:inline-block;color:#0055b3;margin-bottom:24px;font-size:13px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #72aaff;outline-offset:3px}
 form.inline{display:inline-flex;gap:8px;align-items:center}.source-selectors{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}.removed-questions th,.removed-questions td{padding:6px 10px}.removed-questions td small{margin-top:2px}.removed-questions .actions{gap:6px}.removed-questions .button,.removed-questions button{min-height:34px;padding:6px 12px}.removed-questions>p{margin:6px 0}.filters{display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin:0 0 28px}.filters .field{margin-bottom:0;flex:1 1 180px;min-width:0;max-width:320px}.field{display:grid;gap:8px;margin:0 0 22px}label{font-size:13px;font-weight:600;color:#37373d}input,select,textarea{width:100%;max-width:100%;padding:12px 14px;border:1px solid #c8c8cf;border-radius:9px;background:#fff;color:#1d1d1f;min-height:44px}input[type=checkbox]{width:auto;min-height:0;accent-color:var(--accent)}textarea{min-height:100px;resize:vertical}.settings-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:28px}.settings-tabs a{padding:10px 14px;border-radius:8px;font-weight:600;color:#48586a}.settings-tabs a[aria-current=page]{background:#dcecff;color:#0055b3}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:18px;align-items:end}.form-grid .field{margin:0}.form-grid button{min-height:44px}.editor{max-width:680px}.editor .actions{margin-top:30px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.surface{background:white;border:1px solid #e0e0e5;border-radius:16px;padding:28px 30px}.object-list{margin-top:24px}.object-row{padding:26px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:24px}.object-row:first-child{padding-top:0}.object-row h2{margin:0 0 5px}.object-row p{margin:4px 0}.object-meta{font-size:13px}.object-copy{min-width:0;overflow-wrap:anywhere}.object-row .actions{flex-shrink:0}.empty{padding:48px 0;max-width:560px}.empty p{margin:12px 0 24px}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}.section-heading h2{margin:0}.capture-source{padding:24px 0;border-bottom:1px solid var(--line)}.capture-source .actions{margin-top:16px}.capture-source>small{display:block;margin:5px 0}.divider{border:0;border-top:1px solid var(--line);margin:24px 0}
+.surface{background:white;border:1px solid #e0e0e5;border-radius:16px;padding:28px 30px}.object-list{margin-top:24px}.object-row{padding:26px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:24px}.object-row:first-child{padding-top:0}.camera-list .object-row{padding:12px 0;gap:16px}.camera-list .object-row:first-child{padding-top:0}.camera-list .object-row p{margin:2px 0}.camera-list .actions{gap:8px}.camera-list .button{min-height:36px;padding:7px 12px}.object-row h2{margin:0 0 5px}.object-row p{margin:4px 0}.object-meta{font-size:13px}.object-copy{min-width:0;overflow-wrap:anywhere}.object-row .actions{flex-shrink:0}.empty{padding:48px 0;max-width:560px}.empty p{margin:12px 0 24px}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}.section-heading h2{margin:0}.capture-source{padding:24px 0;border-bottom:1px solid var(--line)}.capture-source .actions{margin-top:16px}.capture-source>small{display:block;margin:5px 0}.divider{border:0;border-top:1px solid var(--line);margin:24px 0}
 table{border-collapse:collapse;width:100%;text-align:left}th{font-size:11px;color:var(--muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:18px 14px;border-bottom:1px solid #e8e8ed;vertical-align:top;font-size:13px}td strong{font-weight:600}td small{display:block;line-height:1.6;margin-top:5px}tr:hover td{background:#eeeef3}.table-wrap{overflow:auto}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:0 0 36px;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.stat strong{display:block;font-size:32px;font-weight:600;letter-spacing:-1px;margin-top:10px}.stat small{font-size:12px}.status,.tag{display:inline-block;padding:5px 9px;border-radius:6px;background:#e8e8ed;color:#4f4f58;font-size:11px;font-weight:600;line-height:1.4;white-space:nowrap}.tag{color:#0055b3;background:#e5efff}.status.ACTIVE,.status.HEALTHY,.status.success,.status.closed,.status.OBSERVED,.status.delivered,.status.resolved{background:#e0f1e9;color:#206146}.status.UNKNOWN,.status.PENDING,.status.RECOVERING,.status.interrupted,.status.CONNECTING,.status.warning,.status.open{background:#fff0d7;color:#7e520c}.status.DISCONNECTED,.status.model_failure,.status.capture_failure,.status.timeout,.status.error,.status.critical,.status.failed{background:#fbe6e6;color:#a1252c}.status.info,.status.acknowledged{background:#e5efff;color:#205a94}
 .readiness,.notice,.error{padding:14px 18px;border-radius:10px;margin:16px 0;font-size:13px;line-height:1.6;background:#eef1f5;color:#414854}.readiness p{color:inherit}.readiness ul{margin:5px 0;padding-left:18px}.readiness li{margin:4px 0}.readiness a{text-decoration:underline;text-underline-offset:3px}.readiness.success{background:#e5f2ec;color:#246147}.readiness.warning{background:#fff2df;color:#7a510e}.readiness.error,.error{background:#fbe9e9;color:#9a282f}.readiness.info,.notice{background:#e8f0fc;color:#285483}.readiness.success{padding:0;background:transparent}.readiness.success:before{content:'●';color:#26835b;margin-right:8px}
@@ -540,6 +540,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     app.state.page, app.state.table = page, table
 
     def filters(view, selected="", request=None):
+        if view == 'overview':
+            chosen = set(request.query_params.getlist('source')) - {''}
+            links = [A('All cameras', href='/?view=overview', cls='button secondary' if chosen else 'button',
+                       role='button', aria_pressed=str(not chosen).lower())]
+            for sid in list(pipeline.sources):
+                toggled = chosen ^ {sid}
+                links.append(A(source_name(sid), href='/?' + urlencode([('view', view), *(('source', s) for s in pipeline.sources if s in toggled)]),
+                               cls='button' if sid in chosen else 'button secondary', role='button', aria_pressed=str(sid in chosen).lower()))
+            return Nav(*links, cls='source-selectors', aria_label='Choose cameras to show')
         if view == 'questions':
             return Nav(*(A(label, href='/?' + urlencode({'view': view, 'source': sid}),
                            cls='button' if sid == selected else 'button secondary',
@@ -627,33 +636,36 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if view not in ("overview", "sources", "questions", "events", "metrics", "settings"):
             raise ValueError("Unknown view")
         selected = request.query_params.get("source", "")
-        if selected and selected not in pipeline.sources:
+        selected_sources = set(request.query_params.getlist("source")) - {""} if view == "overview" else ({selected} if selected else set())
+        if selected_sources - pipeline.sources.keys():
             raise ValueError("Unknown source")
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
         operator = request.scope.get("auth_role") == "operator"
         configure = configuring(request)
-        zone = settings.timezone_name if view == 'questions' else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
+        zone = settings.timezone_name if view in ('questions', 'overview') else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
         timezone_for(zone)
-        if view != 'questions':
+        if view not in ('questions', 'overview'):
             request.scope["session"]["timezone"] = zone
-        range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view != "questions" and request.query_params.get("from") else None
-        range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view != "questions" and request.query_params.get("through") else None
+        range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("from") else None
+        range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("through") else None
         data = ([{'source_id': sid, **record} for sid in list(pipeline.sources) if not selected or selected == sid
                  for record in store.questions(sid)] if view == 'questions' else
-                summaries(selected, zone=zone, range_start=range_start, range_end=range_end))
-        sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected or s["source_id"] == selected]
+                summaries(None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
+        if view == "overview" and selected_sources:
+            data = [d for d in data if d["source_id"] in selected_sources]
+        sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected_sources or s["source_id"] in selected_sources]
         content = [filters(view, selected, request)]
         if view == "overview":
             active = sum(d["summary"]["state"] == "ACTIVE" for d in data)
             unknown = sum(d["summary"]["state"] == "UNKNOWN" for d in data)
-            count = store.event_count(selected or None)
+            count = sum(store.event_count(sid) for sid in selected_sources) if selected_sources else store.event_count()
             content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if configure else None, cls="section-heading"),
                                 *(capture_controls(s, csrf, operator, configure,
                                     [d for d in data if d['source_id'] == s['source_id']], zone) for s in sources)),
                         Div(*(Div(Small(metric_label(label)), StrongText(number), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats")]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
-                             " · ", A("Refresh view", href="/?" + urlencode({"view": view, "source": selected, "timezone": zone}), cls="button secondary"), cls="muted"))
+                             " · ", A("Refresh view", href="/?" + urlencode([("view", view), *(("source", s) for s in pipeline.sources if s in selected_sources)]), cls="button secondary"), cls="muted"))
         elif view == "sources":
             content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Capture prerequisites", "Controls"],
                 [Tr(Td(StrongText(s["name"]), Small(s["source_id"])), Td(s["kind"]), Td(badge(s["status"])),
