@@ -186,7 +186,7 @@ def test_removed_camera_keeps_protected_setup_and_does_not_resurrect(app, monkey
     client.close()
 
 
-def test_permanent_removed_question_delete_preserves_history_restart_and_backup(app, tmp_path, monkeypatch):
+def test_permanent_removed_question_delete_erases_target_history_restart_and_backup(app, tmp_path, monkeypatch):
     monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
     monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
     store, pipeline = app.state.store, app.state.pipeline
@@ -200,18 +200,22 @@ def test_permanent_removed_question_delete_preserves_history_restart_and_backup(
         csrf = login(client)
         assert client.post(base+'/remove', data={'csrf': csrf}).status_code == 200
         before = store.observations(limit=100)
-        events = store.events()
+        events = [e for e in store.events() if e['question_id'] != 'red_square']
         page = client.get('/?view=questions')
         assert base+'/delete' in page.text
         preview = client.get(base+'/delete')
         assert 'It cannot be restored from the app' in preview.text
         assert any(r['spec'].question_id == 'red_square' for r in store.questions(SID, include_removed=True))
         assert client.post(base+'/delete', data={'csrf': csrf, 'expected_version': 'stale'}).status_code == 400
-        assert client.post(base+'/delete', data={'csrf': csrf, 'expected_version': '2'}).status_code == 200
+        fingerprint = re.search(r'name="expected_data"[^>]*value="([^"]+)"', preview.text)[1]
+        assert client.post(base+'/delete', data={'csrf': csrf, 'expected_version': '2', 'expected_data': fingerprint}).status_code == 200
         assert base+'/delete' not in client.get('/?view=questions').text
         assert base+'/restore' not in client.get('/?view=questions').text
         assert all(r['spec'].question_id != 'red_square' for r in store.questions(SID, include_removed=True))
-        assert store.observations(limit=100) == before and store.events() == events
+        after = store.observations(limit=100)
+        assert all(o['question_id'] != 'red_square' for o in after)
+        assert {o['id']: o['answer']['value'] for o in after} == {o['id']: o['answer']['value'] for o in before if o['question_id'] != 'red_square'}
+        assert store.events() == events
         assert app.state.reliable.rules()[0]['enabled'] is False
         app.state.reliable.evaluate()
         assert client.post(base+'/restore', data={'csrf': csrf}).status_code == 400
@@ -230,14 +234,14 @@ def test_permanent_removed_question_delete_preserves_history_restart_and_backup(
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
     fresh = create_app(pipeline.settings, token=OWNER)
     assert all(r['spec'].question_id != 'red_square' for r in fresh.state.store.questions(SID, include_removed=True))
-    assert fresh.state.store.observations(limit=100) == before
+    assert fresh.state.store.observations(limit=100) == after
     assert fresh.state.store.events() == events
     config = configuration(pipeline.settings, store, app.state.reliable)
     saved = backup(store, config, tmp_path/'deleted-question-backup')
     restored = restore(saved, tmp_path/'deleted-question-restored')
     recovered = create_app(load_config(restored), token=OWNER)
     assert all(r['spec'].question_id != 'red_square' for r in recovered.state.store.questions(SID, include_removed=True))
-    assert recovered.state.store.observations(limit=100) == before
+    assert recovered.state.store.observations(limit=100) == after
     assert recovered.state.store.events() == events
 
 

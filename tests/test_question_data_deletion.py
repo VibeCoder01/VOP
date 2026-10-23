@@ -1,4 +1,4 @@
-"""Optional question-history erasure uses disposable synthetic inputs only."""
+"""Confirmed question deletion always erases recorded data; synthetic inputs only."""
 from dataclasses import replace
 from datetime import timedelta
 import json
@@ -39,7 +39,7 @@ def capture(app, seconds, sid=SID):
     return result, frame
 
 
-def test_optional_delete_purges_question_versions_and_images_but_preserves_other_answers(app, tmp_path):
+def test_delete_purges_question_versions_and_images_but_preserves_other_answers(app, tmp_path):
     store, pipeline = app.state.store, app.state.pipeline
     store.update_source(SID, enabled=True, retain_evidence=True, sample_interval_seconds=0)
     old, old_frame = capture(app, 60)
@@ -84,11 +84,11 @@ def test_optional_delete_purges_question_versions_and_images_but_preserves_other
         other_events = [e for e in store.events() if e['source_id'] != SID or e['question_id'] != QID]
         pipeline.latest_preview = (SID, shared_frame.frame_id, b'cached-synthetic-preview')
         preview = client.get(URL)
-        assert 'Also delete all recorded data' in preview.text
+        assert 'permanently deletes the removed question and its recorded data' in preview.text
         assert '1 saved image is shared' in preview.text
         assert 'Those images will disappear from their results too' in preview.text
-        assert 'name="delete_data"' in preview.text and 'name="delete_data" checked' not in preview.text
-        form = {**fields(preview), 'delete_data': 'on'}
+        assert 'name="delete_data"' not in preview.text
+        form = fields(preview)
         result = client.post(URL, data=form)
         assert result.status_code == 200 and 'Recorded data deleted' in result.text
         assert pipeline.latest_preview is None
@@ -135,9 +135,8 @@ def test_purge_needs_current_counts_and_is_atomic(app, monkeypatch):
         csrf = login(client)
         client.post(f'/ui/questions/{SID}/{QID}/remove', data={'csrf': csrf})
         preview = client.get(URL)
-        form = {**fields(preview), 'delete_data': 'on'}
+        form = fields(preview)
         assert client.post(URL, data={**form, 'csrf': 'wrong'}).status_code == 403
-        assert client.post(URL, data={**form, 'delete_data': 'invalid'}).status_code == 400
         assert client.post(URL, data=form, headers={'Authorization': 'Bearer '+VIEWER}).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         assert client.post(URL, data=form).status_code == 403
@@ -162,13 +161,13 @@ def test_purge_needs_current_counts_and_is_atomic(app, monkeypatch):
             raise RuntimeError('synthetic deletion failure')
         monkeypatch.setattr('vop.removal.delete_question_data', fail)
         with pytest.raises(RuntimeError, match='synthetic deletion failure'):
-            client.post(URL, data={**fields(changed), 'delete_data': 'on'})
+            client.post(URL, data=fields(changed))
         assert store.observations(SID, limit=100) == before
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))
         assert not pipeline.busy.locked() and not app.state.reliable.lock.locked()
 
 
-def test_leaving_recorded_data_option_off_keeps_answers_and_images(app):
+def test_delete_always_erases_answers_and_images_without_an_opt_in(app):
     from bs4 import BeautifulSoup
     store = app.state.store
     store.update_source(SID, enabled=True, retain_evidence=True, sample_interval_seconds=0)
@@ -180,9 +179,9 @@ def test_leaving_recorded_data_option_off_keeps_answers_and_images(app):
         before = store.observations(SID, limit=100)
         preview = client.get(URL)
         checkbox = BeautifulSoup(preview.text, 'html.parser').find('input', attrs={'name': 'delete_data'})
-        assert checkbox is not None and not checkbox.has_attr('checked')
+        assert checkbox is None
         assert store.observations(SID, limit=100) == before
         assert client.post(URL, data=fields(preview)).status_code == 200
-        assert store.observations(SID, limit=100) == before
-        assert store.evidence(SID, frame.frame_id) == image
-        assert client.get(f'/ui/evidence/{SID}/{frame.frame_id}').status_code == 200
+        assert all(o['question_id'] != QID for o in store.observations(SID, limit=100))
+        assert store.evidence(SID, frame.frame_id) is None
+        assert client.get(f'/ui/evidence/{SID}/{frame.frame_id}').status_code == 404
