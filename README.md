@@ -202,6 +202,9 @@ The compact **Removed questions** list shows answers, saved images, episodes and
 across all versions. Images can be shared, so the same image may appear in several rows.
 Use **Delete permanently…** for one question, or tick several rows and choose
 **Delete selected…**. Review the counts and shared-image warning, then confirm.
+Deletion waits for the current observation or alert processing to finish; monitoring can
+stay on. Keep the page open while it works. VOP rechecks the data after waiting and
+shows updated counts for confirmation if anything changed.
 
 **Permanent question deletion always deletes its recorded data.** There is no keep-data
 checkbox. It erases all versions’ answers, deletion-gap markers, associated saved images,
