@@ -10,9 +10,9 @@ from vop.service import create_app
 
 
 @pytest.mark.parametrize("value,expected", [
-    (0, "Expected level: Low (0.0)"), (1.0, "Expected level: Medium (1.0)"),
-    (2, "Expected level: High (2.0)"), (0.25, "Expected level: Between Low and Medium (0.2)"),
-    (1.8, "Expected level: Between Medium and High (1.8)"),
+    (0, "Low (0.0)"), (1.0, "Medium (1.0)"),
+    (2, "High (2.0)"), (0.25, "Between Low and Medium (0.2)"),
+    (1.8, "Between Medium and High (1.8)"),
     (None, "Unknown"), (float("nan"), "Unknown"), (3, "Unknown"),
 ])
 def test_expected_ordinal_position_is_named_without_rounding(value, expected):
@@ -30,7 +30,7 @@ def test_ordinal_labels_in_capture_overview_history_and_old_version(settings):
         csrf = login(client)
         response = client.post("/ui/sources/synthetic-scene/capture", data={"csrf": csrf})
         assert response.status_code == 200
-        label = "Expected level: Between Low &lt;level&gt; and Medium (0.2)"
+        label = "Between Low &lt;level&gt; and Medium (0.2)"
         assert label in response.text
         observation = store.observations()[0]
         assert observation["answer"]["value"] == 0.25

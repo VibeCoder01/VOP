@@ -1,5 +1,13 @@
 # Specification change log
 
+## Compact Observe controls and steady Trends — 23 October 2026
+
+- Group the sidebar current-mode indicator and existing mode switch.
+- Disable the four-pixel workspace entrance movement on Trends, including automatic refresh.
+- Align monitoring and Show/Hide answers controls, with full-width answer content below.
+- Label live answer state as Episode State, remove the ordinal Expected level prefix,
+  and reduce answer cell/bar spacing while retaining labels, numbers and tooltips.
+
 ## Observe image visibility — 22 October 2026
 
 - Add an independent Show image / Hide image disclosure per camera.
