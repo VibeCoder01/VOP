@@ -152,11 +152,10 @@ def install_removal(app, store, pipeline, reliable):
         return items, fingerprint
 
     def delete_removed_questions(pairs, expected_data, expected_version=None):
-        if not pipeline.busy.acquire(False):
-            raise ProviderError('overloaded', 'An observation is running. Wait, then try deletion again')
+        # Called in a worker thread: wait without blocking the dashboard event loop.
+        pipeline.busy.acquire()
         try:
-            if not reliable.lock.acquire(False):
-                raise ProviderError('overloaded', 'Alert processing is running. Wait, then try deletion again')
+            reliable.lock.acquire()
             try:
                 with store.connection() as db:
                     db.execute('BEGIN IMMEDIATE')
@@ -202,6 +201,7 @@ def install_removal(app, store, pipeline, reliable):
             P('This permanently deletes the selected removed questions and their recorded data. They cannot be restored from the app.' if bulk else 'This permanently deletes the removed question and its recorded data. It cannot be restored from the app.'),
             P('Deletes answers across all versions, associated saved images, raw engine data, episodes, alerts and delivery records. Timestamp-only deletion gaps for these questions are also removed.'),
             P('Other questions’ normalised answers are kept, but shared images and raw engine details are cleared. Previously disabled alert rules stay disabled.'),
+            P('Deletion waits for the current observation to finish. Keep this page open while the request is working.'),
             P('The question IDs stay reserved. Leave the ID blank when adding a replacement question.'),
             Form(hidden(request.scope['session']['csrf']), Input(type='hidden', name='expected_data', value=fingerprint),
                  Input(type='hidden', name='confirm', value='yes'),

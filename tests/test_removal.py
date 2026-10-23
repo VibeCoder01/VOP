@@ -245,7 +245,7 @@ def test_permanent_removed_question_delete_erases_target_history_restart_and_bac
     assert recovered.state.store.events() == events
 
 
-def test_permanent_question_delete_permissions_csrf_busy_and_active_guard(app, monkeypatch):
+def test_permanent_question_delete_permissions_csrf_and_active_guard(app, monkeypatch):
     monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
     monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
     base = f'/ui/questions/{SID}/red_square'
@@ -257,12 +257,6 @@ def test_permanent_question_delete_permissions_csrf_busy_and_active_guard(app, m
         client.post(base+'/remove', data={'csrf': csrf})
         assert client.post(base+'/delete', data={'expected_version': '1'}).status_code == 403
         form = {'csrf': csrf, 'expected_version': '1'}
-        for lock in (app.state.pipeline.busy, app.state.reliable.lock):
-            lock.acquire()
-            try:
-                assert client.post(base+'/delete', data=form).status_code == 429
-            finally:
-                lock.release()
         assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID, include_removed=True))
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         assert client.post(base+'/delete', data=form).status_code == 403

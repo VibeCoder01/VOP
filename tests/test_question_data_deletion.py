@@ -141,12 +141,6 @@ def test_purge_needs_current_counts_and_is_atomic(app, monkeypatch):
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'view'})
         assert client.post(URL, data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
-        for lock in (pipeline.busy, app.state.reliable.lock):
-            lock.acquire()
-            try:
-                assert client.post(URL, data=form).status_code == 429
-            finally:
-                lock.release()
         missing = client.post(URL, data={**form, 'expected_data': ''})
         assert 'Recorded data changed. Review the updated counts' in missing.text
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))

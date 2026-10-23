@@ -45,9 +45,9 @@ def selection(csrf, pairs=PAIRS):
     return {'csrf': csrf, 'selection': [json.dumps(pair) for pair in pairs]}
 
 
-def confirmation(page):
+def confirmation(page, route=BULK):
     soup = BeautifulSoup(page.text, 'html.parser')
-    form = soup.find('form', action=BULK)
+    form = soup.find('form', action=route)
     result = {}
     for control in form.select('input[name]'):
         name, value = control['name'], control.get('value', '')
@@ -164,11 +164,6 @@ def test_bulk_permissions_and_invalid_selections_do_not_delete(app):
         for value in ([], ['invalid-json'], [json.dumps([SID])], [json.dumps([SID, 12])]):
             assert client.post(BULK, data={'csrf':csrf, 'selection':value}).status_code == 400
         assert client.post(BULK, data=selection(csrf, [PAIRS[0], [SID, 'brightness']])).status_code == 400
-        for lock in (app.state.pipeline.busy, app.state.reliable.lock):
-            lock.acquire()
-            try:
-                assert client.post(BULK, data=form).status_code == 429
-            finally: lock.release()
         client.post('/ui/mode', data={'csrf':csrf, 'mode':'view'})
         assert client.post(BULK, data=form).status_code == 403
         assert app.state.store.observations(SID, limit=100) == before
@@ -186,3 +181,60 @@ def test_bulk_can_delete_same_question_id_on_multiple_named_cameras(app):
         for sid in (SID, 'garden-fixture'):
             assert {o['question_id'] for o in app.state.store.observations(sid, limit=100)} == {'background', 'brightness'}
             assert sid not in app.state.pipeline.previews
+
+@pytest.mark.parametrize('bulk', [False, True])
+@pytest.mark.parametrize('changed_while_waiting', [False, True])
+def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, monkeypatch, bulk, changed_while_waiting):
+    from concurrent.futures import ThreadPoolExecutor
+    from test_camera_save_queue import ObservedLock
+    from vop.browser_auth import BrowserAuth
+
+    setup_history(app)
+    store = app.state.store
+    with TestClient(app) as client:
+        csrf = login(client)
+        pairs = PAIRS if bulk else PAIRS[:1]
+        remove(client, csrf, pairs)
+        route = BULK if bulk else f'/ui/questions/{SID}/red_square/delete'
+        preview = client.post(route, data=selection(csrf, pairs)) if bulk else client.get(route)
+        form = confirmation(preview, route)
+        middleware = app.middleware_stack
+        while not isinstance(middleware, BrowserAuth):
+            middleware = middleware.app
+        admission, busy, reliable = ObservedLock(), ObservedLock(), ObservedLock()
+        monkeypatch.setattr(middleware, 'admission', admission)
+        monkeypatch.setattr(app.state.pipeline, 'busy', busy)
+        monkeypatch.setattr(app.state.reliable, 'lock', reliable)
+        before = store.observations(SID, limit=100)
+        controls = store.source_control(SID)
+        held = [admission, busy, reliable]
+        for lock in held:
+            lock.acquire()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            pending = executor.submit(client.post, route, data=form)
+            try:
+                for lock in (admission, busy, reliable):
+                    assert lock.waiting.wait(3), 'Deletion must wait for each dependency'
+                    assert not pending.done()
+                    assert store.observations(SID, limit=100) == before
+                    assert client.get('/api/v1/health').status_code == 200
+                    if lock is reliable and changed_while_waiting:
+                        with store.connection() as db:
+                            db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=?', (SID,))
+                        before = store.observations(SID, limit=100)
+                    lock.release()
+                    held.remove(lock)
+            finally:
+                for lock in held:
+                    lock.release()
+            response = pending.result(timeout=5)
+        assert response.status_code == 200
+        assert all(not lock.locked() for lock in (admission, busy, reliable))
+        assert store.source_control(SID) == controls
+        if changed_while_waiting:
+            assert 'Recorded data changed. Review the updated counts' in response.text
+            assert store.observations(SID, limit=100) == before
+            assert client.post(route, data=confirmation(response, route)).status_code == 200
+        remaining = store.observations(SID, limit=100)
+        assert not any(o['question_id'] in {qid for _, qid in pairs} for o in remaining)
+        assert any(o['question_id'] == 'brightness' for o in remaining)

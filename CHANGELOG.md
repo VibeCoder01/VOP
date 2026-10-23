@@ -1,5 +1,12 @@
 # Specification change log
 
+## Wait for question deletion — 23 October 2026
+
+- Single and bulk permanent question deletion wait for request admission, the current
+  observation and alert processing instead of returning a busy error.
+- Keep the dashboard responsive while waiting and recheck the complete selection and
+  recorded-data fingerprint before any deletion. Changed data requires confirmation again.
+
 ## Questions selectors and bulk removed-question deletion — 23 October 2026
 
 - Replace Questions source/timezone filters with camera-name selector buttons.
