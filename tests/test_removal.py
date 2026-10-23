@@ -119,7 +119,7 @@ def test_remove_all_questions_valid_empty_export_and_no_capture(app, tmp_path):
         assert load_config(path).sources[0].questions == ()
 
 
-def test_removal_permissions_csrf_and_busy_capture(app):
+def test_removal_permissions_and_csrf(app):
     url = f'/ui/sources/{SID}/remove'
     with TestClient(app) as client:
         assert client.post(url).status_code == 401
@@ -129,12 +129,7 @@ def test_removal_permissions_csrf_and_busy_capture(app):
         client.cookies.clear()
         csrf = login(client)
         assert client.post(url).status_code == 403
-        app.state.pipeline.busy.acquire()
-        try:
-            assert client.post(url, data={'csrf': csrf}).status_code == 429
-            assert not app.state.store.is_removed(SID)
-        finally:
-            app.state.pipeline.busy.release()
+
 
 
 def test_removal_cancels_pending_webhook_without_rewriting_alert(app):

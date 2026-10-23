@@ -238,3 +238,49 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
         remaining = store.observations(SID, limit=100)
         assert not any(o['question_id'] in {qid for _, qid in pairs} for o in remaining)
         assert any(o['question_id'] == 'brightness' for o in remaining)
+
+@pytest.mark.parametrize('question', [False, True])
+@pytest.mark.parametrize('restore', [False, True])
+def test_remove_restore_wait_for_active_work(app, monkeypatch, question, restore):
+    from concurrent.futures import ThreadPoolExecutor
+    from test_camera_save_queue import ObservedLock
+    from vop.browser_auth import BrowserAuth
+
+    setup_history(app)
+    with TestClient(app) as client:
+        csrf = login(client)
+        base = f'/ui/questions/{SID}/red_square' if question else f'/ui/sources/{SID}'
+        qid = 'red_square' if question else None
+        if restore:
+            assert client.post(base+'/remove', data={'csrf':csrf}).status_code == 200
+        middleware = app.middleware_stack
+        while not isinstance(middleware, BrowserAuth):
+            middleware = middleware.app
+        admission, busy, reliable = ObservedLock(), ObservedLock(), ObservedLock()
+        monkeypatch.setattr(middleware, 'admission', admission)
+        monkeypatch.setattr(app.state.pipeline, 'busy', busy)
+        monkeypatch.setattr(app.state.reliable, 'lock', reliable)
+        before = app.state.store.observations(SID, limit=100)
+        held = [admission, busy, reliable]
+        for lock in held:
+            lock.acquire()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            pending = executor.submit(client.post, base+('/restore' if restore else '/remove'), data={'csrf':csrf})
+            try:
+                for lock in (admission, busy, reliable):
+                    assert lock.waiting.wait(3)
+                    assert not pending.done()
+                    assert app.state.store.is_removed(SID, qid) == restore
+                    assert client.get('/api/v1/health').status_code == 200
+                    lock.release()
+                    held.remove(lock)
+            finally:
+                for lock in held:
+                    lock.release()
+            response = pending.result(timeout=5)
+        assert response.status_code == 200
+        assert app.state.store.is_removed(SID, qid) != restore
+        after = app.state.store.observations(SID, limit=100)
+        assert all(row in after for row in before)  # Removal can append an intentional gap.
+        assert all(row["captured_at_utc"] is None for row in after if row not in before)
+        assert all(not lock.locked() for lock in (admission, busy, reliable))

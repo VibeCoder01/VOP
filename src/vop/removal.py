@@ -57,11 +57,9 @@ def install_removal(app, store, pipeline, reliable):
             return record
 
     def change(source_id, question_id=None, *, restore=False):
-        if not pipeline.busy.acquire(blocking=False):
-            raise ProviderError("overloaded", "A capture is running; retry removal when it finishes")
+        pipeline.busy.acquire()
         try:
-            if not reliable.lock.acquire(blocking=False):
-                raise ProviderError("overloaded", "Alert processing is running; retry shortly")
+            reliable.lock.acquire()
             try:
                 record = checked(source_id, question_id, removed=restore)
                 if restore:
@@ -120,6 +118,7 @@ def install_removal(app, store, pipeline, reliable):
             return RedirectResponse(destination + ('?' if camera else '&') + 'notice=Removed.+History+retained', status_code=303)
         label = question_id if question_id is not None else pipeline.sources[source_id].name
         return app.state.page("Remove " + label, request, [
+            P("Removal waits for the current observation to finish. Keep this page open while it works."),
             P("This removes the item from active configuration and disables its alert rules. Pending webhook deliveries are cancelled. Recorded observations, events, evidence and immutable versions remain."),
             P("Protected camera details are retained. Restore is available on the listing; monitoring and alert rules must be enabled explicitly afterwards."),
             Form(hidden(request.scope['session']['csrf']), Button("Remove " + label, cls="danger"), method="post", action=request.url.path),
@@ -134,15 +133,15 @@ def install_removal(app, store, pipeline, reliable):
         return await remove(request, source_id, question_id)
 
     @app.route('/ui/sources/{source_id}/restore', methods=['POST'])
-    def restore_source(source_id: str):
-        change(source_id, restore=True)
+    async def restore_source(source_id: str):
+        await run_in_threadpool(change, source_id, restore=True)
         if pipeline.sources[source_id].kind in ('rtsp', 'usb'):
             return RedirectResponse('/cameras?notice=Camera+restored.+Monitoring+is+paused.', status_code=303)
         return RedirectResponse('/?view=sources&notice=Restored.+Monitoring+disabled', status_code=303)
 
     @app.route('/ui/questions/{source_id}/{question_id}/restore', methods=['POST'])
-    def restore_question(source_id: str, question_id: str):
-        change(source_id, question_id, restore=True)
+    async def restore_question(source_id: str, question_id: str):
+        await run_in_threadpool(change, source_id, question_id, restore=True)
         return RedirectResponse('/?view=questions&notice=Restored.+Question+disabled', status_code=303)
 
     def question_snapshot(db, pairs):

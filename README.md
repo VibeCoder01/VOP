@@ -219,7 +219,17 @@ Removing every source or question is supported. Configuration exports include cu
 full database backups preserve removal records, history and recovery information. Removal is
 recoverable configuration removal, not permanent erasure of history or protected credentials.
 
+Observe uses camera-name buttons. Select several to show those cameras together;
+select **All cameras** to reset the filter. This changes the display only, not monitoring.
+The page uses the configured workspace timezone without a timezone selector. Trends
+and observation history retain their existing timezone controls. Refresh view keeps
+all selected cameras. Camera setup uses matching Open camera, Edit and Remove buttons
+with tighter rows.
+
 ### Remove setup or delete recorded data
+
+Removal and restoration wait for current observation/alert work instead of returning
+a busy error. Keep the request page open until it completes; saved history is retained.
 
 - **Cameras → Remove…** is visible on each camera row and its detail page. Removal stops using
   that camera and keeps history and protected details. **Retired Cameras → Restore** brings it

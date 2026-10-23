@@ -143,8 +143,8 @@ def install_integration(app, settings, store, pipeline):
                                     P(source.source_id, cls='object-meta'),
                                     P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
                                  Div(A('Open camera', href='/cameras/' + source.source_id, cls='button secondary'),
-                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='text-link'),
-                                     A('Remove…', href='/ui/sources/' + source.source_id + '/remove', cls='button danger'), cls='actions'), cls='object-row') for source in rows), cls='object-list')
+                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='button secondary'),
+                                     A('Remove…', href='/ui/sources/' + source.source_id + '/remove', cls='button danger'), cls='actions'), cls='object-row') for source in rows), cls='object-list camera-list')
                        if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
                                         A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
         from vop.removal import removed_controls
