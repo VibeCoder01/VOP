@@ -28,10 +28,13 @@ def test_observe_answers_are_collapsible_and_isolated_per_camera(app):
             assert len(cameras) == 2
             for camera in cameras:
                 disclosure = camera.select_one('details.camera-answers')
+                controls = camera.select_one('.observe-controls')
+                assert disclosure.parent == controls
+                assert controls.select_one('.actions').parent == controls
                 assert 'open' not in disclosure.attrs
                 assert disclosure.select_one('summary.button .show-answers').text == 'Show answers'
                 assert disclosure.select_one('summary.button .hide-answers').text == 'Hide answers'
-                assert [h.text for h in disclosure.select('th')] == ['Question', 'State', 'Last answer', 'Value', 'Observed']
+                assert [h.text for h in disclosure.select('th')] == ['Question', 'Episode State', 'Last answer', 'Value', 'Observed']
             assert first.questions[0].text in cameras[0].text
             assert second.questions[0].text not in cameras[0].text
             assert len(cameras[0].select('tbody tr')) == 3

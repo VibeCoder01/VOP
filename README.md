@@ -9,8 +9,8 @@ C510W is reported temporarily unavailable. Phase 5 is not authorised.
 ## Everyday use on this laptop
 
 Ordinal answers show their configured level names. Liquid d1 returns an expected position:
-for levels Low, Medium, High, a score of 0 is shown as **Expected level: Low (0)** and 0.25 as
-**Expected level: Between Low and Medium (0.25)**. This is not a rounded category or a calibrated
+for levels Low, Medium, High, a score of 0 is shown as **Low (0.0)** and 0.25 as
+**Between Low and Medium (0.2)**. This is not a rounded category or a calibrated
 probability. Technical details preserve the numeric score and provider probabilities.
 Recorded answers use the level names from their original question version.
 
@@ -68,7 +68,8 @@ Individual Observations, Continuous Observations (Episodes) and Trends. Operator
 **Pause monitoring**, and view
 permitted saved images. Start also enables a paused input. Existing monitoring continues
 when you switch modes. Choose **Configure mode** on the single sidebar mode switch to manage cameras,
-engines, questions, monitoring intervals, image saving, deletion and restart. Choose **View mode**
+engines, questions, monitoring intervals, image saving, deletion and restart. The current-mode
+indicator and switch are visually grouped in one sidebar panel. Choose **View mode**
 when finished. No extra access key is required. The selected mode stays in this browser
 session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
 Configure mode opens Cameras and lists only Cameras, Engines, Questions and Settings;
@@ -90,7 +91,8 @@ Observation lists, episode lists, Trends and result pages use the camera/input n
 with its stable ID as the fallback. IDs remain unchanged in URLs and technical details.
 Trends refreshes every 10 seconds while its tab is visible. Automatic refresh pauses while
 you focus or change its filters; apply changes to resume. Selected camera, date range and time
-zone stay in the page URL. Refresh updates recorded results and does not start monitoring.
+zone stay in the page URL. Trends has no page entrance movement on refresh. Refresh
+updates recorded results and does not start monitoring.
 With JavaScript disabled, use **Refresh now** instead.
 
 Images are optional and saving is **off by default**. A capture can show a temporary preview
@@ -958,7 +960,9 @@ masks and releases the preview process after its lease expires.
 ### Answers under each camera
 
 On Observe, each camera has its own **Show answers** button below its controls.
-Open it to see that camera’s latest answers, states, question versions and observation
+The monitoring control and **Show answers** share one line when space permits; the
+answer table opens underneath at full width with compact rows. Open it to see that
+camera’s latest answers, **Episode State**, question versions and observation
 times; **Hide answers** collapses it. Cameras open independently. Tables are hidden
 initially and reset to hidden on page reload. The source filter still limits which
 cameras appear. Opening a panel checks for new recorded answers immediately, then every

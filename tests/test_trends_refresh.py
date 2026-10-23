@@ -3,10 +3,11 @@ import shutil
 import subprocess
 
 import pytest
+from bs4 import BeautifulSoup
 from starlette.testclient import TestClient
 
 from test_phase4_worker import app, login, VIEWER
-from vop.dashboard import TRENDS_REFRESH_JS
+from vop.dashboard import TRENDS_REFRESH_JS, CSS
 
 
 def test_only_trends_loads_authenticated_refresh_script_without_capture(app, monkeypatch):
@@ -21,6 +22,8 @@ def test_only_trends_loads_authenticated_refresh_script_without_capture(app, mon
             page = client.get('/?view=metrics&source=synthetic-scene&timezone=UTC', headers=headers)
             assert page.status_code == 200
             assert '/ui/trends-refresh.js' in page.text
+            assert 'trends-workspace' in BeautifulSoup(page.text, 'html.parser').select_one('main')['class']
+            assert '.trends-workspace{animation:none}' in CSS
             assert 'Auto refresh: every 00:00:10.0' in page.text
             assert 'Apply your changes to resume' in page.text
             assert '/ui/trends-refresh.js' not in client.get('/', headers=headers).text

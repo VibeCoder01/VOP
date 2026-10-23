@@ -94,6 +94,10 @@ def test_one_mode_toggle_and_no_observe_in_configure_or_duplicate_history(settin
             page = BeautifulSoup(client.get(path).text, 'html.parser')
             forms = page.find_all('form', action='/ui/mode')
             assert len(forms) == 1
+            group = page.select_one('.mode-switch[role=group]')
+            assert group['aria-label'] == 'Workspace mode'
+            assert forms[0].parent == group
+            assert group.select_one('.mode-label[role=status]')
             assert forms[0].find('button').get_text() == label
             return page
         home = mode_form('/', 'Configure mode')
