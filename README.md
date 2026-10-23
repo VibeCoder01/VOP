@@ -193,16 +193,24 @@ Protected camera details are retained so setup can be recovered. Use **Removed s
 → Restore** on the corresponding listing to recover an item. Restore leaves that source or
 question disabled; source restore also stops sampling and switches evidence retention off.
 Alert rules remain disabled until explicitly edited. Restore a removed source before its questions.
-To discard a removed question, open **Questions → Removed questions → Delete permanently…**.
-Review and confirm the deletion. It then disappears from active and removed listings and
-cannot be restored from the app. Recorded data is kept by default. To erase it too, select
-**Also delete all recorded data for this question** on that confirmation page. Review its
-answer/image/episode/alert counts first. This deletes all versions’ answers, deletion-gap
-markers, associated saved images, episodes, alerts and delivery records. Images shared with
-other questions disappear from those results too; other normalised answers remain, but
-shared raw engine payloads are cleared. Unrelated captures and other cameras are kept.
+On **Questions**, choose a camera-name selector button or **All sources**. The selection
+filters both active and removed questions. Questions has no timezone control; timezones
+on observation/Trends pages are unchanged. Camera names are used instead of model/ID labels
+where available.
+
+The compact **Removed questions** list shows answers, saved images, episodes and alerts
+across all versions. Images can be shared, so the same image may appear in several rows.
+Use **Delete permanently…** for one question, or tick several rows and choose
+**Delete selected…**. Review the counts and shared-image warning, then confirm.
+
+**Permanent question deletion always deletes its recorded data.** There is no keep-data
+checkbox. It erases all versions’ answers, deletion-gap markers, associated saved images,
+raw engine details, episodes, alerts and delivery records. Shared images disappear from
+other questions’ results too; unselected normalised answers remain. Unrelated captures
+and other cameras are kept. Bulk deletion validates the whole selection and commits in
+one transaction; changed data requires a fresh review and failures roll back the batch.
 Question definitions and audit records stay; backups, exports and messages already sent
-are unchanged. There is no Undo. Its old ID stays reserved; leave the ID blank for a replacement.
+are unchanged. There is no Undo. Old IDs stay reserved; leave the ID blank for a replacement.
 The deletion survives restart and backup/restore. An older backup can still restore its older setup.
 Removing every source or question is supported. Configuration exports include current items only;
 full database backups preserve removal records, history and recovery information. Removal is

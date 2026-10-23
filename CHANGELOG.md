@@ -1,5 +1,14 @@
 # Specification change log
 
+## Questions selectors and bulk removed-question deletion — 23 October 2026
+
+- Replace Questions source/timezone filters with camera-name selector buttons.
+- Show compact Removed questions rows with camera names and all-version data counts.
+- Add checkbox multi-selection and a shared confirmation for permanent bulk deletion.
+- Always purge recorded data when permanently deleting a question. Validate the whole
+  batch before committing; preserve unselected normalised answers and prevent deleted
+  answers from reappearing through another selected question's shared result.
+
 ## Compact Observe controls and steady Trends — 23 October 2026
 
 - Group the sidebar current-mode indicator and existing mode switch.
