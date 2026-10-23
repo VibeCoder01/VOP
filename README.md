@@ -185,39 +185,32 @@ The overview shows sampling status; use **Refresh view** to refresh the native H
 inference retains the Phase 1 soft deadline and can occupy the slot until process restart;
 hard real-model isolation remains later work, not an unattended-production claim.
 
-**Sources / Questions → Remove…** opens a confirmation page. Confirming removes the item from
-active configuration, stops its monitoring, disables dependent alert rules and cancels pending
-webhook retries. Removal survives restart. Existing observations, events, evidence and immutable
-versions remain; retained evidence is still subject to the existing evidence deletion tools.
-Protected camera details are retained so setup can be recovered. Use **Removed sources/questions
-→ Restore** on the corresponding listing to recover an item. Restore leaves that source or
-question disabled; source restore also stops sampling and switches evidence retention off.
-Alert rules remain disabled until explicitly edited. Restore a removed source before its questions.
-On **Questions**, choose a camera-name selector button or **All sources**. The selection
-filters both active and removed questions. Questions has no timezone control; timezones
-on observation/Trends pages are unchanged. Camera names are used instead of model/ID labels
-where available.
+**Sources / Cameras → Remove…** removes an input from active configuration while
+keeping history and protected credentials. Restore is available for retired cameras
+and removed inputs. Source restore leaves monitoring and evidence retention off.
 
-The compact **Removed questions** list shows answers, saved images, episodes and alerts
-across all versions. Images can be shared, so the same image may appear in several rows.
-Use **Delete permanently…** for one question, or tick several rows and choose
-**Delete selected…**. Review the counts and shared-image warning, then confirm.
-Deletion waits for the current observation or alert processing to finish; monitoring can
-stay on. Keep the page open while it works. VOP rechecks the data after waiting and
-shows updated counts for confirmation if anything changed.
+**Questions → Delete question…** opens a confirmation showing the recorded data to
+be deleted. There is no recoverable question removal or keep-data option. Previously
+removed questions appear in the same Questions list and can be deleted there; no
+Restore action is shown. Old question Remove/Restore links open deletion confirmation
+without changing data. Cameras retain their separate recoverable removal workflow.
 
-**Permanent question deletion always deletes its recorded data.** There is no keep-data
-checkbox. It erases all versions’ answers, deletion-gap markers, associated saved images,
-raw engine details, episodes, alerts and delivery records. Shared images disappear from
-other questions’ results too; unselected normalised answers remain. Unrelated captures
-and other cameras are kept. Bulk deletion validates the whole selection and commits in
-one transaction; changed data requires a fresh review and failures roll back the batch.
-Question definitions and audit records stay; backups, exports and messages already sent
-are unchanged. There is no Undo. Old IDs stay reserved; leave the ID blank for a replacement.
-The deletion survives restart and backup/restore. An older backup can still restore its older setup.
-Removing every source or question is supported. Configuration exports include current items only;
-full database backups preserve removal records, history and recovery information. Removal is
-recoverable configuration removal, not permanent erasure of history or protected credentials.
+Choose a camera-name selector button or **All sources** to filter Questions. The
+compact list shows all-version answer, image, episode and alert counts. Listing uses
+count-only aggregate queries, not complete deletion previews. Tick several rows and
+choose **Delete selected…** for one atomic batch. Review the shared-image warning
+before confirming. Deletion waits for current observation/alert work; keep the page
+open. Changed data requires review and confirmation again.
+
+Deletion erases all versions’ answers, deletion-gap markers, associated saved images,
+raw engine details, episodes, alerts and delivery records. Shared images disappear
+from other questions’ results too; their typed answers remain. Related alert rules
+are disabled. Unrelated captures and other cameras are kept. Failures roll back the
+batch. Immutable question definitions, reserved IDs and audit records remain to prevent
+old configuration from recreating deleted questions. Backups, exports and messages
+already sent are unchanged. There is no Undo. The deletion survives restart and
+backup/restore; an older backup can still restore its older setup. Leave the ID blank
+when adding a replacement question. Deleting every question is supported.
 
 Observe uses camera-name buttons. Select several to show those cameras together;
 select **All cameras** to reset the filter. This changes the display only, not monitoring.
@@ -233,7 +226,7 @@ a busy error. Keep the request page open until it completes; saved history is re
 
 - **Cameras → Remove…** is visible on each camera row and its detail page. Removal stops using
   that camera and keeps history and protected details. **Retired Cameras → Restore** brings it
-  back with monitoring and evidence retention off. **Questions → Remove…** remains recoverable.
+  back with monitoring and evidence retention off. **Questions → Delete question…** permanently deletes the question and its recorded data.
 - **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
   if that profile is selected; VOP never chooses a fallback. Model files, protected keys and
   recorded observations are kept. Shared keys are not erased by profile deletion.

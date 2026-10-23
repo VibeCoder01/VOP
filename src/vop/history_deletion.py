@@ -90,6 +90,30 @@ def delete_selected(db, chosen, *, whole_source=False):
     db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)', (utcnow().isoformat(), 'history_delete', dumps(chosen['counts'])))
 
 
+def question_counts(db, source_id, question_id):
+    """List counts without loading results/images or querying once per capture."""
+    params = (source_id, question_id)
+    answers, gaps = db.execute("SELECT COALESCE(SUM(status!='retention_gap'),0), COALESCE(SUM(status='retention_gap'),0) FROM observations WHERE source_id=? AND question_id=?", params).fetchone()
+    images, shared, others = db.execute("""
+        WITH selected AS (
+            SELECT DISTINCT run_id FROM observations WHERE source_id=? AND question_id=?
+        ), other AS (
+            SELECT run_id, count(*) AS n FROM observations
+            WHERE source_id=? AND question_id!=? AND status!='retention_gap' GROUP BY run_id
+        )
+        SELECT COALESCE(SUM(f.evidence_png IS NOT NULL),0),
+               COALESCE(SUM(f.evidence_png IS NOT NULL AND other.n>0),0),
+               COALESCE(SUM(other.n),0)
+        FROM selected JOIN runs r ON r.id=selected.run_id
+        LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id
+        LEFT JOIN other ON other.run_id=r.id
+        """, params + params).fetchone()
+    episodes = db.execute('SELECT count(*) FROM events WHERE source_id=? AND question_id=?', params).fetchone()[0]
+    alerts = db.execute('SELECT count(*) FROM alerts WHERE source_id=? AND question_id=?', params).fetchone()[0]
+    return dict(answers=answers, gap_markers=gaps, images=images, shared_images=shared,
+                other_answers=others, episodes=episodes, alerts=alerts)
+
+
 def question_selection(db, source_id, question_id):
     """Preview all versions of one question, without loading retained image bytes."""
     params = (source_id, question_id)
@@ -98,15 +122,7 @@ def question_selection(db, source_id, question_id):
     alerts = [r[0] for r in db.execute('SELECT id FROM alerts WHERE source_id=? AND question_id=? ORDER BY id', params)]
     events = [r[0] for r in db.execute('SELECT id FROM events WHERE source_id=? AND question_id=? ORDER BY id', params)]
     rules = [dict(r) for r in db.execute('SELECT * FROM rules ORDER BY id') if (json.loads(r['configuration'])['source_id'], json.loads(r['configuration'])['question_id']) == params]
-    images = shared_images = other_answers = 0
-    for run in runs:
-        other = db.execute("SELECT count(*) FROM observations WHERE run_id=? AND question_id!=? AND status!='retention_gap'", (run['id'], question_id)).fetchone()[0]
-        image = bool(db.execute('SELECT 1 FROM frames WHERE source_id=? AND frame_id=? AND evidence_png IS NOT NULL', (source_id, run['frame_id'])).fetchone())
-        images += image
-        shared_images += image and other > 0
-        other_answers += other
-    counts = {'answers': sum(r['status'] != 'retention_gap' for r in answers), 'gap_markers': sum(r['status'] == 'retention_gap' for r in answers),
-              'images': images, 'shared_images': shared_images, 'other_answers': other_answers, 'episodes': len(events), 'alerts': len(alerts)}
+    counts = question_counts(db, source_id, question_id)
     fingerprint = sha256(dumps({'source_id': source_id, 'question_id': question_id, 'counts': counts, 'answers': [r['sequence'] for r in answers],
                                'runs': [(r['id'], sha256(r['result_json'].encode()).hexdigest()) for r in runs], 'alerts': alerts, 'events': events, 'rules': rules}).encode()).hexdigest()
     return dict(source_id=source_id, question_id=question_id, runs=runs, alerts=alerts, rules=rules, counts=counts, fingerprint=fingerprint)

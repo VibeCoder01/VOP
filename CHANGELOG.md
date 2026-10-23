@@ -1,5 +1,15 @@
 # Specification change log
 
+## Direct question deletion and faster Questions page — 23 October 2026
+
+- Replace recoverable question removal with direct confirmed Delete question and data.
+  Include existing removed questions in the same list, retain bulk deletion and remove
+  question Restore controls. Old links open confirmation without deleting anything.
+- Use count-only aggregate queries for Removed questions instead of building a full
+  deletion preview for every row. Do not load result payloads or query per capture.
+- Reuse aggregate counts in deletion previews while preserving detailed fingerprints,
+  stale-data confirmation and transactional deletion guards.
+
 ## Queued removal and simpler camera controls — 23 October 2026
 
 - Wait for current observation/alert work when removing or restoring questions/cameras.

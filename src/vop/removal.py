@@ -9,11 +9,12 @@ from starlette.concurrency import run_in_threadpool
 
 from vop.contracts import ProviderError, utcnow
 from vop.dashboard import action, hidden
+from vop.display import answer_kind
 from vop.storage import dumps
-from vop.history_deletion import question_selection, delete_question_data, checkpoint
+from vop.history_deletion import question_counts, question_selection, delete_question_data, checkpoint
 
 
-def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=None, source_filter=None):
+def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=None, source_filter=None, editable=True):
     if view == 'sources':
         rows = [(s.name, f"/ui/sources/{sid}/restore") for sid, s in list(pipeline.removed_sources.items()) if source_kinds is None or s.kind in source_kinds]
         return Section(H2(heading or 'Removed sources'), P('Restore keeps monitoring disabled. History and protected camera details are retained.'),
@@ -24,25 +25,23 @@ def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=
             continue
         for record in store.questions(sid, include_removed=True):
             question = record['spec']
-            if not store.is_removed(sid, question.question_id):
-                continue
             with store.connection() as db:
-                counts = question_selection(db, sid, question.question_id)['counts']
+                counts = question_counts(db, sid, question.question_id)
             url = f'/ui/questions/{sid}/{question.question_id}'
             rows.append(Tr(Td(Input(type='checkbox', name='selection', value=dumps([sid, question.question_id]),
-                                   form='removed-question-selection', aria_label=f'Select {question.text} on {source.name}')),
-                Td(source.name or sid), Td(question.text, Small(question.question_id)),
+                                   form='question-selection', aria_label=f'Select {question.text} on {source.name}') if editable else ''),
+                Td(source.name or sid), Td(question.text, Small(question.question_id), Small(answer_kind(question.kind) + ' · version ' + question.version + (' · Enabled' if record['enabled'] else ' · Paused')), Small('Awaiting deletion', cls='status warning') if store.is_removed(sid, question.question_id) else None),
                 Td(str(counts['answers'])), Td(str(counts['images']), Small(f"{counts['shared_images']} shared") if counts['shared_images'] else None),
                 Td(str(counts['episodes'])), Td(str(counts['alerts'])),
-                Td(Div(action('Restore', url + '/restore', csrf, secondary=True),
-                       A('Delete permanently…', href=url + '/delete', cls='button danger'), cls='actions'))))
-    return Section(H2(heading or 'Removed questions'),
-        P('Restore keeps monitoring disabled. Permanent deletion always deletes the question’s recorded data.'),
+                Td(Div(A('Edit', href=url, cls='button secondary') if not store.is_removed(sid, question.question_id) else None,
+                       A('Delete question…', href=url + '/delete', cls='button danger'), cls='actions') if editable else 'Read only')))
+    return Section(H2('Questions'),
+        P('Delete question permanently deletes the question and all its recorded data. There is no Undo.'),
         P('Counts include all versions. An image shared by several questions can appear in several rows.', cls='muted'),
-        Form(hidden(csrf), Button('Delete selected…', cls='danger'), id='removed-question-selection',
-             method='post', action='/ui/removed-questions/delete'),
+        Form(hidden(csrf), Button('Delete selected…', cls='danger'), id='question-selection',
+             method='post', action='/ui/questions/delete') if editable else None,
         Div(Table(Thead(Tr(*(Th(label) for label in ('Select', 'Camera', 'Question', 'Answers', 'Images', 'Episodes', 'Alerts', 'Actions')))),
-                  Tbody(*rows)), cls='table-wrap'), cls='removed-questions') if rows else None
+                  Tbody(*rows)), cls='table-wrap'), cls='question-list') if rows else Section(H2('Questions'), P('No questions. Add a question to begin.'))
 
 
 def install_removal(app, store, pipeline, reliable):
@@ -52,7 +51,7 @@ def install_removal(app, store, pipeline, reliable):
             raise ValueError("Unknown source")
         if question_id is not None:
             record = next((r for r in store.questions(source_id, include_removed=True) if r['spec'].question_id == question_id), None)
-            if record is None or store.is_removed(source_id, question_id) != removed:
+            if record is None or (removed is not None and store.is_removed(source_id, question_id) != removed):
                 raise ValueError("Unknown question")
             return record
 
@@ -130,7 +129,8 @@ def install_removal(app, store, pipeline, reliable):
 
     @app.route('/ui/questions/{source_id}/{question_id}/remove', methods=['GET', 'POST'])
     async def remove_question(request, source_id: str, question_id: str):
-        return await remove(request, source_id, question_id)
+        checked(source_id, question_id, removed=None)
+        return RedirectResponse(f'/ui/questions/{source_id}/{question_id}/delete', status_code=303)
 
     @app.route('/ui/sources/{source_id}/restore', methods=['POST'])
     async def restore_source(source_id: str):
@@ -141,16 +141,16 @@ def install_removal(app, store, pipeline, reliable):
 
     @app.route('/ui/questions/{source_id}/{question_id}/restore', methods=['POST'])
     async def restore_question(source_id: str, question_id: str):
-        await run_in_threadpool(change, source_id, question_id, restore=True)
-        return RedirectResponse('/?view=questions&notice=Restored.+Question+disabled', status_code=303)
+        checked(source_id, question_id, removed=None)
+        return RedirectResponse(f'/ui/questions/{source_id}/{question_id}/delete', status_code=303)
 
     def question_snapshot(db, pairs):
-        items = [(sid, qid, checked(sid, qid, removed=True), question_selection(db, sid, qid)) for sid, qid in pairs]
+        items = [(sid, qid, checked(sid, qid, removed=None), question_selection(db, sid, qid)) for sid, qid in pairs]
         fingerprint = sha256(dumps([(sid, qid, record['spec'].version, chosen['fingerprint'])
                                     for sid, qid, record, chosen in items]).encode()).hexdigest()
         return items, fingerprint
 
-    def delete_removed_questions(pairs, expected_data, expected_version=None):
+    def delete_questions(pairs, expected_data, expected_version=None):
         # Called in a worker thread: wait without blocking the dashboard event loop.
         pipeline.busy.acquire()
         try:
@@ -167,6 +167,8 @@ def install_removal(app, store, pipeline, reliable):
                     # so a later selected question cannot restore an earlier deleted answer.
                     for sid, qid, _, _ in items:
                         delete_question_data(db, question_selection(db, sid, qid))
+                        db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (sid, qid))
+                        db.execute('DELETE FROM release_settings WHERE id=?', (store.removal_key(sid, qid),))
                         db.execute('INSERT INTO release_settings VALUES(?,?)',
                                    (f'deleted_question:{sid}:{qid}', dumps({'deleted_at_utc': utcnow().isoformat()})))
                         db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)',
@@ -194,12 +196,12 @@ def install_removal(app, store, pipeline, reliable):
                 warnings.append(P('Some selected questions share saved images. Those images will disappear from other questions’ results too.' if bulk else
                     f"{counts['shared_images']} saved " + ('image is' if counts['shared_images'] == 1 else 'images are') +
                     ' shared with other questions. Those images will disappear from their results too.'))
-        return app.state.page('Delete removed questions' if bulk else 'Delete removed question', request, [
+        return app.state.page('Delete questions' if bulk else 'Delete question', request, [
             H2(f'{len(items)} selected questions' if bulk else items[0][2]['spec'].text),
             P('Recorded data changed. Review the updated counts and confirm again.', cls='notice', role='status') if changed else None,
-            P('This permanently deletes the selected removed questions and their recorded data. They cannot be restored from the app.' if bulk else 'This permanently deletes the removed question and its recorded data. It cannot be restored from the app.'),
+            P('This permanently deletes the selected questions and their recorded data. They cannot be restored from the app.' if bulk else 'This permanently deletes the question and its recorded data. It cannot be restored from the app.'),
             P('Deletes answers across all versions, associated saved images, raw engine data, episodes, alerts and delivery records. Timestamp-only deletion gaps for these questions are also removed.'),
-            P('Other questions’ normalised answers are kept, but shared images and raw engine details are cleared. Previously disabled alert rules stay disabled.'),
+            P('Other questions’ normalised answers are kept, but shared images and raw engine details are cleared. Related alert rules are disabled.'),
             P('Deletion waits for the current observation to finish. Keep this page open while the request is working.'),
             P('The question IDs stay reserved. Leave the ID blank when adding a replacement question.'),
             Form(hidden(request.scope['session']['csrf']), Input(type='hidden', name='expected_data', value=fingerprint),
@@ -210,24 +212,28 @@ def install_removal(app, store, pipeline, reliable):
                          P('Counts are per question. Shared images may appear in more than one row; each image is deleted once.', cls='muted'),
                          *warnings,
                          P('Question definitions and audit records remain. There is no Undo. Existing backups, exports and messages already sent are not changed.', cls='readiness warning')),
-                 Button('Delete permanently', cls='danger'), method='post', action=request.url.path),
+                 Button('Delete question and data' if not bulk else 'Delete selected questions and data', cls='danger'), method='post', action=request.url.path),
             A('Cancel', href='/?view=questions', cls='button secondary')], view='questions')
 
     @app.route('/ui/questions/{source_id}/{question_id}/delete', methods=['GET', 'POST'])
     async def delete_question(request, source_id: str, question_id: str):
         if request.scope.get('auth_role') != 'operator':
             return Response('Operator required', status_code=403)
-        checked(source_id, question_id, removed=True)
+        checked(source_id, question_id, removed=None)
         changed = False
         if request.method == 'POST':
             form = await request.form()
-            if await run_in_threadpool(delete_removed_questions, [(source_id, question_id)],
+            if await run_in_threadpool(delete_questions, [(source_id, question_id)],
                                       str(form.get('expected_data', '')), str(form.get('expected_version', ''))):
                 return RedirectResponse('/?view=questions&notice=Question+deleted.+Recorded+data+deleted.', status_code=303)
             changed = True
         return deletion_page(request, [(source_id, question_id)], changed=changed)
 
     @app.route('/ui/removed-questions/delete', methods=['POST'])
+    async def legacy_bulk_delete():
+        return RedirectResponse('/ui/questions/delete', status_code=307)
+
+    @app.route('/ui/questions/delete', methods=['POST'])
     async def delete_selected_questions(request):
         if request.scope.get('auth_role') != 'operator':
             return Response('Operator required', status_code=403)
@@ -238,10 +244,10 @@ def install_removal(app, store, pipeline, reliable):
                 raise ValueError()
             pairs = sorted({tuple(value) for value in values})
         except (ValueError, TypeError):
-            raise ValueError('Select one or more removed questions before deleting.') from None
+            raise ValueError('Select one or more questions before deleting.') from None
         changed = False
         if form.get('confirm') == 'yes':
-            if await run_in_threadpool(delete_removed_questions, pairs, str(form.get('expected_data', ''))):
+            if await run_in_threadpool(delete_questions, pairs, str(form.get('expected_data', ''))):
                 return RedirectResponse('/?view=questions&notice=Selected+questions+and+their+recorded+data+deleted.', status_code=303)
             changed = True
         return deletion_page(request, pairs, changed=changed, bulk=True)

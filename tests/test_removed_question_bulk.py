@@ -12,7 +12,7 @@ from vop.inputs.sources import capture_inline
 from vop.service import create_app
 
 SID = 'synthetic-scene'
-BULK = '/ui/removed-questions/delete'
+BULK = '/ui/questions/delete'
 PAIRS = [[SID, 'red_square'], [SID, 'background']]
 
 
@@ -68,8 +68,8 @@ def test_question_buttons_names_counts_and_source_filter(app):
         buttons = soup.select('nav.source-selectors a')
         assert [a.text for a in buttons] == ['All sources', 'Front door', 'Garden']
         assert buttons[0]['aria-current'] == 'page'
-        removed = soup.select_one('.removed-questions')
-        assert len(removed.select('input[type=checkbox][name=selection]')) == 3
+        removed = soup.select_one('.question-list')
+        assert len(removed.select('input[type=checkbox][name=selection]')) == 6
         form_id = removed.find('form', action=BULK)['id']
         assert all(box['form'] == form_id for box in removed.select('input[name=selection]'))
         first_row = removed.select('tbody tr')[0]
@@ -80,8 +80,8 @@ def test_question_buttons_names_counts_and_source_filter(app):
         assert first_row.select('td')[4].get_text(' ', strip=True) == '2 2 shared'
         filtered = BeautifulSoup(client.get('/?view=questions&source=garden-fixture').text, 'html.parser')
         assert filtered.select_one('nav.source-selectors [aria-current=page]').text == 'Garden'
-        rows = filtered.select('.removed-questions tbody tr')
-        assert len(rows) == 1 and rows[0].select('td')[1].text == 'Garden'
+        rows = filtered.select('.question-list tbody tr')
+        assert len(rows) == 3 and rows[0].select('td')[1].text == 'Garden'
         assert 'Updated front door question' not in filtered.text
 
 
@@ -146,7 +146,8 @@ def test_bulk_preview_staleness_restored_guard_and_atomic_rollback(app, monkeypa
             assert not db.execute("SELECT 1 FROM release_settings WHERE id LIKE 'deleted_question:%'").fetchone()
         assert not app.state.pipeline.busy.locked() and not app.state.reliable.lock.locked()
         assert client.post(f'/ui/questions/{SID}/red_square/restore', data={'csrf': csrf}).status_code == 200
-        assert client.post(BULK, data=form).status_code == 400
+        assert not store.is_removed(SID, 'red_square')
+        assert client.post(BULK, data={**form, 'expected_data':'stale'}).status_code == 200
         assert store.observations(SID, limit=100) == before
 
 
@@ -163,7 +164,7 @@ def test_bulk_permissions_and_invalid_selections_do_not_delete(app):
         assert client.post(BULK, data=form, headers={'Origin':'http://elsewhere.example'}).status_code == 403
         for value in ([], ['invalid-json'], [json.dumps([SID])], [json.dumps([SID, 12])]):
             assert client.post(BULK, data={'csrf':csrf, 'selection':value}).status_code == 400
-        assert client.post(BULK, data=selection(csrf, [PAIRS[0], [SID, 'brightness']])).status_code == 400
+        assert client.post(BULK, data=selection(csrf, [PAIRS[0], [SID, 'missing-question']])).status_code == 400
         client.post('/ui/mode', data={'csrf':csrf, 'mode':'view'})
         assert client.post(BULK, data=form).status_code == 403
         assert app.state.store.observations(SID, limit=100) == before
@@ -239,7 +240,7 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
         assert not any(o['question_id'] in {qid for _, qid in pairs} for o in remaining)
         assert any(o['question_id'] == 'brightness' for o in remaining)
 
-@pytest.mark.parametrize('question', [False, True])
+@pytest.mark.parametrize('question', [False])
 @pytest.mark.parametrize('restore', [False, True])
 def test_remove_restore_wait_for_active_work(app, monkeypatch, question, restore):
     from concurrent.futures import ThreadPoolExecutor
@@ -284,3 +285,25 @@ def test_remove_restore_wait_for_active_work(app, monkeypatch, question, restore
         assert all(row in after for row in before)  # Removal can append an intentional gap.
         assert all(row["captured_at_utc"] is None for row in after if row not in before)
         assert all(not lock.locked() for lock in (admission, busy, reliable))
+
+
+def test_legacy_removed_question_is_listed_only_for_deletion(app):
+    from vop.storage import dumps
+    setup_history(app)
+    store = app.state.store
+    with store.connection() as db:
+        db.execute('INSERT INTO release_settings VALUES(?,?)', (store.removal_key(SID, 'red_square'), dumps({'removed_at_utc':'2026-10-01T00:00:00+00:00'})))
+        db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, 'red_square'))
+    with TestClient(app) as client:
+        login(client)
+        page = client.get('/?view=questions')
+        soup = BeautifulSoup(page.text, 'html.parser')
+        row = next(r for r in soup.select('.question-list tbody tr') if 'red_square' in r.text)
+        assert [a.text for a in row.select('.actions a')] == ['Delete question…']
+        assert 'Awaiting deletion' in row.text
+        assert not soup.select('a[href$="/remove"], form[action$="/restore"]')
+        url = f'/ui/questions/{SID}/red_square/delete'
+        assert client.post(url, data=confirmation(client.get(url), url)).status_code == 200
+        assert not store.is_removed(SID, 'red_square')
+        assert not any(q['spec'].question_id == 'red_square' for q in store.questions(SID, include_removed=True))
+        assert not any(o['question_id'] == 'red_square' for o in store.observations(SID, limit=100))
