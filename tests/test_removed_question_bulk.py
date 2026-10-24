@@ -76,8 +76,11 @@ def test_question_buttons_names_counts_and_source_filter(app):
         assert first_row.select('td')[1].text == 'Front door'
         with app.state.store.connection() as db:
             count = db.execute("SELECT count(*) FROM observations WHERE source_id=? AND question_id='red_square' AND status!='retention_gap'", (SID,)).fetchone()[0]
-        assert int(first_row.select('td')[3].text) == count
-        assert first_row.select('td')[4].get_text(' ', strip=True) == '2 2 shared'
+        assert first_row.select('td')[3].text == 'Loading…'
+        fragment = BeautifulSoup(client.get('/ui/question-counts').text, 'html.parser')
+        cells = [c for c in fragment.select('[data-count]') if c['data-source'] == SID and c['data-question'] == 'red_square']
+        assert int(cells[0].text) == count
+        assert cells[1].get_text(' ', strip=True) == '2 2 shared'
         filtered = BeautifulSoup(client.get('/?view=questions&source=garden-fixture').text, 'html.parser')
         assert filtered.select_one('nav.source-selectors [aria-current=page]').text == 'Garden'
         rows = filtered.select('.question-list tbody tr')

@@ -333,7 +333,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,
-                         Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None))
+                         Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None,
+                         Script(src='/ui/question-counts.js', defer=True) if view == 'questions' else None))
 
     def recorded_label(source_id, answer):
         if answer.get("status") != "success":
@@ -648,8 +649,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             request.scope["session"]["timezone"] = zone
         range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("from") else None
         range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("through") else None
-        data = ([{'source_id': sid, **record} for sid in list(pipeline.sources) if not selected or selected == sid
-                 for record in store.questions(sid)] if view == 'questions' else
+        data = ([] if view == 'questions' else
                 summaries(None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
         if view == "overview" and selected_sources:
             data = [d for d in data if d["source_id"] in selected_sources]

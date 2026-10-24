@@ -196,8 +196,10 @@ Restore action is shown. Old question Remove/Restore links open deletion confirm
 without changing data. Cameras retain their separate recoverable removal workflow.
 
 Choose a camera-name selector button or **All sources** to filter Questions. The
-compact list shows all-version answer, image, episode and alert counts. Listing uses
-count-only aggregate queries, not complete deletion previews. Tick several rows and
+compact list shows all-version answer, image, episode and alert counts. Questions opens from configuration only. Recorded-data counts load separately,
+without delaying edit/delete controls. If counts fail, use **Retry counts**; deletion
+confirmation still calculates its own current counts. Listing uses count-only aggregate
+queries on indexed metadata, not complete deletion previews. Tick several rows and
 choose **Delete selected…** for one atomic batch. Review the shared-image warning
 before confirming. Deletion waits for current observation/alert work; keep the page
 open. Changed data requires review and confirmation again.

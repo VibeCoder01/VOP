@@ -114,6 +114,8 @@ class Store:
                         connection.backup(backup)
                 from vop.reliable import MIGRATION_3
                 connection.executescript(MIGRATION_3)
+            connection.execute("CREATE INDEX IF NOT EXISTS observations_count_lookup ON observations(source_id,run_id,question_id,status)")
+            connection.execute("CREATE INDEX IF NOT EXISTS frames_with_evidence ON frames(source_id,frame_id) WHERE evidence_png IS NOT NULL")
             connection.execute("PRAGMA journal_mode=WAL")
 
     @contextmanager
