@@ -1,5 +1,11 @@
 # Specification change log
 
+## Observe refresh and counters — 24 October 2026
+
+- Refresh camera previews independently; one slow request no longer blocks other cameras.
+- Update Active and Unknown counters with current answers, including while answers are hidden.
+- Count RECOVERING episodes as active until end confirmation; keep counters scoped to selected cameras.
+
 ## One camera entry and page — 24 October 2026
 
 - Replace Open camera/Edit settings/Remove row actions with one Manage camera button.
