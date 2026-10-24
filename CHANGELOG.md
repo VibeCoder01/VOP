@@ -1,5 +1,12 @@
 # Specification change log
 
+## Trends camera buttons — 24 October 2026
+
+- Replace Trends source/timezone dropdowns with multi-select camera-name buttons.
+  Use workspace timezone and retain date filters and automatic refresh.
+- Preserve applied dates on camera toggles/reset and all selected cameras on Apply
+  dates. Replay summaries only for selected cameras.
+
 ## Observation history camera buttons — 24 October 2026
 
 - Use multi-select camera-name buttons on Individual and Continuous Observations,

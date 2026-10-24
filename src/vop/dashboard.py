@@ -365,8 +365,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
         result = []
+        chosen = {source_filter} if isinstance(source_filter, str) else source_filter
         for source_id in list(pipeline.sources):
-            if source_filter and source_filter != source_id:
+            if chosen and source_id not in chosen:
                 continue
             for record in store.questions(source_id):
                 q = record["spec"]
@@ -540,8 +541,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     app.state.page, app.state.table = page, table
 
-    def source_buttons(chosen, *, path='/', view=None):
-        base = [('view', view)] if view else []
+    def source_buttons(chosen, *, path='/', view=None, extra=()):
+        base = ([('view', view)] if view else []) + list(extra)
         links = [A('All cameras', href=path + ('?' + urlencode(base) if base else ''),
                    cls='button secondary' if chosen else 'button', role='button', aria_pressed=str(not chosen).lower())]
         for sid in list(pipeline.sources):
@@ -559,6 +560,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                            aria_current='page' if sid == selected else None)
                          for sid, label in [('', 'All sources'), *((sid, source_name(sid)) for sid in list(pipeline.sources))]),
                        cls='source-selectors', aria_label='Filter questions by camera')
+        if view == 'metrics':
+            chosen = set(request.query_params.getlist('source')) - {''}
+            dates = [(key, request.query_params[key]) for key in ('from', 'through') if request.query_params.get(key)]
+            return Div(source_buttons(chosen, view=view, extra=dates),
+                       Form(Input(type='hidden', name='view', value=view),
+                            *(Input(type='hidden', name='source', value=sid) for sid in pipeline.sources if sid in chosen),
+                            field('From date', 'from', request.query_params.get('from', ''), type='date'),
+                            field('Through date', 'through', request.query_params.get('through', ''), type='date'),
+                            Button('Apply dates', cls='secondary'), method='get', action='/', cls='filters'))
         selected_zone = request.scope["session"].get("timezone", settings.timezone_name) if request else settings.timezone_name
         return Form(Input(type="hidden", name="view", value=view),
                     Div(Label("Source", _for="source"), Select(Option("All sources", value=""),
@@ -640,20 +650,20 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if view not in ("overview", "sources", "questions", "events", "metrics", "settings"):
             raise ValueError("Unknown view")
         selected = request.query_params.get("source", "")
-        selected_sources = set(request.query_params.getlist("source")) - {""} if view in ("overview", "events") else ({selected} if selected else set())
+        selected_sources = set(request.query_params.getlist("source")) - {""} if view in ("overview", "events", "metrics") else ({selected} if selected else set())
         if selected_sources - pipeline.sources.keys():
             raise ValueError("Unknown source")
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
         operator = request.scope.get("auth_role") == "operator"
         configure = configuring(request)
-        zone = settings.timezone_name if view in ('questions', 'overview', 'events') else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
+        zone = settings.timezone_name if view in ('questions', 'overview', 'events', 'metrics') else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
         timezone_for(zone)
-        if view not in ('questions', 'overview', 'events'):
+        if view not in ('questions', 'overview', 'events', 'metrics'):
             request.scope["session"]["timezone"] = zone
         range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("from") else None
         range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("through") else None
         data = ([] if view in ('questions', 'events') else
-                summaries(None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
+                summaries(selected_sources if view == "metrics" else None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
         if view == "overview" and selected_sources:
             data = [d for d in data if d["source_id"] in selected_sources]
         sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected_sources or s["source_id"] in selected_sources]
