@@ -142,9 +142,7 @@ def install_integration(app, settings, store, pipeline):
         content.append(Div(*(Div(Div(H2(A(source.name, href='/cameras/' + source.source_id)),
                                     P(source.source_id, cls='object-meta'),
                                     P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
-                                 Div(A('Open camera', href='/cameras/' + source.source_id, cls='button secondary'),
-                                     A('Edit settings', href='/cameras/' + source.source_id + '/edit', cls='button secondary'),
-                                     A('Remove…', href='/ui/sources/' + source.source_id + '/remove', cls='button danger'), cls='actions'), cls='object-row') for source in rows), cls='object-list camera-list')
+                                 Div(A('Manage camera', href='/cameras/' + source.source_id, cls='button secondary'), cls='actions'), cls='object-row') for source in rows), cls='object-list camera-list')
                        if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
                                         A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
         from vop.removal import removed_controls
@@ -174,8 +172,15 @@ def install_integration(app, settings, store, pipeline):
             with store.connection() as db:
                 row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_profile:' + source_id,)).fetchone()
             model = json.loads(row[0])['model'] if row else selected.name.removeprefix('Tapo ')
-        return app.state.page('Camera settings' if selected else 'Add camera', request, [
+        last_test = None
+        if selected:
+            with store.connection() as db:
+                row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
+                last_test = json.loads(row[0]) if row else None
+        return app.state.page(selected.name if selected else 'Add camera', request, [
             A('‹ Cameras', href='/cameras', cls='back'), warning,
+            P('Monitoring' if control['enabled'] and control['sample_interval_seconds'] else 'Monitoring paused' if control['enabled'] else 'Camera disabled',
+              cls='status success' if control['enabled'] and control['sample_interval_seconds'] else 'status warning') if selected else None,
             Form(hidden(csrf(request)), Input(type='hidden', name='source_id', value=source_id if selected else ''),
                  Input(type='hidden', name='observation_settings', value='1'),
                  Section(H2('Camera'), field('Camera name', 'name', selected.name if selected else '',
@@ -188,7 +193,11 @@ def install_integration(app, settings, store, pipeline):
                          P('Use the LAN address with /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
                          Div(field('Camera username', 'username', username, autocomplete='username', required=not selected),
                              field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected), cls='pair'),
-                         P('Leave the password empty to keep the saved password.', cls='muted') if selected else None)),
+                         P('Leave the password empty to keep the saved password.', cls='muted') if selected else None),
+                     dependency_panel(camera_dependencies(selected), ready='Connection details are saved.') if selected else None,
+                     P('Camera test scheduled. ', A('Open test result', href='/integration/cameras/' + source_id + '/test'), cls='notice') if selected and app.state.sampler.camera_test_requested(source_id) else None,
+                     P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Check the connection details and test again.', cls='muted') if last_test else None,
+                     P('Save and test connection below saves this form, then receives one image. The connection test does not run inference or keep an image.', cls='muted') if selected and not usb else None),
                  Section(H2('Observations'),
                      Label(Input(type='checkbox', name='enabled', checked=control['enabled']), ' Camera enabled'),
                      P('When off, this camera does not take observations. Its saved questions and history remain.', cls='muted'),
@@ -201,9 +210,15 @@ def install_integration(app, settings, store, pipeline):
                      P('Off by default. When on, future observations keep a privacy-masked still image for Individual Observations. Questions from the same capture share one image.', cls='muted'),
                      P('Turning this off keeps images already saved. It cannot recover earlier unsaved or deleted images.', cls='muted'), id='image-saving'),
                  P('Save waits for the current observation. Changes apply to the next one.', cls='muted'),
-                 Div(Button('Save settings' if selected else 'Add camera'), A('Cancel', href='/cameras/' + source_id if selected else '/cameras', cls='button secondary'), cls='actions'),
-                 method='post', action='/cameras/save', cls='editor camera-editor')
-        ], view='cameras')
+                 Div(Button('Save settings' if selected else 'Add camera'),
+                     Button('Save and test connection', name='connect', value='1', cls='secondary') if selected and not usb else None,
+                     A('Cancel', href='/cameras', cls='button secondary'), cls='actions'),
+                 method='post', action='/cameras/save', cls='editor camera-editor'),
+            Section(H2('Questions'), P('Choose what this camera observes.'),
+                    A('Manage questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='camera-related') if selected else None,
+            Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
+                    A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'), cls='camera-related') if selected else None
+        ], view='cameras', notice=request.query_params.get('notice'))
 
     @app.route('/cameras/new', methods=['GET'])
     def new_camera(request):
@@ -211,13 +226,13 @@ def install_integration(app, settings, store, pipeline):
 
     @app.route('/cameras/{source_id}/edit', methods=['GET'])
     def edit_camera(source_id: str, request):
-        return camera_editor(source_id, request)
+        return RedirectResponse('/cameras/' + source_id, status_code=303)
 
     @app.route('/cameras/{source_id}/rename', methods=['GET'])
     def rename_camera_editor(source_id: str, request):
         if denied(request): return denied(request)
         source = camera_record(source_id)
-        return RedirectResponse('/cameras/' + source_id + '/edit', status_code=303)
+        return RedirectResponse('/cameras/' + source_id, status_code=303)
 
     @app.route('/cameras/{source_id}/rename', methods=['POST'])
     async def rename_camera(source_id: str, request):
@@ -241,28 +256,7 @@ def install_integration(app, settings, store, pipeline):
 
     @app.route('/cameras/{source_id}', methods=['GET'])
     def camera_detail(source_id: str, request):
-        if denied(request): return denied(request)
-        source = camera_record(source_id)
-        problems = camera_dependencies(source)
-        last_test = None
-        with store.connection() as db:
-            row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
-            if row: last_test = json.loads(row[0])
-        content = [A('‹ Cameras', href='/cameras', cls='back'),
-            Div(P(source_id), A('Edit settings', href='/cameras/' + source_id + '/edit', cls='button'), cls='section-heading'),
-            Section(H2('Connection'), dependency_panel(problems, ready='Saved details are available. Test the connection to check the camera.'),
-                    P('Camera test scheduled. ', A('Open test result', href='/integration/cameras/' + source_id + '/test'), cls='notice') if app.state.sampler.camera_test_requested(source_id) else None,
-                    P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
-                    Form(hidden(csrf(request)), Button('Test camera', disabled=bool(problems)), method='post', action='/integration/cameras/' + source_id + '/test'),
-                    P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
-            Section(H2('Questions'), P('Choose what this camera observes. Switch to View mode to run observations.'),
-                    A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary')),
-            Section(H2('Settings'), P('Sample interval: ' + duration(store.source_control(source_id)['sample_interval_seconds'])),
-                    P('Image saving: ' + ('On' if store.source_control(source_id)['retain_evidence'] else 'Off')),
-                    P('Use Edit settings to change the name, connection, observation interval or saved images.', cls='muted')),
-            Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
-                    A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
-        return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))
+        return camera_editor(source_id, request)
 
     @app.route('/engines', methods=['GET'])
     def engines(request):
@@ -648,7 +642,7 @@ def install_integration(app, settings, store, pipeline):
             elif diagnostic:
                 from vop.operator_workflow import recovery_message
                 content = [P('The camera could not connect yet.', cls='readiness warning'), P(recovery_message(diagnostic['status'])),
-                           A('Correct camera details', href='/cameras/' + source_id + '/edit', cls='button secondary'),
+                           A('Correct camera details', href='/cameras/' + source_id, cls='button secondary'),
                            Details(Summary('Technical details'), Pre(diagnostic['status']))]
             else:
                 content = [P('This camera has not been tested yet.')]
