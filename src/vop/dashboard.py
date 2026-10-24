@@ -540,16 +540,19 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     app.state.page, app.state.table = page, table
 
+    def source_buttons(chosen, *, path='/', view=None):
+        base = [('view', view)] if view else []
+        links = [A('All cameras', href=path + ('?' + urlencode(base) if base else ''),
+                   cls='button secondary' if chosen else 'button', role='button', aria_pressed=str(not chosen).lower())]
+        for sid in list(pipeline.sources):
+            toggled = chosen ^ {sid}
+            links.append(A(source_name(sid), href=path + '?' + urlencode(base + [('source', s) for s in pipeline.sources if s in toggled]),
+                           cls='button' if sid in chosen else 'button secondary', role='button', aria_pressed=str(sid in chosen).lower()))
+        return Nav(*links, cls='source-selectors', aria_label='Choose cameras to show')
+
     def filters(view, selected="", request=None):
-        if view == 'overview':
-            chosen = set(request.query_params.getlist('source')) - {''}
-            links = [A('All cameras', href='/?view=overview', cls='button secondary' if chosen else 'button',
-                       role='button', aria_pressed=str(not chosen).lower())]
-            for sid in list(pipeline.sources):
-                toggled = chosen ^ {sid}
-                links.append(A(source_name(sid), href='/?' + urlencode([('view', view), *(('source', s) for s in pipeline.sources if s in toggled)]),
-                               cls='button' if sid in chosen else 'button secondary', role='button', aria_pressed=str(sid in chosen).lower()))
-            return Nav(*links, cls='source-selectors', aria_label='Choose cameras to show')
+        if view in ('overview', 'events'):
+            return source_buttons(set(request.query_params.getlist('source')) - {''}, view=view)
         if view == 'questions':
             return Nav(*(A(label, href='/?' + urlencode({'view': view, 'source': sid}),
                            cls='button' if sid == selected else 'button secondary',
@@ -637,19 +640,19 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if view not in ("overview", "sources", "questions", "events", "metrics", "settings"):
             raise ValueError("Unknown view")
         selected = request.query_params.get("source", "")
-        selected_sources = set(request.query_params.getlist("source")) - {""} if view == "overview" else ({selected} if selected else set())
+        selected_sources = set(request.query_params.getlist("source")) - {""} if view in ("overview", "events") else ({selected} if selected else set())
         if selected_sources - pipeline.sources.keys():
             raise ValueError("Unknown source")
         csrf = request.scope["session"].setdefault("csrf", secrets.token_urlsafe(24))
         operator = request.scope.get("auth_role") == "operator"
         configure = configuring(request)
-        zone = settings.timezone_name if view in ('questions', 'overview') else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
+        zone = settings.timezone_name if view in ('questions', 'overview', 'events') else request.query_params.get("timezone", request.scope["session"].get("timezone", settings.timezone_name))
         timezone_for(zone)
-        if view not in ('questions', 'overview'):
+        if view not in ('questions', 'overview', 'events'):
             request.scope["session"]["timezone"] = zone
-        range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("from") else None
-        range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview") and request.query_params.get("through") else None
-        data = ([] if view == 'questions' else
+        range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("from") else None
+        range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("through") else None
+        data = ([] if view in ('questions', 'events') else
                 summaries(None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
         if view == "overview" and selected_sources:
             data = [d for d in data if d["source_id"] in selected_sources]
@@ -677,7 +680,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content += [removed_controls(store, pipeline, csrf, view, source_filter=selected or None, editable=operator),
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
-            event_rows = store.events(selected or None)
+            event_rows = store.events(source_ids=tuple(sorted(selected_sources)))
             content += [P('Episodes group individual observations after the required confirmations. ', A('Open Individual Observations to inspect results, saved images or delete recorded data.', href='/observations', cls='text-link')),
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(source_name(e["source_id"]) + " · version " + e["question_version"])),
@@ -721,29 +724,31 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     @app.route('/observations', methods=['GET'])
     def observation_list(request):
-        selected = request.query_params.get('source') or None
+        selected_sources = set(request.query_params.getlist('source')) - {''}
         before = int(request.query_params['before']) if request.query_params.get('before') else None
         if before is not None and before < 1: raise ValueError('Invalid observation page')
         with store.connection() as db:
             names = {r['id']: json.loads(r['configuration']).get('name', r['id']) for r in db.execute('SELECT id,configuration FROM sources')}
-        if selected and selected not in names: raise ValueError('Unknown input')
-        rows = store.observations(selected, newest=True, before=before, limit=100)
+        if selected_sources - names.keys(): raise ValueError('Unknown input')
+        rows = store.observations(newest=True, before=before, limit=100, source_ids=tuple(sorted(selected_sources)))
         operator = request.scope.get('auth_role') == 'operator'
         return page('Individual Observations', request, [
             P('Each row is one answer from a captured image. Open a result to see its saved image, if available. Several answers can share the same image.'),
             P('Image saving is off by default. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
-            Form(Div(Label('Input', _for='history-source'), Select(Option('All inputs', value=''), *(Option(name, value=sid, selected=sid == selected) for sid, name in names.items() if sid in pipeline.sources), name='source', id='history-source'), cls='field'),
-                 Button('Show', cls='secondary'), method='get', action='/observations', cls='filters'),
-            image_settings(selected, operator, configuring(request)) if selected else P('Select an input above to see whether image saving is on or off. Use Configure mode to change it.' if operator else 'Select an input above to see its image-saving setting.', cls='notice'),
+            source_buttons(selected_sources, path='/observations'),
+            *(Section(H2(names[sid] or sid), image_settings(sid, operator, configuring(request)),
+                      A('Delete input history…', href='/ui/sources/' + sid + '/history/delete', cls='button danger') if configuring(request) else None)
+              for sid in sorted(selected_sources)),
+            P('Select cameras above to see their image-saving settings.', cls='notice') if not selected_sources else None,
             Div(P('Newest answers first.'),
-                A('Delete input history…', href='/ui/sources/' + selected + '/history/delete', cls='button danger') if selected and configuring(request) else P('Use Configure mode to delete recorded data.', cls='muted') if operator else None, cls='section-heading'),
+                P('Use Configure mode to delete recorded data.', cls='muted') if operator and not configuring(request) else None, cls='section-heading'),
             table(['Question / input', 'Result', 'Time', 'Image', 'Actions'], [Tr(
                 Td(o['question_id'], Small(names.get(o['source_id']) or o['source_id'])), Td(badge(o['status']), Small(recorded_label(o['source_id'], o['answer']))),
                 Td(local_time(o['captured_at_utc'] or o['processed_at_utc'], settings.timezone_name)),
                 Td(recorded_image_status(o, operator)),
                 Td(Div(A('Open', href='/ui/observations/' + o['id'], cls='button secondary'),
                        A('Delete capture…', href='/ui/observations/' + o['id'] + '/delete', cls='button danger') if configuring(request) else None, cls='actions'))) for o in rows]) if rows else P('No recorded observations.'),
-            A('Older answers', href='/observations?' + urlencode({'source': selected or '', 'before': rows[-1]['sequence']}), cls='button secondary') if len(rows) == 100 else None
+            A('Older answers', href='/observations?' + urlencode([*(('source', sid) for sid in sorted(selected_sources)), ('before', rows[-1]['sequence'])]), cls='button secondary') if len(rows) == 100 else None
         ], view='observations', notice=request.query_params.get('notice'))
 
     @app.route("/ui/sources/{source_id}", methods=["GET"])

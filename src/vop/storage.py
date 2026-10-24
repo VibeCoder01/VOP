@@ -280,9 +280,11 @@ class Store:
             result.update(state="UNKNOWN", latest_value=None, disabled=True)
         return result
 
-    def events(self, source_id: str | None = None, *, limit: int = 100) -> list[dict]:
+    def events(self, source_id: str | None = None, *, limit: int = 100, source_ids: tuple[str, ...] = ()) -> list[dict]:
         with self.connection() as connection:
-            rows = connection.execute("SELECT event_json FROM events WHERE (? IS NULL OR source_id=?) ORDER BY started_at_utc DESC LIMIT ?", (source_id, source_id, limit)).fetchall()
+            clause = 'source_id IN (' + ','.join('?' for _ in source_ids) + ')' if source_ids else '(? IS NULL OR source_id=?)'
+            parameters = source_ids if source_ids else (source_id, source_id)
+            rows = connection.execute("SELECT event_json FROM events WHERE " + clause + " ORDER BY started_at_utc DESC LIMIT ?", (*parameters, limit)).fetchall()
         return [json.loads(row[0]) for row in rows]
 
     def event_count(self, source_id: str | None = None) -> int:
@@ -360,11 +362,13 @@ class Store:
             connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (processed, "capture_inference", result["status"]))
         return {"run_id": run_id, "result": result, "duplicate": False}
 
-    def observations(self, source_id: str | None = None, *, after: int = 0, limit: int = 20, before: int | None = None, newest: bool = False) -> list[dict]:
+    def observations(self, source_id: str | None = None, *, after: int = 0, limit: int = 20, before: int | None = None, newest: bool = False, source_ids: tuple[str, ...] = ()) -> list[dict]:
         with self.connection() as connection:
             order = 'DESC' if newest else 'ASC'
-            rows = connection.execute("SELECT o.*,r.result_json,f.evidence_png IS NOT NULL AS image_saved FROM observations o JOIN runs r ON r.id=o.run_id LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.status!='retention_gap' AND o.sequence>? AND (? IS NULL OR o.source_id=?) AND (? IS NULL OR o.sequence<?) ORDER BY o.sequence " + order + " LIMIT ?",
-                                      (after, source_id, source_id, before, before, limit)).fetchall()
+            clause = 'o.source_id IN (' + ','.join('?' for _ in source_ids) + ')' if source_ids else '(? IS NULL OR o.source_id=?)'
+            parameters = source_ids if source_ids else (source_id, source_id)
+            rows = connection.execute("SELECT o.*,r.result_json,f.evidence_png IS NOT NULL AS image_saved FROM observations o JOIN runs r ON r.id=o.run_id LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.status!='retention_gap' AND o.sequence>? AND " + clause + " AND (? IS NULL OR o.sequence<?) ORDER BY o.sequence " + order + " LIMIT ?",
+                                      (after, *parameters, before, before, limit)).fetchall()
         results = []
         for row in rows:
             item = dict(row)

@@ -1,5 +1,14 @@
 # Specification change log
 
+## Observation history camera buttons — 24 October 2026
+
+- Use multi-select camera-name buttons on Individual and Continuous Observations,
+  sharing the existing Observe selection pattern and All cameras reset.
+- Filter in SQL before the global result limit; keep combined results newest first
+  and retain every selected camera on Older answers links.
+- Remove the Continuous Observations timezone control and use workspace timezone.
+  Keep retired cameras out of buttons and preserve individual-history deep links.
+
 ## Isolate Questions configuration from history counts — 24 October 2026
 
 - Render configuration/edit/delete controls before querying history. Load count cells

@@ -216,9 +216,15 @@ when adding a replacement question. Deleting every question is supported.
 
 Observe uses camera-name buttons. Select several to show those cameras together;
 select **All cameras** to reset the filter. This changes the display only, not monitoring.
-The page uses the configured workspace timezone without a timezone selector. Trends
-and observation history retain their existing timezone controls. Refresh view keeps
-all selected cameras. Camera setup uses matching Open camera, Edit and Remove buttons
+The page uses the configured workspace timezone without a timezone selector. Refresh view keeps
+all selected cameras. **Individual Observations** and **Continuous Observations
+(Episodes)** use the same multi-select buttons. Choose several cameras to combine
+results in time order; All cameras clears the filter. Older answers keeps every
+selected camera. Individual Observations shows image-saving information per selected
+camera; Configure mode retains a separate Delete input history action for each camera.
+Retired cameras stay out of the selection buttons; existing individual-history links
+still work. Continuous Observations uses the configured workspace timezone without
+a timezone control. Trends keeps its timezone control. Camera setup uses matching Open camera, Edit and Remove buttons
 with tighter rows.
 
 ### Remove setup or delete recorded data
