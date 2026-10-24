@@ -207,7 +207,8 @@ def test_camera_remove_is_visible_and_restore_returns_to_cameras(app):
         client.post('/cameras/save', data={'csrf': csrf, 'model': 'C200', 'endpoint': 'rtsp://192.168.1.200:554/stream1',
                                           'username': 'fixture-user', 'password': 'fixture-password'})
         path = '/ui/sources/tapo-c200/remove'
-        assert path in client.get('/cameras').text
+        assert path not in client.get('/cameras').text
+        assert path in client.get('/cameras/tapo-c200').text
         assert 'Remove camera' in client.get('/cameras/tapo-c200').text
         preview = client.get(path)
         assert 'Protected camera details are retained' in preview.text

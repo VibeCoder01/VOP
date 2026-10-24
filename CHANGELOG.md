@@ -1,5 +1,13 @@
 # Specification change log
 
+## One camera entry and page — 24 October 2026
+
+- Replace Open camera/Edit settings/Remove row actions with one Manage camera button.
+- Make the canonical camera page the editable form with connection status/testing,
+  observations, recorded images, Questions and Remove camera in a logical order.
+- Redirect old edit/rename/observation links to the same page. Save and test connection
+  uses the form's current values and keeps the connection-test result flow explicit.
+
 ## Unified camera settings — 24 October 2026
 
 - Combine camera identity/connection, enabled state, observation interval and image

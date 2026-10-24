@@ -55,9 +55,11 @@ def test_camera_name_creation_rename_restart_and_model_are_independent(app, monk
         control = app.state.store.source_control(sid)
         questions = app.state.store.questions(sid)
         secrets = dict(app.state.pipeline.sources[sid].settings)
-        monkeypatch.setattr(app.state.secrets, 'get', lambda *_: pytest.fail('Renaming must not read secrets'))
-        response = client.post('/cameras/' + sid + '/rename', data={'csrf': csrf, 'name': 'Garden <north>'})
-        assert response.status_code == 200 and 'Garden &lt;north&gt;' in response.text
+        with monkeypatch.context() as patch:
+            patch.setattr(app.state.secrets, 'get', lambda *_: pytest.fail('Renaming must not read secrets'))
+            response = client.post('/cameras/' + sid + '/rename', data={'csrf': csrf, 'name': 'Garden <north>'}, follow_redirects=False)
+            assert response.status_code == 303
+        assert 'Garden &lt;north&gt;' in client.get(response.headers['location']).text
         assert app.state.store.source_control(sid) == control
         assert app.state.store.questions(sid) == questions
         assert app.state.pipeline.sources[sid].settings == secrets
@@ -96,7 +98,7 @@ def test_usb_camera_name_survives_restart(app):
         response = client.post('/cameras/save', data={'csrf': csrf, 'source_id':'usb-test', 'name': 'Desk camera',
              'observation_settings':'1', 'enabled':'on', 'retain_evidence':'on', 'sample_interval_seconds':'00:00:15.0'})
         assert response.status_code == 200
-        assert client.get('/cameras/usb-test/rename').url.path == '/cameras/usb-test/edit'
+        assert client.get('/cameras/usb-test/rename').url.path == '/cameras/usb-test'
     restarted = create_app(settings, token=OWNER)
     assert restarted.state.pipeline.sources['usb-test'].name == 'Desk camera'
     assert restarted.state.store.sources(('usb-test',))[0]['name'] == 'Desk camera'

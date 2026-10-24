@@ -32,8 +32,8 @@ def test_one_form_all_settings_persist_and_old_editor_redirects(app, monkeypatch
         assert all(form.select_one('[name='+name+']') for name in ('endpoint','username','enabled','sample_interval_seconds','retain_evidence'))
         assert form.select_one('[name=sample_interval_seconds]')['value']=='00:00:12.0'
         old=client.get('/ui/sources/tapo-c200')
-        assert old.url.path=='/cameras/tapo-c200/edit'
-        assert client.get('/cameras/tapo-c200/rename').url.path=='/cameras/tapo-c200/edit'
+        assert old.url.path=='/cameras/tapo-c200'
+        assert client.get('/cameras/tapo-c200/rename').url.path=='/cameras/tapo-c200'
         changed=body(csrf,password='',username='updated-user',name='Driveway',sample_interval_seconds='00:00:25.0')
         assert client.post('/cameras/save',data=changed).status_code==200
         assert app.state.secrets.camera('tapo-c200-credentials')=={'username':'updated-user','password':'offline-password'}
@@ -80,3 +80,44 @@ def test_usb_uses_same_editor_and_preserves_device(app):
         assert pipeline.sources[source.source_id].settings['device']==0
         assert pipeline.sources[source.source_id].name=='Office'
         assert store.source_control(source.source_id)=={'enabled':True,'retain_evidence':True,'sample_interval_seconds':20}
+
+
+def test_single_camera_entry_opens_complete_page_and_legacy_edit_redirects(app, monkeypatch):
+    monkeypatch.setattr(SourceAdapters, 'capture', lambda *_:pytest.fail('Opening a camera page must not capture'))
+    with TestClient(app) as client:
+        csrf=login(client)
+        client.post('/cameras/save',data=body(csrf))
+        listing=BeautifulSoup(client.get('/cameras').text,'html.parser')
+        buttons=listing.select('.camera-list .actions a')
+        assert [(b.text,b['href']) for b in buttons]==[('Manage camera','/cameras/tapo-c200')]
+        page=client.get(buttons[0]['href'])
+        soup=BeautifulSoup(page.text,'html.parser')
+        assert soup.select_one('h1').text=='Front door'
+        form=soup.select_one('form.camera-editor')
+        assert form and not form.select('form')
+        assert form.select_one('[name=endpoint]') and form.select_one('[name=sample_interval_seconds]')
+        assert soup.select_one('a[href="/?view=questions&source=tapo-c200"]')
+        assert soup.select_one('a[href="/ui/sources/tapo-c200/remove"]')
+        assert form.select_one('button[name=connect]')['value']=='1'
+        assert form.select_one('button').text=='Save settings'  # Enter must not trigger a connection test.
+        assert 'Open camera' not in page.text and 'Edit settings' not in page.text
+        assert client.get('/cameras/tapo-c200/edit').url.path=='/cameras/tapo-c200'
+
+
+def test_save_and_test_uses_the_new_form_values_without_inference(app, monkeypatch):
+    from vop.inputs.sources import capture_inline
+    captured=[]
+    def capture(_, source):
+        captured.append(app.state.secrets.get(source.settings['endpoint_secret_ref']))
+        return replace(capture_inline(app.state.pipeline.sources['synthetic-scene']), source_id=source.source_id)
+    monkeypatch.setattr(SourceAdapters, 'capture', capture)
+    with TestClient(app) as client:
+        csrf=login(client)
+        client.post('/cameras/save',data=body(csrf))
+        before=app.state.store.health()['observation_count']
+        response=client.post('/cameras/save',data=body(csrf,password='',endpoint='rtsp://192.168.1.101:554/stream1',connect='1'))
+        assert response.status_code==200 and 'Capture succeeded' in response.text
+        assert captured==['rtsp://192.168.1.101:554/stream1']
+        assert app.state.store.health()['observation_count']==before
+        assert app.state.store.source_control('tapo-c200')['sample_interval_seconds']==12
+        assert '/cameras/tapo-c200' in response.text

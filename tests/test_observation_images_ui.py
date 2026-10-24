@@ -76,8 +76,10 @@ def test_camera_detail_links_directly_to_image_setting(app):
             'endpoint': 'rtsp://192.168.1.200:554/stream1', 'username': 'fixture-user', 'password': 'fixture-password'})
         before = app.state.store.source_control('tapo-c200')
         detail = client.get('/cameras/tapo-c200').text
-        assert 'Image saving: Off' in detail
-        assert '/cameras/tapo-c200/edit' in detail
+        from bs4 import BeautifulSoup
+        form = BeautifulSoup(detail, 'html.parser').select_one('form.camera-editor')
+        assert form.select_one('[name=retain_evidence]').get('checked') is None
+        assert form.select_one('#image-saving')
         assert 'href="/observations' not in detail
         assert app.state.store.source_control('tapo-c200') == before
 

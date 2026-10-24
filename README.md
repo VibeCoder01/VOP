@@ -176,7 +176,7 @@ The mock preset is a user-selected synthetic answer, not computer vision. Its pe
 override survives restart. Unconfigured mock questions return unsupported instead of fabricated
 answers. The source and model interfaces remain independent; Phase 4 worker setup is described below.
 
-**Cameras → Open camera → Edit settings** controls enabled state, image saving
+**Cameras → Manage camera** controls enabled state, image saving
 and sample interval. Other inputs use **Settings → Other inputs → Edit source**. A nonzero
 interval (1–3600 seconds) explicitly starts background sampling, independent of browser tabs;
 0 stops it. Saved sampling controls resume after restart. There is one worker and zero queued
@@ -226,16 +226,18 @@ Retired cameras stay out of the selection buttons; existing individual-history l
 still work. Continuous Observations uses the configured workspace timezone without
 a timezone control. Trends also uses multi-select camera buttons and the workspace
 timezone. Its camera buttons preserve the applied dates; Apply dates preserves all
-selected cameras, and auto-refresh retains the complete URL. Camera setup uses matching Open camera, Edit and Remove buttons
-with tighter rows.
+selected cameras, and auto-refresh retains the complete URL. Camera setup uses one Manage camera button per camera, with tighter rows.
 
 ### Unified camera settings
 
-Use **Cameras → Edit settings**, or **Open camera → Edit settings**. One form contains
+Use **Cameras → Manage camera**. One page contains
 Camera (name), Connection (model/address/account for network cameras), Observations
 (enabled state and sample interval), and Recorded images (save images). One Save
-settings button saves the form. USB cameras use the same observation/image controls
-and show their existing device connection. Connection tests stay on the camera page.
+settings button saves the form. Save and test connection saves the current form and
+then runs the explicit network-camera connection test. Last-test status, Questions
+and Remove camera are on this same page. USB cameras use the same observation/image controls
+and show their existing device connection. Old /edit and /rename links redirect to
+the same canonical camera page; there is no separate overview/edit workflow.
 Old camera observation and rename links open this editor. Other input types retain
 their existing observation editor.
 
@@ -255,8 +257,8 @@ normalised rectangle; leave it blank for the whole image. The hold-for-review ga
 policy has no separate approval action in the editor: choose Resume or Split and
 save a new version to resume automatic episode classification.
 
-Observation frequency is set **per camera** at **Configure mode → Cameras → Open
-camera → Edit settings → Sample interval**. The question editor links
+Observation frequency is set **per camera** at **Configure mode → Cameras → Manage
+camera → Observations → Sample interval**. The question editor links
 there too. The interval applies to all enabled questions on that camera. It is a
 target: cameras take turns, and processing time or connection retries can increase
 the actual interval. `00:00:00.0` pauses monitoring; for example, `00:00:10.0` requests
@@ -268,7 +270,7 @@ the expected interval and normal capture/engine delays.
 Removal and restoration wait for current observation/alert work instead of returning
 a busy error. Keep the request page open until it completes; saved history is retained.
 
-- **Cameras → Remove…** is visible on each camera row and its detail page. Removal stops using
+- **Cameras → Manage camera → Remove camera…** is visible on each camera row and its detail page. Removal stops using
   that camera and keeps history and protected details. **Retired Cameras → Restore** brings it
   back with monitoring and evidence retention off. **Questions → Delete question…** permanently deletes the question and its recorded data.
 - **Engines → Delete…** deletes a saved profile after confirmation. Select another engine first
@@ -509,7 +511,7 @@ local frame, show a privacy-masked memory-only preview and store diagnostic meta
 request is made by that connection test. Capture failure never asserts “no human”.
 
 The setup page reopens the saved camera's address, username and model; passwords stay blank.
-Use **Cameras → Open camera → Edit settings** to change a saved camera, or **Add camera**
+Use **Cameras → Manage camera** to change a saved camera, or **Add camera**
 for an empty form. Save returns to that camera's page; **Test camera** opens the connection result.
 The sample IP is a
 placeholder only and is never submitted as a default address.
