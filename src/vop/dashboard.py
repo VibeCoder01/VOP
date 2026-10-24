@@ -80,7 +80,7 @@ async function refreshPreview(card) {
   const empty = card.querySelector('[data-preview-empty]');
   const caption = card.querySelector('[data-preview-caption]');
   try {
-    const response = await fetch(card.dataset.imageUrl, {method:'HEAD', cache:'no-store'});
+    const response = await fetch(card.dataset.imageUrl, {method:'HEAD', cache:'no-store', signal:AbortSignal.timeout(5000)});
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) { image.hidden = true; empty.hidden = false; }
       return;
@@ -96,7 +96,7 @@ async function refreshPreview(card) {
     // or renew the live decoder lease until the operator shows the image again.
     if (!panel.open) return;
     if (card.dataset.leaseUrl && Date.now() >= Number(card.dataset.renewAt || 0)) {
-      const lease = await fetch(card.dataset.leaseUrl, {method:'POST', body:new URLSearchParams({csrf:card.dataset.csrf}), cache:'no-store'});
+      const lease = await fetch(card.dataset.leaseUrl, {method:'POST', body:new URLSearchParams({csrf:card.dataset.csrf}), cache:'no-store', signal:AbortSignal.timeout(5000)});
       card.dataset.leaseFailed = lease.ok ? '' : 'true';
       card.dataset.renewAt = Date.now() + 5000;
     }
@@ -125,7 +125,11 @@ async function refreshPreview(card) {
   } catch (_) { /* Keep the last received image during a temporary connection failure. */ }
 }
 async function refreshPreviews() {
-  if (!document.hidden) await Promise.all(Array.from(previews, refreshPreview));
+  if (!document.hidden) for (const card of previews) {
+    if (card.pending) continue;
+    card.pending = true;
+    refreshPreview(card).finally(() => { card.pending = false; });
+  }
   setTimeout(refreshPreviews, 200);
 }
 refreshPreviews();
@@ -134,16 +138,24 @@ refreshPreviews();
 
 OBSERVE_ANSWERS_JS = """const panels = document.querySelectorAll('[data-answer-url]');
 async function refreshAnswers(panel) {
-  if (!panel.open || document.hidden || panel.pending) return;
+  if (document.hidden || panel.pending) return;
   panel.pending = true;
+  const showing = panel.open;
   try {
-    const response = await fetch(panel.dataset.answerUrl, {cache:'no-store',
+    const response = await fetch(panel.dataset.answerUrl + (showing ? '' : '&counts_only=1'), {cache:'no-store', signal:AbortSignal.timeout(5000),
       headers: panel.dataset.etag ? {'If-None-Match':panel.dataset.etag} : {}});
     if (response.status === 200) {
+      for (const kind of ['active', 'unknown']) {
+        const count = response.headers.get('X-VOP-' + kind);
+        if (count === null) continue;
+        panel.dataset[kind] = count;
+        const total = document.querySelector('[data-condition-count="' + kind + '"]');
+        if (total) total.textContent = Array.from(panels).reduce((sum, item) => sum + Number(item.dataset[kind] || 0), 0);
+      }
       const html = await response.text();
-      if (panel.open && !document.hidden) {
+      panel.dataset.etag = response.headers.get('ETag') || '';
+      if (showing && panel.open && !document.hidden) {
         panel.querySelector('[data-answer-content]').innerHTML = html;
-        panel.dataset.etag = response.headers.get('ETag') || '';
       }
     }
   } catch (_) { /* Keep the last answers during a temporary connection failure. */ }
@@ -153,7 +165,7 @@ for (const panel of panels) {
   panel.addEventListener('toggle', () => { if (panel.open) refreshAnswers(panel); });
   async function poll() {
     await refreshAnswers(panel);
-    setTimeout(poll, 200);
+    setTimeout(poll, panel.open ? 200 : 1000);
   }
   poll();
 }
@@ -207,7 +219,7 @@ def field(label, name, value="", *, type="text", required=False, **kwargs):
 
 METRIC_HELP = {
     "Configured sources": "Number of saved image inputs in this view, This does not mean that each input is connected or monitoring.",
-    "Active conditions": "Number of questions currently in the ACTIVE state after the required positive confirmations. This counts questions, not people or cameras. Conditions awaiting end confirmation are shown as RECOVERING instead.",
+    "Active conditions": "Number of confirmed active questions, including episodes awaiting end confirmation (RECOVERING). This counts questions, not people or cameras. Updates automatically for the selected cameras.",
     "Unknown conditions": "Number of questions whose current condition cannot be determined. Causes include missing, failed or stale answers, disabled questions, and disabled inputs. Unknown does not mean absent.",
     "Episodes recorded": "Number of confirmed episodes stored for the selected inputs, across question versions. Repeated positive samples in the same episode do not add to this count.",
     "Episodes": "Number of confirmed episodes that started in the selected range. An episode begins after the required positive confirmations; repeated positive samples do not create new episodes.",
@@ -444,11 +456,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 Td(local_time(summary['last_observed_at_utc'], zone))))
         return table(['Question', 'Episode State', 'Last answer', 'Value', 'Observed'], rows) if answers else P('No questions are configured for this camera.', cls='muted')
 
+    def condition_counts(answers):
+        return {'active': sum(d['summary']['state'] in ('ACTIVE', 'RECOVERING') for d in answers),
+                'unknown': sum(d['summary']['state'] == 'UNKNOWN' for d in answers)}
+
     def camera_answers(source, answers, zone):
         return Details(Summary(Span('Show answers', cls='show-answers'), Span('Hide answers', cls='hide-answers'), cls='button secondary'),
             P('Answers update after each observation. Live images update separately.', cls='muted'),
             Div(camera_answer_content(answers, zone), data_answer_content=''),
             cls='camera-answers', aria_label='Latest answers for ' + source['name'],
+            data_active=condition_counts(answers)['active'], data_unknown=condition_counts(answers)['unknown'],
             data_answer_url='/ui/camera-answers/' + source['source_id'] + '?' + urlencode({'zone': zone}))
 
     @app.route('/ui/observe-answers.js', methods=['GET'])
@@ -463,7 +480,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         timezone_for(zone)
         records = store.questions(source_id)
         # Cheap change checks avoid replaying the full history on every 0.2-second poll.
-        revision = [app.state.instance_id, zone, store.source_control(source_id), records]
+        counts_only = request.query_params.get('counts_only') == '1'
+        revision = [app.state.instance_id, zone, counts_only, store.source_control(source_id), records]
         with store.connection() as db:
             revision.append(tuple(db.execute("SELECT count(*),max(sequence) FROM observations WHERE source_id=? AND status!='retention_gap'", (source_id,)).fetchone()))
             for record in records:
@@ -475,8 +493,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         etag = '"' + sha256(json.dumps(revision, default=lambda obj: asdict(obj), sort_keys=True).encode()).hexdigest() + '"'
         if request.headers.get('if-none-match') == etag:
             return Response(status_code=304, headers={'ETag': etag})
-        content = camera_answer_content(summaries(source_id, zone=zone), zone)
-        return Response(to_xml(content), media_type='text/html', headers={'ETag': etag})
+        answers = summaries(source_id, zone=zone)
+        headers = {'ETag': etag, **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
+        content = '' if counts_only else to_xml(camera_answer_content(answers, zone))
+        return Response(content, media_type='text/html', headers=headers)
 
     def capture_controls(source, csrf, operator, configure, answers=(), zone=None):
         sid = source['source_id']
@@ -669,13 +689,13 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected_sources or s["source_id"] in selected_sources]
         content = [filters(view, selected, request)]
         if view == "overview":
-            active = sum(d["summary"]["state"] == "ACTIVE" for d in data)
-            unknown = sum(d["summary"]["state"] == "UNKNOWN" for d in data)
+            counts = condition_counts(data)
+            active, unknown = counts['active'], counts['unknown']
             count = sum(store.event_count(sid) for sid in selected_sources) if selected_sources else store.event_count()
             content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if configure else None, cls="section-heading"),
                                 *(capture_controls(s, csrf, operator, configure,
                                     [d for d in data if d['source_id'] == s['source_id']], zone) for s in sources)),
-                        Div(*(Div(Small(metric_label(label)), StrongText(number), cls="stat")
+                        Div(*(Div(Small(metric_label(label)), StrongText(number, data_condition_count="active" if label == "Active conditions" else "unknown" if label == "Unknown conditions" else None), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats")]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode([("view", view), *(("source", s) for s in pipeline.sources if s in selected_sources)]), cls="button secondary"), cls="muted"))
@@ -1120,6 +1140,6 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return page("Individual Observation", request, content, view="observations")
 
 
-def StrongText(value):
+def StrongText(value, **attrs):
     from fasthtml.components import Strong
-    return Strong(str(value))
+    return Strong(str(value), **attrs)

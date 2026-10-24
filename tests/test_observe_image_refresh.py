@@ -99,3 +99,41 @@ global.fetch = async (url, options) => {
 """
     result = subprocess.run([node], input='\n'.join((harness, OBSERVE_IMAGES_JS, checks)), capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_slow_camera_does_not_block_other_camera_refreshes():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for the browser-script unit check')
+    harness = r"""
+const assert = require('node:assert/strict');
+let scheduled, slowCalls = 0, fastCalls = 0;
+function card(url) {
+  const panel = {open:false};
+  return {dataset:{imageUrl:url, monitoring:'false'}, classList:{toggle(){}},
+    querySelector(selector) { return selector === '[data-image-panel]' ? panel : {}; }};
+}
+const slow = card('/slow'), fast = card('/fast');
+global.document = {hidden:false, querySelectorAll() { return [slow, fast]; }};
+global.setTimeout = (callback, delay) => { assert.equal(delay,200); scheduled = callback; };
+global.fetch = (url, options) => {
+  assert.ok(options.signal instanceof AbortSignal);
+  if (url === '/slow') { slowCalls++; return new Promise(() => {}); }
+  fastCalls++;
+  return Promise.resolve({ok:true, status:204, headers:{get(){return 'false';}}});
+};
+"""
+    checks = r"""
+(async () => {
+  await new Promise(setImmediate);
+  assert.equal(slowCalls,1); assert.equal(fastCalls,1);
+  assert.equal(typeof scheduled,'function');
+  scheduled(); await new Promise(setImmediate);
+  assert.equal(slowCalls,1); // Never overlap requests for a stalled camera.
+  assert.equal(fastCalls,2); // Other cameras continue at their own cadence.
+  document.hidden=true; scheduled(); await new Promise(setImmediate);
+  assert.equal(fastCalls,2);
+})().catch(error => { console.error(error); process.exitCode=1; });
+"""
+    result = subprocess.run([node], input='\n'.join((harness, OBSERVE_IMAGES_JS, checks)), capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

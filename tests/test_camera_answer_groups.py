@@ -87,6 +87,15 @@ def test_answer_fragments_refresh_scores_and_unknowns_without_capturing(app, mon
         assert 'Between Medium and Bright' in soup.text
         assert 'not a calibrated probability' in str(soup)
         assert response.headers['cache-control'] == 'no-store'
+        states = [cell.text for cell in soup.select('tbody tr td:nth-child(2)')]
+        assert int(response.headers['x-vop-active']) == sum(state in ('ACTIVE', 'RECOVERING') for state in states)
+        assert int(response.headers['x-vop-unknown']) == states.count('UNKNOWN')
+        counts = client.get(route + '?counts_only=1')
+        assert not counts.content and counts.headers['x-vop-active'] == response.headers['x-vop-active']
+        assert counts.headers['etag'] != response.headers['etag']
+        with monkeypatch.context() as patch:
+            patch.setattr(store, 'summary', fail)
+            assert client.get(route + '?counts_only=1', headers={'If-None-Match': counts.headers['etag']}).status_code == 304
         tag = response.headers['etag']
         with monkeypatch.context() as patch:
             patch.setattr(store, 'summary', fail)
@@ -109,6 +118,8 @@ def test_answer_fragments_refresh_scores_and_unknowns_without_capturing(app, mon
         assert stale.status_code == 200 and stale.headers['etag'] != tag
         assert not BeautifulSoup(stale.text, 'html.parser').select('meter')
         assert 'Unknown' in stale.text and 'No current value' in stale.text
+        assert stale.headers['x-vop-active'] == '0'
+        assert int(stale.headers['x-vop-unknown']) == len(store.questions(sid))
         assert store.health()['observation_count'] == count
         client.cookies.clear()
         assert client.get(route).status_code == 401
@@ -157,3 +168,22 @@ def test_no_answer_is_an_empty_bar_but_failed_answer_has_no_bar(app):
         row = BeautifulSoup(failed.text, 'html.parser').select_one('tbody tr')
         assert row.select('td')[2].text == 'Unknown'
         assert not row.select('meter') and 'No current value' in row.text
+
+
+def test_live_count_matches_active_and_recovering_episode_on_page(app):
+    sid = 'synthetic-scene'
+    pipeline, store = app.state.pipeline, app.state.store
+    with TestClient(app) as client:
+        csrf = login(client)
+        app.state.sampler.stop()
+        client.post('/ui/mode', data={'csrf':csrf, 'mode':'view'})
+        for expected, value in [('PENDING', True), ('ACTIVE', True), ('RECOVERING', False), ('INACTIVE', False)]:
+            pipeline.engine.configure_source_answer(sid, 'red_square', '1', value)
+            pipeline.run(sid, capture_inline(pipeline.sources[sid]))
+            response = client.get('/ui/camera-answers/' + sid)
+            assert expected in response.text
+            active = '1' if expected in ('ACTIVE', 'RECOVERING') else '0'
+            assert response.headers['x-vop-active'] == active
+            soup = BeautifulSoup(client.get('/?source=' + sid).text, 'html.parser')
+            assert soup.select_one('[data-condition-count=active]').text == active
+            assert soup.select_one('[data-answer-url]')['data-active'] == active

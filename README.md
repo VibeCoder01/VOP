@@ -975,6 +975,16 @@ GPU recovery still happen only when observation is requested or saved monitoring
 
 ### Live images on Observe
 
+Each camera refreshes independently, so a slow camera does not hold up the other
+images. Refreshes do not reload the page or overlap requests for the same camera.
+Actual image rate depends on the camera, connection and decoding; 5 fps is a target.
+Active and Unknown counters update automatically for the selected cameras, even
+when answers are hidden (once per second; open answers check every 0.2 seconds).
+Active includes ACTIVE and RECOVERING: an episode remains active until its end is
+confirmed. Unknown includes stale, failed and disabled conditions. These counters
+use episode states, not an unconfirmed positive answer or the live preview pixels.
+
+
 Observe shows privacy-masked live previews for configured RTSP and USB cameras,
 independently of the interval used to answer questions. A **green ring** and Monitoring
 label mean question monitoring is enabled; an **amber ring** and Paused label mean it
