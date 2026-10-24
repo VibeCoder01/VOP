@@ -3,8 +3,10 @@ from dataclasses import asdict, replace
 import json
 from hashlib import sha256
 
-from fasthtml.components import A, Button, Div, Form, H2, Input, P, Section, Small, Table, Tbody, Td, Th, Thead, Tr
+from fasthtml.components import A, Button, Div, Form, H2, Input, Noscript, P, Section, Small, Table, Tbody, Td, Th, Thead, Tr
 from starlette.responses import RedirectResponse, Response
+from fasthtml.common import to_xml
+from urllib.parse import urlencode
 from starlette.concurrency import run_in_threadpool
 
 from vop.contracts import ProviderError, utcnow
@@ -25,26 +27,87 @@ def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=
             continue
         for record in store.questions(sid, include_removed=True):
             question = record['spec']
-            with store.connection() as db:
-                counts = question_counts(db, sid, question.question_id)
             url = f'/ui/questions/{sid}/{question.question_id}'
             rows.append(Tr(Td(Input(type='checkbox', name='selection', value=dumps([sid, question.question_id]),
                                    form='question-selection', aria_label=f'Select {question.text} on {source.name}') if editable else ''),
                 Td(source.name or sid), Td(question.text, Small(question.question_id), Small(answer_kind(question.kind) + ' · version ' + question.version + (' · Enabled' if record['enabled'] else ' · Paused')), Small('Awaiting deletion', cls='status warning') if store.is_removed(sid, question.question_id) else None),
-                Td(str(counts['answers'])), Td(str(counts['images']), Small(f"{counts['shared_images']} shared") if counts['shared_images'] else None),
-                Td(str(counts['episodes'])), Td(str(counts['alerts'])),
+                *(Td('Loading…', data_count=key, data_source=sid, data_question=question.question_id)
+                  for key in ('answers', 'images', 'episodes', 'alerts')),
                 Td(Div(A('Edit', href=url, cls='button secondary') if not store.is_removed(sid, question.question_id) else None,
                        A('Delete question…', href=url + '/delete', cls='button danger'), cls='actions') if editable else 'Read only')))
     return Section(H2('Questions'),
         P('Delete question permanently deletes the question and all its recorded data. There is no Undo.'),
-        P('Counts include all versions. An image shared by several questions can appear in several rows.', cls='muted'),
+        P('Counts load separately and include all versions. Shared images can appear in several rows.', cls='muted'),
+        P('Loading recorded data counts…', data_counts_status='', role='status', cls='muted'),
+        Noscript(P('Counts require JavaScript here. Open Delete question to review its recorded data counts.')),
+        Button('Retry counts', type='button', cls='secondary', hidden=True, data_retry_counts=''),
         Form(hidden(csrf), Button('Delete selected…', cls='danger'), id='question-selection',
              method='post', action='/ui/questions/delete') if editable else None,
         Div(Table(Thead(Tr(*(Th(label) for label in ('Select', 'Camera', 'Question', 'Answers', 'Images', 'Episodes', 'Alerts', 'Actions')))),
-                  Tbody(*rows)), cls='table-wrap'), cls='question-list') if rows else Section(H2('Questions'), P('No questions. Add a question to begin.'))
+                  Tbody(*rows)), cls='table-wrap'), cls='question-list', data_counts_url='/ui/question-counts' + ('?' + urlencode({'source': source_filter}) if source_filter else '')) if rows else Section(H2('Questions'), P('No questions. Add a question to begin.'))
+
+
+QUESTION_COUNTS_JS = """const list = document.querySelector('[data-counts-url]');
+if (list) {
+  const status = list.querySelector('[data-counts-status]');
+  const retry = list.querySelector('[data-retry-counts]');
+  async function load() {
+    retry.hidden = true;
+    status.textContent = 'Loading recorded data counts…';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(list.dataset.countsUrl, {signal: controller.signal, headers: {Accept: 'text/html'}});
+      if (!response.ok || response.redirected) throw new Error('counts unavailable');
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const cells = new Map(Array.from(doc.querySelectorAll('[data-count]'), cell =>
+        [JSON.stringify([cell.dataset.source, cell.dataset.question, cell.dataset.count]), cell]));
+      const targets = Array.from(list.querySelectorAll('[data-count]'));
+      if (targets.some(cell => !cells.has(JSON.stringify([cell.dataset.source, cell.dataset.question, cell.dataset.count]))))
+        throw new Error('questions changed');
+      for (const cell of targets) {
+        const value = cells.get(JSON.stringify([cell.dataset.source, cell.dataset.question, cell.dataset.count]));
+        cell.replaceChildren(...value.childNodes);
+      }
+      status.textContent = 'Recorded data counts loaded. Counts can change while monitoring runs.';
+    } catch (_) {
+      status.textContent = 'Counts could not load. Try again. You can still edit questions or review deletion counts.';
+      retry.hidden = false;
+    } finally { clearTimeout(timer); }
+  }
+  retry.addEventListener('click', load);
+  load();
+}
+"""
 
 
 def install_removal(app, store, pipeline, reliable):
+    @app.route('/ui/question-counts.js', methods=['GET'])
+    def counts_script():
+        return Response(QUESTION_COUNTS_JS, media_type='application/javascript')
+
+    def count_cells(source_filter):
+        cells = []
+        with store.connection() as db:
+            db.execute('BEGIN')
+            for sid in list(pipeline.sources):
+                if source_filter and source_filter != sid:
+                    continue
+                for record in store.questions(sid, include_removed=True):
+                    qid = record['spec'].question_id
+                    counts = question_counts(db, sid, qid)
+                    cells.extend(Div(str(counts[key]), Small(f"{counts['shared_images']} shared") if key == 'images' and counts['shared_images'] else None,
+                                     data_count=key, data_source=sid, data_question=qid)
+                                 for key in ('answers', 'images', 'episodes', 'alerts'))
+        return to_xml(Div(*cells))
+
+    @app.route('/ui/question-counts', methods=['GET'])
+    async def counts_fragment(request):
+        selected = request.query_params.get('source', '')
+        if selected and selected not in pipeline.sources:
+            raise ValueError('Unknown source')
+        return Response(await run_in_threadpool(count_cells, selected), media_type='text/html')
+
     def checked(source_id, question_id=None, *, removed=False):
         sources = pipeline.removed_sources if removed and question_id is None else pipeline.sources
         if source_id not in sources:

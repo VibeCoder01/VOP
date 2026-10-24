@@ -1,5 +1,14 @@
 # Specification change log
 
+## Isolate Questions configuration from history counts — 24 October 2026
+
+- Render configuration/edit/delete controls before querying history. Load count cells
+  separately in a worker thread, with failure/retry handling and no row replacement.
+- Replace the count query's repeated temporary-table scans with one grouped pass.
+- Add metadata indexes for observation counts and saved-image presence, avoiding
+  lookups through tables containing answer/image payloads. No count cache is added.
+- Verify bounded SQL work and responsive configuration/health during stalled counts.
+
 ## Direct question deletion and faster Questions page — 23 October 2026
 
 - Replace recoverable question removal with direct confirmed Delete question and data.

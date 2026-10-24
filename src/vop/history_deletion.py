@@ -95,19 +95,18 @@ def question_counts(db, source_id, question_id):
     params = (source_id, question_id)
     answers, gaps = db.execute("SELECT COALESCE(SUM(status!='retention_gap'),0), COALESCE(SUM(status='retention_gap'),0) FROM observations WHERE source_id=? AND question_id=?", params).fetchone()
     images, shared, others = db.execute("""
-        WITH selected AS (
-            SELECT DISTINCT run_id FROM observations WHERE source_id=? AND question_id=?
-        ), other AS (
-            SELECT run_id, count(*) AS n FROM observations
-            WHERE source_id=? AND question_id!=? AND status!='retention_gap' GROUP BY run_id
+        WITH per_run AS (
+            SELECT run_id, MAX(question_id=?) AS selected,
+                   SUM(question_id!=? AND status!='retention_gap') AS others
+            FROM observations WHERE source_id=? GROUP BY run_id
         )
-        SELECT COALESCE(SUM(f.evidence_png IS NOT NULL),0),
-               COALESCE(SUM(f.evidence_png IS NOT NULL AND other.n>0),0),
-               COALESCE(SUM(other.n),0)
-        FROM selected JOIN runs r ON r.id=selected.run_id
-        LEFT JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id
-        LEFT JOIN other ON other.run_id=r.id
-        """, params + params).fetchone()
+        SELECT COALESCE(SUM(f.frame_id IS NOT NULL),0),
+               COALESCE(SUM(f.frame_id IS NOT NULL AND per_run.others>0),0),
+               COALESCE(SUM(per_run.others),0)
+        FROM per_run JOIN runs r ON r.id=per_run.run_id
+        LEFT JOIN frames f INDEXED BY frames_with_evidence ON f.source_id=r.source_id AND f.frame_id=r.frame_id AND f.evidence_png IS NOT NULL
+        WHERE per_run.selected=1
+        """, (question_id, question_id, source_id)).fetchone()
     episodes = db.execute('SELECT count(*) FROM events WHERE source_id=? AND question_id=?', params).fetchone()[0]
     alerts = db.execute('SELECT count(*) FROM alerts WHERE source_id=? AND question_id=?', params).fetchone()[0]
     return dict(answers=answers, gap_markers=gaps, images=images, shared_images=shared,
