@@ -164,7 +164,7 @@ def test_all_views_native_markup_and_no_external_assets(settings):
             assert all(f'src="{asset}"' in attrs and not body.strip() for attrs, body in scripts)
             assert 'name="viewport"' in response.text
         assert client.get("/api/v1/metrics").json()["metrics"][0]["summary"]["state"] == "UNKNOWN"
-        assert client.get("/?view=metrics&timezone=invalid/timezone").status_code == 400
+        assert client.get("/?view=metrics&timezone=invalid/timezone").status_code == 200
 
 
 def test_viewer_can_logout_and_cookie_tampering_denied(settings):

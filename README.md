@@ -224,7 +224,9 @@ selected camera. Individual Observations shows image-saving information per sele
 camera; Configure mode retains a separate Delete input history action for each camera.
 Retired cameras stay out of the selection buttons; existing individual-history links
 still work. Continuous Observations uses the configured workspace timezone without
-a timezone control. Trends keeps its timezone control. Camera setup uses matching Open camera, Edit and Remove buttons
+a timezone control. Trends also uses multi-select camera buttons and the workspace
+timezone. Its camera buttons preserve the applied dates; Apply dates preserves all
+selected cameras, and auto-refresh retains the complete URL. Camera setup uses matching Open camera, Edit and Remove buttons
 with tighter rows.
 
 ### Remove setup or delete recorded data
@@ -261,7 +263,7 @@ Gap policies: **resume** after reconfirmation, **split** into an interrupted/new
 claiming a negative end, or **manual review** (remains UNKNOWN until an operator reviews history
 and saves a new version). A revised question supersedes any old open episode without fake closure.
 
-**Events** shows the latest 100 recorded episodes. **Metrics** provides source/date/timezone
+**Events** shows the latest 100 recorded episodes. **Metrics** provides camera/date
 filters, counts, estimated sampled durations, rates per covered hour, occupancy/coverage,
 choice dwell and ordinal SVG trends. UTC instants remain intact; timezone labels include offsets
 and distinguish repeated DST hours. Date filters are local-calendar inclusive dates converted

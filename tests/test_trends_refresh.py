@@ -39,10 +39,10 @@ def test_refresh_timer_respects_hidden_tabs_filter_focus_and_unsaved_changes():
     script = r'''
 const assert = require('node:assert/strict');
 let timer, delay, reloads = 0;
-const filters = {values:[['view','metrics'],['source','fixture'],['timezone','UTC']], contains: x => x === 'filter'};
+const filters = {values:[['view','metrics'],['source','fixture'],['source','garden'],['from','2026-10-01'],['through','2026-10-31']], contains: x => x === 'filter'};
 global.document = {hidden:false, activeElement:null, querySelector:() => filters};
 global.FormData = class { constructor(form) {this.form = form;} [Symbol.iterator]() {return this.form.values[Symbol.iterator]();} };
-global.location = {href:'http://127.0.0.1/?view=metrics&source=fixture&timezone=UTC', reload:() => reloads++};
+global.location = {href:'http://127.0.0.1/?view=metrics&source=fixture&source=garden&from=2026-10-01&through=2026-10-31', reload:() => reloads++};
 global.setInterval = (fn, ms) => {timer=fn; delay=ms;};
 global.fetch = () => {throw new Error('Refresh must not request a capture or worker operation');};
 new Function(SOURCE)();
@@ -52,7 +52,7 @@ document.hidden=true; timer(); assert.equal(reloads,1);
 document.hidden=false; document.activeElement='filter'; timer(); assert.equal(reloads,1);
 document.activeElement=null; filters.values[1][1]='unsaved'; timer(); assert.equal(reloads,1);
 filters.values[1][1]='fixture'; timer(); assert.equal(reloads,2);
-assert.equal(location.href,'http://127.0.0.1/?view=metrics&source=fixture&timezone=UTC');
+assert.equal(location.href,'http://127.0.0.1/?view=metrics&source=fixture&source=garden&from=2026-10-01&through=2026-10-31');
 timer=null; document.querySelector=() => null; new Function(SOURCE)(); assert.equal(timer,null);
 '''.replace('SOURCE', json.dumps(TRENDS_REFRESH_JS))
     result = subprocess.run([shutil.which('node'), '-e', script], capture_output=True, text=True, timeout=10)
