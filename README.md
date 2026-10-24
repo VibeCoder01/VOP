@@ -229,6 +229,24 @@ timezone. Its camera buttons preserve the applied dates; Apply dates preserves a
 selected cameras, and auto-refresh retains the complete URL. Camera setup uses matching Open camera, Edit and Remove buttons
 with tighter rows.
 
+### Question help and observation frequency
+
+Question editors explain every field in **Advanced: detection and episode settings**
+and **Advanced: observation settings**. Yes/No confirmations count consecutive valid
+answers, not time. The maximum observation gap controls coverage/unknown intervals;
+it does not control how often images are captured. ROI limits this question to a
+normalised rectangle; leave it blank for the whole image. The hold-for-review gap
+policy has no separate approval action in the editor: choose Resume or Split and
+save a new version to resume automatic episode classification.
+
+Observation frequency is set **per camera** at **Configure mode → Cameras → Open
+camera → Edit observation settings → Sample interval**. The question editor links
+there too. The interval applies to all enabled questions on that camera. It is a
+target: cameras take turns, and processing time or connection retries can increase
+the actual interval. `00:00:00.0` pauses monitoring; for example, `00:00:10.0` requests
+an observation every `00:00:10.0`. Keep the question’s maximum gap long enough for
+the expected interval and normal capture/engine delays.
+
 ### Remove setup or delete recorded data
 
 Removal and restoration wait for current observation/alert work instead of returning

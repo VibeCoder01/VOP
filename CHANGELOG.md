@@ -1,5 +1,13 @@
 # Specification change log
 
+## Explain advanced question settings — 24 October 2026
+
+- Add linked help for Yes/No threshold, positive/negative confirmations, all gap
+  policies, maximum observation gap, ROI and question enabled status.
+- Link question observation help to the camera interval form and explain the target
+  per-camera interval, shared by its enabled questions, including pauses and delays.
+- Explain the current hold-for-review limitation without promising an approval action.
+
 ## Trends camera buttons — 24 October 2026
 
 - Replace Trends source/timezone dropdowns with multi-select camera-name buttons.

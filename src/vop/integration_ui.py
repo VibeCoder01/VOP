@@ -247,7 +247,7 @@ def install_integration(app, settings, store, pipeline):
             Section(H2('Questions'), P('Choose what this camera observes. Switch to View mode to run observations.'),
                     A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary')),
             Section(H2('Recorded images'), app.state.image_settings(source_id, True)),
-            Section(H2('Observation settings'), P('Set the sample interval and image-saving setting.'),
+            Section(H2('Observation settings'), P('Set how often this camera observes. Its sample interval applies to all enabled questions on this camera. Image saving is also set here.'),
                     A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary')),
             Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
                     A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
