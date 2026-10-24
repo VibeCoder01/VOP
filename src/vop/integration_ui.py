@@ -11,7 +11,7 @@ from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label,
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fasthtml.common import to_xml
-from vop.display import duration
+from vop.display import duration, duration_input
 
 from vop.config import SourceSpec, identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec
@@ -143,7 +143,7 @@ def install_integration(app, settings, store, pipeline):
                                     P(source.source_id, cls='object-meta'),
                                     P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
                                  Div(A('Open camera', href='/cameras/' + source.source_id, cls='button secondary'),
-                                     A('Edit', href='/cameras/' + source.source_id + '/edit', cls='button secondary'),
+                                     A('Edit settings', href='/cameras/' + source.source_id + '/edit', cls='button secondary'),
                                      A('Remove…', href='/ui/sources/' + source.source_id + '/remove', cls='button danger'), cls='actions'), cls='object-row') for source in rows), cls='object-list camera-list')
                        if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
                                         A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
@@ -154,11 +154,11 @@ def install_integration(app, settings, store, pipeline):
     def camera_editor(source_id, request):
         if denied(request): return denied(request)
         selected = camera_record(source_id) if source_id != 'new' else None
-        if selected and selected.kind != 'rtsp':
-            return RedirectResponse('/cameras/' + source_id + '/rename', status_code=303)
+        usb = selected is not None and selected.kind == 'usb'
+        control = store.source_control(source_id) if selected else {'enabled':False, 'retain_evidence':False, 'sample_interval_seconds':0}
         endpoint, username, warning = '', '', None
         missing = []
-        if selected:
+        if selected and not usb:
             try:
                 endpoint = secrets.get(selected.settings['endpoint_secret_ref'])
             except ProviderError:
@@ -170,24 +170,39 @@ def install_integration(app, settings, store, pipeline):
             if missing:
                 warning = P('Saved ' + ' and '.join(missing) + ' could not be read. Check those fields and save the corrected details. Any readable saved details are kept.', cls='readiness warning')
         model = 'C200'
-        if selected:
+        if selected and not usb:
             with store.connection() as db:
                 row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_profile:' + source_id,)).fetchone()
             model = json.loads(row[0])['model'] if row else selected.name.removeprefix('Tapo ')
-        return app.state.page('Edit camera' if selected else 'Add camera', request, [
+        return app.state.page('Camera settings' if selected else 'Add camera', request, [
             A('‹ Cameras', href='/cameras', cls='back'), warning,
             Form(hidden(csrf(request)), Input(type='hidden', name='source_id', value=source_id if selected else ''),
-                 Div(field('Camera name', 'name', selected.name if selected else '', placeholder='For example, Front door', maxlength=128),
-                     P('Use a name you recognise. Leave it empty for the model name.', cls='muted'), H2('Connection'),
-                     Div(Label('Camera model', _for='camera-model'), Select(*(Option(m, value=m, selected=m == model) for m in ('C200', 'C210', 'C510W')), name='model', id='camera-model'), cls='field'),
-                     field('Camera address', 'endpoint', endpoint, placeholder='rtsp://CAMERA-IP:554/stream1', required=True),
-                     P('Use the camera LAN address. Use /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
-                     field('Camera username', 'username', username, autocomplete='username', required=not selected),
-                     field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected),
-                     P('Leave the password empty to keep the saved password.', cls='muted') if selected else None, cls='surface'),
-                 P('Saving waits for any current observation to finish. You do not need to stop monitoring.', cls='muted'),
-                 Div(Button('Save camera'), A('Cancel', href='/cameras/' + source_id if selected else '/cameras', cls='button secondary'), cls='actions'),
-                 method='post', action='/cameras/save', cls='editor')
+                 Input(type='hidden', name='observation_settings', value='1'),
+                 Section(H2('Camera'), field('Camera name', 'name', selected.name if selected else '',
+                         placeholder='For example, Front door', maxlength=128),
+                         P('Choose a name you recognise.', cls='muted')),
+                 Section(H2('Connection'),
+                     P('USB camera · device ' + str(selected.settings.get('device', 0)), cls='muted') if usb else
+                     Div(Div(Label('Camera model', _for='camera-model'), Select(*(Option(m, value=m, selected=m == model) for m in ('C200', 'C210', 'C510W')), name='model', id='camera-model'), cls='field'),
+                         field('Camera address', 'endpoint', endpoint, placeholder='rtsp://CAMERA-IP:554/stream1', required=True),
+                         P('Use the LAN address with /stream1 for full size or /stream2 for a smaller image.', cls='muted'),
+                         Div(field('Camera username', 'username', username, autocomplete='username', required=not selected),
+                             field('Camera password', 'password', type='password', autocomplete='new-password', required=not selected), cls='pair'),
+                         P('Leave the password empty to keep the saved password.', cls='muted') if selected else None)),
+                 Section(H2('Observations'),
+                     Label(Input(type='checkbox', name='enabled', checked=control['enabled']), ' Camera enabled'),
+                     P('When off, this camera does not take observations. Its saved questions and history remain.', cls='muted'),
+                     field('Sample interval (H:M:S)', 'sample_interval_seconds', duration(control['sample_interval_seconds']), required=True,
+                           aria_describedby='camera-interval-help'),
+                     P('Applies to all enabled questions on this camera. Use 00:00:00.0 to pause monitoring, or 00:00:01.0 to 01:00:00.0 for repeated observations. Cameras take turns, so processing and connection delays can make the actual interval longer.', id='camera-interval-help', cls='muted'),
+                     P('Saving a nonzero interval starts monitoring when Camera enabled is on.', cls='muted'), id='observations'),
+                 Section(H2('Recorded images'),
+                     Label(Input(type='checkbox', name='retain_evidence', checked=control['retain_evidence']), ' Save images with observations'),
+                     P('Off by default. When on, future observations keep a privacy-masked still image for Individual Observations. Questions from the same capture share one image.', cls='muted'),
+                     P('Turning this off keeps images already saved. It cannot recover earlier unsaved or deleted images.', cls='muted'), id='image-saving'),
+                 P('Save waits for the current observation. Changes apply to the next one.', cls='muted'),
+                 Div(Button('Save settings' if selected else 'Add camera'), A('Cancel', href='/cameras/' + source_id if selected else '/cameras', cls='button secondary'), cls='actions'),
+                 method='post', action='/cameras/save', cls='editor camera-editor')
         ], view='cameras')
 
     @app.route('/cameras/new', methods=['GET'])
@@ -202,10 +217,7 @@ def install_integration(app, settings, store, pipeline):
     def rename_camera_editor(source_id: str, request):
         if denied(request): return denied(request)
         source = camera_record(source_id)
-        return app.state.page('Rename camera', request, [A('‹ Camera', href='/cameras/' + source_id, cls='back'),
-            Form(hidden(csrf(request)), field('Camera name', 'name', source.name, required=True, maxlength=128),
-                 P('The camera ID, connection, questions and history stay the same.', cls='muted'), Button('Save name'),
-                 method='post', action=request.url.path, cls='editor')], view='cameras')
+        return RedirectResponse('/cameras/' + source_id + '/edit', status_code=303)
 
     @app.route('/cameras/{source_id}/rename', methods=['POST'])
     async def rename_camera(source_id: str, request):
@@ -237,8 +249,7 @@ def install_integration(app, settings, store, pipeline):
             row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('camera_test:' + source_id,)).fetchone()
             if row: last_test = json.loads(row[0])
         content = [A('‹ Cameras', href='/cameras', cls='back'),
-            Div(P(source_id), Div(A('Rename', href='/cameras/' + source_id + '/rename', cls='button secondary'),
-                                 A('Edit camera', href='/cameras/' + source_id + '/edit', cls='button secondary'), cls='actions'), cls='section-heading'),
+            Div(P(source_id), A('Edit settings', href='/cameras/' + source_id + '/edit', cls='button'), cls='section-heading'),
             Section(H2('Connection'), dependency_panel(problems, ready='Saved details are available. Test the connection to check the camera.'),
                     P('Camera test scheduled. ', A('Open test result', href='/integration/cameras/' + source_id + '/test'), cls='notice') if app.state.sampler.camera_test_requested(source_id) else None,
                     P('Last test: image received.' if last_test.get('status') == 'capture_success' else 'Last test failed. Try again or edit the camera.', cls='muted') if last_test else P('Connection not tested in this setup.', cls='muted'),
@@ -246,9 +257,9 @@ def install_integration(app, settings, store, pipeline):
                     P('This test receives one image. It does not ask the engine a question or keep evidence.', cls='muted')),
             Section(H2('Questions'), P('Choose what this camera observes. Switch to View mode to run observations.'),
                     A('Questions', href='/?view=questions&source=' + source_id, cls='button secondary')),
-            Section(H2('Recorded images'), app.state.image_settings(source_id, True)),
-            Section(H2('Observation settings'), P('Set how often this camera observes. Its sample interval applies to all enabled questions on this camera. Image saving is also set here.'),
-                    A('Edit observation settings', href='/ui/sources/' + source_id, cls='button secondary')),
+            Section(H2('Settings'), P('Sample interval: ' + duration(store.source_control(source_id)['sample_interval_seconds'])),
+                    P('Image saving: ' + ('On' if store.source_control(source_id)['retain_evidence'] else 'Off')),
+                    P('Use Edit settings to change the name, connection, observation interval or saved images.', cls='muted')),
             Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
                     A('Remove camera…', href='/ui/sources/' + source_id + '/remove', cls='button danger'))]
         return app.state.page(source.name, request, content, view='cameras', notice=request.query_params.get('notice'))
@@ -506,6 +517,35 @@ def install_integration(app, settings, store, pipeline):
                 requested_id = base + '-' + str(number)
         sid = identifier(requested_id)
         is_new = sid not in pipeline.sources
+        controls = None
+        if form.get('observation_settings') == '1':
+            interval = duration_input(form.get('sample_interval_seconds', ''))
+            if interval != 0 and not 1 <= interval <= 3600:
+                raise ValueError('Use 00:00:00.0 to pause, or an interval from 00:00:01.0 to 01:00:00.0.')
+            controls = {'enabled':form.get('enabled') == 'on', 'retain_evidence':form.get('retain_evidence') == 'on',
+                        'sample_interval_seconds':interval}
+        if not is_new and pipeline.sources[sid].kind == 'usb':
+            source = pipeline.sources[sid]
+            name = str(form.get('name', source.name)).strip()
+            if not name or len(name) > 128 or any(ord(c) < 32 for c in name):
+                raise ValueError('Enter a camera name with 1 to 128 characters.')
+            await run_in_threadpool(pipeline.busy.acquire)
+            try:
+                source = replace(source, name=name)
+                store.configure(replace(settings, sources=(source,)))
+                with store.connection() as db:
+                    db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
+                pipeline.sources[sid] = source
+                if controls is not None:
+                    previous = store.source_control(sid)
+                    store.update_source(sid, **controls)
+                    if (previous['enabled'] and not controls['enabled']) or (previous['sample_interval_seconds'] and not controls['sample_interval_seconds']):
+                        pipeline.record_gap(sid)
+                pipeline.clear_preview(sid)
+                store.audit('camera_setup', 'saved')
+            finally:
+                pipeline.busy.release()
+            return RedirectResponse('/cameras/' + sid + '?notice=Camera+settings+saved.', status_code=303)
         parsed = urlsplit(str(form["endpoint"]))
         try:
             address = ipaddress.ip_address(parsed.hostname or "")
@@ -529,6 +569,8 @@ def install_integration(app, settings, store, pipeline):
             record["privacy_masks"] = pipeline.sources[sid].settings["privacy_masks"]
             source = replace(source, settings={**source.settings, "privacy_masks": record["privacy_masks"]})
         username, password = str(form.get("username", "")), str(form.get("password", ""))
+        if username and (len(username) > 128 or any(ord(c) < 32 for c in username)):
+            raise ValueError('Invalid camera account username')
         if password:
             if not 1 <= len(username) <= 128 or not 1 <= len(password) <= 128 or any(ord(c) < 32 for c in username + password):
                 raise ValueError("Invalid camera account credentials")
@@ -539,7 +581,9 @@ def install_integration(app, settings, store, pipeline):
             if password:
                 await run_in_threadpool(secrets.set, record["credentials_ref"], json.dumps({"username": username, "password": password}))
             else:
-                await run_in_threadpool(secrets.camera, record["credentials_ref"])
+                saved = await run_in_threadpool(secrets.camera, record["credentials_ref"])
+                if username and username != saved['username']:
+                    await run_in_threadpool(secrets.set, record["credentials_ref"], json.dumps({'username':username, 'password':saved['password']}))
             await run_in_threadpool(secrets.set, record["endpoint_ref"], str(form["endpoint"]))
             store.configure(replace(settings, sources=(source,)))
             with store.connection() as db:
@@ -547,7 +591,12 @@ def install_integration(app, settings, store, pipeline):
                 db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
             pipeline.sources[sid] = source
             pipeline.clear_preview(sid)
-            if is_new and form.get('connect') == '1':
+            if controls is not None:
+                previous = store.source_control(sid)
+                store.update_source(sid, **controls)
+                if (previous['enabled'] and not controls['enabled']) or (previous['sample_interval_seconds'] and not controls['sample_interval_seconds']):
+                    pipeline.record_gap(sid)
+            elif is_new and form.get('connect') == '1':
                 store.update_source(sid, enabled=True, retain_evidence=False, sample_interval_seconds=0)
             store.audit("camera_setup", "saved_protected_references")
         finally:

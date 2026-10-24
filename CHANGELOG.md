@@ -1,5 +1,14 @@
 # Specification change log
 
+## Unified camera settings — 24 October 2026
+
+- Combine camera identity/connection, enabled state, observation interval and image
+  saving in one grouped editor and one Save action, for network and USB cameras.
+- Replace duplicate detail-page edit/rename/observation links with Edit settings;
+  redirect old observation and rename editor links to the unified form.
+- Validate intervals before protected writes. Preserve observation settings for old
+  connection-only clients and retain a saved password when changing the username.
+
 ## Explain advanced question settings — 24 October 2026
 
 - Add linked help for Yes/No threshold, positive/negative confirmations, all gap

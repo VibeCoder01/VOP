@@ -93,9 +93,11 @@ def test_usb_camera_name_survives_restart(app):
     app = create_app(settings, token=OWNER)
     with TestClient(app) as client:
         csrf = login(client)
-        response = client.post('/cameras/usb-test/rename', data={'csrf': csrf, 'name': 'Desk camera'})
+        response = client.post('/cameras/save', data={'csrf': csrf, 'source_id':'usb-test', 'name': 'Desk camera',
+             'observation_settings':'1', 'enabled':'on', 'retain_evidence':'on', 'sample_interval_seconds':'00:00:15.0'})
         assert response.status_code == 200
-        assert client.get('/cameras/usb-test/edit').url.path == '/cameras/usb-test/rename'
+        assert client.get('/cameras/usb-test/rename').url.path == '/cameras/usb-test/edit'
     restarted = create_app(settings, token=OWNER)
     assert restarted.state.pipeline.sources['usb-test'].name == 'Desk camera'
     assert restarted.state.store.sources(('usb-test',))[0]['name'] == 'Desk camera'
+    assert restarted.state.store.source_control('usb-test') == {'enabled':True, 'retain_evidence':True, 'sample_interval_seconds':15}

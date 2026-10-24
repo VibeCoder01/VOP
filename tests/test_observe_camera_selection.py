@@ -58,6 +58,6 @@ def test_camera_setup_actions_have_consistent_buttons_and_compact_rows(app):
         soup = BeautifulSoup(client.get('/cameras').text, 'html.parser')
         row = soup.select_one('.camera-list .object-row')
         actions = row.select('.actions a')
-        assert [a.text for a in actions] == ['Open camera', 'Edit', 'Remove…']
+        assert [a.text for a in actions] == ['Open camera', 'Edit settings', 'Remove…']
         assert all('button' in a['class'] for a in actions)
         assert 'camera-list .object-row{padding:12px 0' in client.get('/ui/style.css').text
