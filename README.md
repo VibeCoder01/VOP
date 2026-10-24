@@ -176,7 +176,7 @@ The mock preset is a user-selected synthetic answer, not computer vision. Its pe
 override survives restart. Unconfigured mock questions return unsupported instead of fabricated
 answers. The source and model interfaces remain independent; Phase 4 worker setup is described below.
 
-**Cameras → Open camera → Edit observation settings** controls enabled state, image saving
+**Cameras → Open camera → Edit settings** controls enabled state, image saving
 and sample interval. Other inputs use **Settings → Other inputs → Edit source**. A nonzero
 interval (1–3600 seconds) explicitly starts background sampling, independent of browser tabs;
 0 stops it. Saved sampling controls resume after restart. There is one worker and zero queued
@@ -229,6 +229,22 @@ timezone. Its camera buttons preserve the applied dates; Apply dates preserves a
 selected cameras, and auto-refresh retains the complete URL. Camera setup uses matching Open camera, Edit and Remove buttons
 with tighter rows.
 
+### Unified camera settings
+
+Use **Cameras → Edit settings**, or **Open camera → Edit settings**. One form contains
+Camera (name), Connection (model/address/account for network cameras), Observations
+(enabled state and sample interval), and Recorded images (save images). One Save
+settings button saves the form. USB cameras use the same observation/image controls
+and show their existing device connection. Connection tests stay on the camera page.
+Old camera observation and rename links open this editor. Other input types retain
+their existing observation editor.
+
+Leave the network camera password blank to keep it. A changed username can reuse
+that saved password. Invalid intervals are rejected before any protected connection
+values are written. Connection-only legacy requests retain saved observation settings.
+Saving waits for active acquisition; it does not require pausing monitoring first.
+A nonzero interval starts repeated observations only when Camera enabled is on.
+
 ### Question help and observation frequency
 
 Question editors explain every field in **Advanced: detection and episode settings**
@@ -240,7 +256,7 @@ policy has no separate approval action in the editor: choose Resume or Split and
 save a new version to resume automatic episode classification.
 
 Observation frequency is set **per camera** at **Configure mode → Cameras → Open
-camera → Edit observation settings → Sample interval**. The question editor links
+camera → Edit settings → Sample interval**. The question editor links
 there too. The interval applies to all enabled questions on that camera. It is a
 target: cameras take turns, and processing time or connection retries can increase
 the actual interval. `00:00:00.0` pauses monitoring; for example, `00:00:10.0` requests
@@ -493,7 +509,7 @@ local frame, show a privacy-masked memory-only preview and store diagnostic meta
 request is made by that connection test. Capture failure never asserts “no human”.
 
 The setup page reopens the saved camera's address, username and model; passwords stay blank.
-Use **Cameras → Open camera → Edit camera** to change a saved camera, or **Add camera**
+Use **Cameras → Open camera → Edit settings** to change a saved camera, or **Add camera**
 for an empty form. Save returns to that camera's page; **Test camera** opens the connection result.
 The sample IP is a
 placeholder only and is never submitted as a default address.
