@@ -218,6 +218,13 @@ are blocked. Without JavaScript or native dialog support, normal form submission
 still works: wait for the result page. Going Back restores the confirmation controls;
 the server still checks whether the selected questions can be deleted.
 
+On startup VOP adds a small capture-to-observation lookup index to existing
+workspaces. This avoids scanning the whole observation table for each capture during
+deletion and foreign-key checks. Confirmation previews read counts and rule setup,
+not every raw capture result; deletion loads the current results only when needed.
+Saved-image clearing and the final database checkpoint can still take time. Do not
+force a restart to install an update while a deletion is running; let it finish first.
+
 Deletion erases all versions’ answers, deletion-gap markers, associated saved images,
 raw engine details, episodes, alerts and delivery records. Shared images disappear
 from other questions’ results too; their typed answers remain. Related alert rules

@@ -97,7 +97,7 @@ def test_count_lookup_indexes_exist_after_reopen(app):
     reopened = Store(app.state.store.path)
     with reopened.connection() as db:
         indexes = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
-        assert {'observations_count_lookup','frames_with_evidence'} <= indexes
+        assert {'observations_count_lookup','frames_with_evidence','observations_run'} <= indexes
 
 
 def test_count_script_updates_cells_preserves_selection_and_offers_retry():

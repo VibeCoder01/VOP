@@ -1,5 +1,15 @@
 # Specification change log
 
+## Efficient question deletion — 26 October 2026
+
+- Add an observation lookup index by capture run, including existing databases on
+  startup, to avoid repeated full-table scans during shared-answer cleanup and
+  capture foreign-key checks.
+- Use metadata-only question deletion previews; remove unused full-history hashing.
+- Avoid rewriting already-cleared images. Preserve atomic deletion, fresh shared
+  result reads, other normalized answers and the progress dialog.
+- Add deterministic SQL-work scaling checks with shared and exclusive captures.
+
 ## Question deletion progress — 26 October 2026
 
 - Show a native modal with an indeterminate progress bar after confirming single or

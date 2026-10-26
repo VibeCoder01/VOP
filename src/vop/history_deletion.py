@@ -113,18 +113,15 @@ def question_counts(db, source_id, question_id):
                 other_answers=others, episodes=episodes, alerts=alerts)
 
 
-def question_selection(db, source_id, question_id):
-    """Preview all versions of one question, without loading retained image bytes."""
+def question_selection(db, source_id, question_id, *, include_runs=True):
+    """Select all versions; previews need only counts/rules, not raw result payloads."""
     params = (source_id, question_id)
-    answers = db.execute('SELECT sequence,status FROM observations WHERE source_id=? AND question_id=? ORDER BY sequence', params).fetchall()
-    runs = db.execute('SELECT id,frame_id,result_json FROM runs WHERE id IN (SELECT run_id FROM observations WHERE source_id=? AND question_id=?) ORDER BY id', params).fetchall()
+    runs = (db.execute('SELECT id,frame_id,result_json FROM runs WHERE id IN (SELECT run_id FROM observations WHERE source_id=? AND question_id=?) ORDER BY id', params).fetchall()
+            if include_runs else [])
     alerts = [r[0] for r in db.execute('SELECT id FROM alerts WHERE source_id=? AND question_id=? ORDER BY id', params)]
-    events = [r[0] for r in db.execute('SELECT id FROM events WHERE source_id=? AND question_id=? ORDER BY id', params)]
     rules = [dict(r) for r in db.execute('SELECT * FROM rules ORDER BY id') if (json.loads(r['configuration'])['source_id'], json.loads(r['configuration'])['question_id']) == params]
-    counts = question_counts(db, source_id, question_id)
-    fingerprint = sha256(dumps({'source_id': source_id, 'question_id': question_id, 'counts': counts, 'answers': [r['sequence'] for r in answers],
-                               'runs': [(r['id'], sha256(r['result_json'].encode()).hexdigest()) for r in runs], 'alerts': alerts, 'events': events, 'rules': rules}).encode()).hexdigest()
-    return dict(source_id=source_id, question_id=question_id, runs=runs, alerts=alerts, rules=rules, counts=counts, fingerprint=fingerprint)
+    return dict(source_id=source_id, question_id=question_id, runs=runs, alerts=alerts,
+                rules=rules, counts=question_counts(db, source_id, question_id))
 
 
 def delete_question_data(db, chosen):
@@ -152,7 +149,7 @@ def delete_question_data(db, chosen):
             answer = json.loads(row['answer_json'])
             answer.update(raw_provider_fields=None, usage=None)
             db.execute('UPDATE observations SET answer_json=? WHERE id=?', (dumps(answer), row['id']))
-        db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=? AND frame_id=?', (sid, run['frame_id']))
+        db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=? AND frame_id=? AND evidence_png IS NOT NULL', (sid, run['frame_id']))
     last = db.execute('SELECT MAX(captured_at_utc) FROM frames WHERE source_id=?', (sid,)).fetchone()[0]
     db.execute('UPDATE sources SET last_frame_utc=? WHERE id=?', (last, sid))
     db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)', (utcnow().isoformat(), 'question_data_delete', dumps({'source_id': sid, 'question_id': qid, **chosen['counts']})))
