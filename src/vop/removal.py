@@ -3,7 +3,7 @@ from dataclasses import asdict, replace
 import json
 from hashlib import sha256
 
-from fasthtml.components import A, Button, Div, Form, H2, Input, Noscript, P, Section, Small, Table, Tbody, Td, Th, Thead, Tr
+from fasthtml.components import A, Button, Dialog, Div, Form, H2, Input, Noscript, P, Progress, Script, Section, Small, Table, Tbody, Td, Th, Thead, Tr
 from starlette.responses import RedirectResponse, Response
 from fasthtml.common import to_xml
 from urllib.parse import urlencode
@@ -81,7 +81,40 @@ if (list) {
 """
 
 
+QUESTION_DELETE_JS = """const deletionForm = document.querySelector('[data-question-delete]');
+const deletionDialog = document.querySelector('[data-question-delete-progress]');
+if (deletionForm && deletionDialog && typeof deletionDialog.showModal === 'function') {
+  let pending = false;
+  const buttons = Array.from(deletionForm.querySelectorAll('button[type="submit"], button:not([type])'));
+  const labels = buttons.map(button => button.textContent);
+  deletionDialog.addEventListener('cancel', event => event.preventDefault());
+  deletionForm.addEventListener('submit', event => {
+    if (event.defaultPrevented) return;
+    if (pending) { event.preventDefault(); return; }
+    pending = true;
+    deletionForm.setAttribute('aria-busy', 'true');
+    deletionDialog.showModal();
+    // Keep native form submission, CSRF fields and server result/error navigation.
+    // No percentage is shown: this deletion commits as a single transaction.
+  });
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    pending = false;
+    deletionForm.removeAttribute('aria-busy');
+    if (deletionDialog.open) deletionDialog.close();
+    buttons.forEach((button, index) => {
+      button.textContent = labels[index]; button.removeAttribute('aria-busy');
+    });
+  });
+}
+"""
+
+
 def install_removal(app, store, pipeline, reliable):
+    @app.route('/ui/question-delete.js', methods=['GET'])
+    def deletion_script():
+        return Response(QUESTION_DELETE_JS, media_type='application/javascript')
+
     @app.route('/ui/question-counts.js', methods=['GET'])
     def counts_script():
         return Response(QUESTION_COUNTS_JS, media_type='application/javascript')
@@ -279,8 +312,16 @@ def install_removal(app, store, pipeline, reliable):
                          P('Counts are per question. Shared images may appear in more than one row; each image is deleted once.', cls='muted'),
                          *warnings,
                          P('Question definitions and audit records remain. There is no Undo. Existing backups, exports and messages already sent are not changed.', cls='readiness warning')),
-                 Button('Delete question and data' if not bulk else 'Delete selected questions and data', cls='danger'), method='post', action=request.url.path),
-            A('Cancel', href='/?view=questions', cls='button secondary')], view='questions')
+                 Button('Delete question and data' if not bulk else 'Delete selected questions and data', cls='danger'), method='post', action=request.url.path, data_question_delete=''),
+            A('Cancel', href='/?view=questions', cls='button secondary'),
+            Dialog(H2('Deleting questions', id='question-delete-title'),
+                   P('Please wait. VOP will finish the current observation, then delete the questions and their data.', id='question-delete-description'),
+                   Progress('Deletion in progress', aria_label='Deletion in progress. Completion time is unknown.'),
+                   P('Large histories can take time. Keep this page open. The result will appear automatically.', cls='muted'),
+                   data_question_delete_progress='', cls='deletion-progress',
+                   aria_labelledby='question-delete-title', aria_describedby='question-delete-description'),
+            Noscript(P('After you confirm, keep this page open while VOP deletes the data. The result will appear when it finishes.', cls='notice')),
+            Script(src='/ui/question-delete.js', defer=True)], view='questions')
 
     @app.route('/ui/questions/{source_id}/{question_id}/delete', methods=['GET', 'POST'])
     async def delete_question(request, source_id: str, question_id: str):
