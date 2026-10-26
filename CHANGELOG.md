@@ -1,5 +1,14 @@
 # Specification change log
 
+## Delete questions during monitoring — 26 October 2026
+
+- Bind question deletion confirmation to question/rule configuration, rather than
+  changing observation counts. New observations no longer force repeated confirmation.
+- Delete all matching data under the existing capture/alert locks, including data
+  recorded while waiting. Preserve camera monitoring settings and other questions.
+- Explain preview counts and shared-image effects; retain configuration-change,
+  permission and atomic rollback protections for single and bulk deletion.
+
 ## Observe refresh and counters — 24 October 2026
 
 - Refresh camera previews independently; one slow request no longer blocks other cameras.

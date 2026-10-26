@@ -202,7 +202,12 @@ confirmation still calculates its own current counts. Listing uses count-only ag
 queries on indexed metadata, not complete deletion previews. Tick several rows and
 choose **Delete selected…** for one atomic batch. Review the shared-image warning
 before confirming. Deletion waits for current observation/alert work; keep the page
-open. Changed data requires review and confirmation again.
+open. The counts are a preview: confirmation covers all data for the selected
+questions, including observations recorded before deletion obtains its lock. The
+camera does not need to be paused. Other questions continue monitoring afterwards.
+New answers, image retention/deletion and episode/alert updates do not force repeated
+confirmation. Changes to the selected question setup or its alert-rule configuration
+still require a fresh review; deleted IDs remain reserved.
 
 Deletion erases all versions’ answers, deletion-gap markers, associated saved images,
 raw engine details, episodes, alerts and delivery records. Shared images disappear
@@ -285,7 +290,8 @@ a busy error. Keep the request page open until it completes; saved history is re
   history…**. Pause its monitoring first. This also removes deletion-gap markers. Camera setup,
   questions and engine profiles remain. You can review history for a removed input here too.
 
-Delete actions show effects and require confirmation. A changed preview must be reviewed again;
+Delete actions show effects and require confirmation. Changed configuration must be reviewed again;
+question deletion covers new data as described above, while history-only deletion retains its current-data check;
 GET links never delete. There is no Undo for permanent data/profile deletion. Audit records,
 backups and messages already sent remain. Retained images can also be deleted independently
 on observation detail pages without deleting measured answers. No user data is deleted merely

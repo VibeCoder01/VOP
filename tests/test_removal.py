@@ -242,5 +242,5 @@ def test_permanent_question_delete_permissions_csrf_and_active_guard(app, monkey
         assert client.post(base+'/delete', data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
         # Missing data confirmation must never delete a question.
-        assert 'Recorded data changed' in client.post(base+'/delete', data=form).text
+        assert 'Question setup or alert rules changed' in client.post(base+'/delete', data=form).text
         assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID))

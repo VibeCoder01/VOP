@@ -127,7 +127,7 @@ def test_delete_purges_question_versions_and_images_but_preserves_other_answers(
     assert restored.state.store.evidence(SID, shared_frame.frame_id) is None
 
 
-def test_purge_needs_current_counts_and_is_atomic(app, monkeypatch):
+def test_purge_needs_current_configuration_and_is_atomic(app, monkeypatch):
     store, pipeline = app.state.store, app.state.pipeline
     store.update_source(SID, enabled=True, retain_evidence=True, sample_interval_seconds=0)
     capture(app, 20)
@@ -142,12 +142,12 @@ def test_purge_needs_current_counts_and_is_atomic(app, monkeypatch):
         assert client.post(URL, data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
         missing = client.post(URL, data={**form, 'expected_data': ''})
-        assert 'Recorded data changed. Review the updated counts' in missing.text
+        assert 'Question setup or alert rules changed. Review the selection' in missing.text
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))
-        # An image deletion after preview invalidates the recorded-data confirmation.
-        with store.connection() as db: db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=?', (SID,))
+        # A changed question setup still invalidates confirmation.
+        with store.connection() as db: db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, QID))
         changed = client.post(URL, data=form)
-        assert 'Recorded data changed. Review the updated counts' in changed.text
+        assert 'Question setup or alert rules changed. Review the selection' in changed.text
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))
         before = store.observations(SID, limit=100)
         def fail(db, chosen):
