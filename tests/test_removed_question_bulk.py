@@ -1,5 +1,6 @@
 """Bulk deletion is exercised only on disposable synthetic histories."""
-from dataclasses import replace
+from dataclasses import asdict, replace
+from datetime import timedelta
 import json
 
 from bs4 import BeautifulSoup
@@ -10,6 +11,8 @@ from test_phase4_worker import app, login, OWNER, VIEWER
 from vop.history_deletion import delete_question_data
 from vop.inputs.sources import capture_inline
 from vop.service import create_app
+from vop.contracts import InferenceRequest, utcnow
+from vop.storage import dumps
 
 SID = 'synthetic-scene'
 BULK = '/ui/questions/delete'
@@ -129,9 +132,9 @@ def test_bulk_preview_staleness_restored_guard_and_atomic_rollback(app, monkeypa
         remove(client, csrf)
         form = confirmation(client.post(BULK, data=selection(csrf)))
         with store.connection() as db:
-            db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=?', (SID,))
+            db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, 'red_square'))
         stale = client.post(BULK, data=form)
-        assert 'Recorded data changed. Review the updated counts' in stale.text
+        assert 'Question setup or alert rules changed. Review the selection' in stale.text
         assert {r['spec'].question_id for r in store.questions(SID, include_removed=True)} == {'red_square', 'background', 'brightness'}
         form = confirmation(stale)
         before = store.observations(SID, limit=100)
@@ -187,7 +190,7 @@ def test_bulk_can_delete_same_question_id_on_multiple_named_cameras(app):
             assert sid not in app.state.pipeline.previews
 
 @pytest.mark.parametrize('bulk', [False, True])
-@pytest.mark.parametrize('changed_while_waiting', [False, True])
+@pytest.mark.parametrize('changed_while_waiting', ['none', 'observation', 'configuration'])
 def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, monkeypatch, bulk, changed_while_waiting):
     from concurrent.futures import ThreadPoolExecutor
     from test_camera_save_queue import ObservedLock
@@ -210,6 +213,7 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
         monkeypatch.setattr(app.state.pipeline, 'busy', busy)
         monkeypatch.setattr(app.state.reliable, 'lock', reliable)
         before = store.observations(SID, limit=100)
+        store.update_source(SID, enabled=True, retain_evidence=True, sample_interval_seconds=1)
         controls = store.source_control(SID)
         held = [admission, busy, reliable]
         for lock in held:
@@ -222,9 +226,16 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
                     assert not pending.done()
                     assert store.observations(SID, limit=100) == before
                     assert client.get('/api/v1/health').status_code == 200
-                    if lock is reliable and changed_while_waiting:
+                    if lock is busy and changed_while_waiting == 'observation':
+                        # Finish a synthetic in-flight capture before deletion gets the lock.
+                        source = app.state.pipeline.source(SID)
+                        frame = capture_inline(source)
+                        outcome = app.state.pipeline.engine.infer(InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=30)))
+                        store.save(SID, frame, json.loads(dumps(asdict(outcome))), frame.payload)
+                        before = store.observations(SID, limit=100)
+                    if lock is reliable and changed_while_waiting == 'configuration':
                         with store.connection() as db:
-                            db.execute('UPDATE frames SET evidence_png=NULL WHERE source_id=?', (SID,))
+                            db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, 'red_square'))
                         before = store.observations(SID, limit=100)
                     lock.release()
                     held.remove(lock)
@@ -235,10 +246,15 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
         assert response.status_code == 200
         assert all(not lock.locked() for lock in (admission, busy, reliable))
         assert store.source_control(SID) == controls
-        if changed_while_waiting:
-            assert 'Recorded data changed. Review the updated counts' in response.text
+        if changed_while_waiting == 'configuration':
+            assert 'Question setup or alert rules changed. Review the selection' in response.text
             assert store.observations(SID, limit=100) == before
             assert client.post(route, data=confirmation(response, route)).status_code == 200
+        if changed_while_waiting == 'observation':
+            assert 'Question setup or alert rules changed' not in response.text
+            assert store.evidence(SID, frame.frame_id) is None
+            # Monitoring continues for the remaining question and cannot resurrect targets.
+            app.state.pipeline.run(SID, capture_inline(app.state.pipeline.sources[SID]))
         remaining = store.observations(SID, limit=100)
         assert not any(o['question_id'] in {qid for _, qid in pairs} for o in remaining)
         assert any(o['question_id'] == 'brightness' for o in remaining)
