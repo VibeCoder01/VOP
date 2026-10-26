@@ -241,7 +241,7 @@ def install_removal(app, store, pipeline, reliable):
         return RedirectResponse(f'/ui/questions/{source_id}/{question_id}/delete', status_code=303)
 
     def question_snapshot(db, pairs):
-        items = [(sid, qid, checked(sid, qid, removed=None), question_selection(db, sid, qid)) for sid, qid in pairs]
+        items = [(sid, qid, checked(sid, qid, removed=None), question_selection(db, sid, qid, include_runs=False)) for sid, qid in pairs]
         # Confirmation covers all data for these question identities, including observations
         # arriving while monitoring runs. Bind it to configuration, not changing history.
         fingerprint = sha256(dumps([(sid, qid, record, chosen['rules'])
