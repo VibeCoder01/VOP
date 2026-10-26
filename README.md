@@ -222,6 +222,13 @@ On startup VOP adds a small capture-to-observation lookup index to existing
 workspaces. This avoids scanning the whole observation table for each capture during
 deletion and foreign-key checks. Confirmation previews read counts and rule setup,
 not every raw capture result; deletion loads the current results only when needed.
+Repeated rule checks reuse each question's summary within one evaluation cycle;
+the next cycle reloads current configuration and data. Notification deliveries and
+live answer details are read in batches. Retention skips raw histories/images it has
+already cleared. Backup/restore checksums stream files rather than loading the
+whole database into memory. Question-history and latest saved-image lookups have
+matching indexes installed on startup.
+
 Saved-image clearing and the final database checkpoint can still take time. Do not
 force a restart to install an update while a deletion is running; let it finish first.
 
