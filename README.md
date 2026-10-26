@@ -63,7 +63,7 @@ works for USB cameras and does not require camera credentials. Names survive app
 the camera ID, connection, questions and recorded history stay the same.
 
 VOP opens in **View mode** after sign-in, including Start VOP. View mode shows Observe,
-Individual Observations, Continuous Observations (Episodes) and Trends. Operators can run
+Individual Observations, Episodes (Contiguous active observations) and Trends. Operators can run
 **Observe now** on an enabled camera that is not monitoring, **Start monitoring** or
 **Pause monitoring**, and view
 permitted saved images. Start also enables a paused input. Existing monitoring continues
@@ -73,7 +73,7 @@ indicator and switch are visually grouped in one sidebar panel. Choose **View mo
 when finished. No extra access key is required. The selected mode stays in this browser
 session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
 Configure mode opens Cameras and lists only Cameras, Engines, Questions and Settings;
-Individual Observations, Continuous Observations (Episodes) and Trends stay in View mode.
+Individual Observations, Episodes (Contiguous active observations) and Trends stay in View mode.
 Saved-data deletion remains available through Settings → Manage saved data. Use the same sidebar switch to return to View mode.
 Old setup links direct you to the single sidebar mode switch. A stale form submitted in View mode
 is refused; switch modes and reopen the form. Authenticated bearer API clients keep their
@@ -83,8 +83,8 @@ Observe omits the duplicate recent-observations table. Retired cameras are omitt
 Individual Observations filter; their stored history remains available through All inputs
 and existing history links, and restoring a camera returns it to the filter.
 
-**Individual Observations** lists each recorded answer from a capture. **Continuous
-Observations (Episodes)** groups checks into confirmed episodes; it does not mean continuous
+**Individual Observations** lists each recorded answer from a capture. **Episodes
+(Contiguous active observations)** groups checks into confirmed episodes; it does not mean continuous
 video recording. URLs and existing records are unchanged.
 The VOP title at the far left shows the installed version in small text; browser-tab titles include it too.
 Observation lists, episode lists, Trends and result pages use the camera/input name when available,
@@ -245,16 +245,39 @@ when adding a replacement question. Deleting every question is supported.
 Observe uses camera-name buttons. Select several to show those cameras together;
 select **All cameras** to reset the filter. This changes the display only, not monitoring.
 The page uses the configured workspace timezone without a timezone selector. Refresh view keeps
-all selected cameras. **Individual Observations** and **Continuous Observations
-(Episodes)** use the same multi-select buttons. Choose several cameras to combine
+all selected cameras. **Individual Observations** and **Episodes
+(Contiguous active observations)** use the same multi-select buttons. Choose several cameras to combine
 results in time order; All cameras clears the filter. Older answers keeps every
 selected camera. Individual Observations shows image-saving information per selected
 camera; Configure mode retains a separate Delete input history action for each camera.
 Retired cameras stay out of the selection buttons; existing individual-history links
-still work. Continuous Observations uses the configured workspace timezone without
+still work. Episodes uses the configured workspace timezone without
 a timezone control. Trends also uses multi-select camera buttons and the workspace
 timezone. Its camera buttons preserve the applied dates; Apply dates preserves all
 selected cameras, and auto-refresh retains the complete URL. Camera setup uses one Manage camera button per camera, with tighter rows.
+
+### Episode timeline
+
+In View mode, **Episodes (Contiguous active observations)** shows the total recorded
+episode count beside each camera name. Select several camera buttons to compare
+them. Counts are all-time; the timeline displays up to the latest 1,000 matching
+episodes, and the table below retains the latest 100 details.
+
+Use the zoom slider, **+**, **−** and **Fit**, then scroll horizontally through time.
+Camera/question labels and the time axis stay visible while scrolling. Each row
+represents a camera, question and immutable question version. Select an episode to
+inspect its first individual observation; hover or keyboard-focus for context.
+The chart uses the workspace timezone and does not start monitoring or inference.
+
+Solid blue bars represent recorded active intervals; amber dashed lines mark
+unobserved gaps. Dots mark confirmed starts, including episodes that have no stored
+interval yet. Adjacent sampled intervals are merged for display. An open episode
+ends visually at its last recorded sample, never at the current clock time. The
+existing unknown-gap policy can retain one episode across a gap; the gap remains
+visible and does not count as active time. The new title does not change this policy.
+The page is a snapshot: refresh it to load newer episodes. Zooming and scrolling
+stay local and do not reload the page. Without JavaScript, the SVG, native scrolling
+and episode links remain available, but zoom controls need JavaScript.
 
 ### Unified camera settings
 

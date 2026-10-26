@@ -28,8 +28,10 @@ from vop.inference.mock import MockInferenceEngine
 from vop.inputs.sources import capture_inline
 from vop.measurements import QueryPolicy, utc, timezone_for
 from vop.ui_readiness import capture_dependencies
+from vop.episodes_ui import TITLE as EPISODES_TITLE, EPISODES_JS, episode_timeline
 
 CSS = """
+.source-selectors .button{gap:8px}.source-count{padding:2px 7px;border-radius:5px;background:#0001;font-size:11px;font-variant-numeric:tabular-nums}.episode-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.episode-toolbar input[type=range]{width:180px;padding:0;min-height:32px;accent-color:var(--accent)}.episode-toolbar [data-zoom-value]{min-width:48px;font-size:13px;font-variant-numeric:tabular-nums}.episode-scroll{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:10px;background:#fff;overscroll-behavior:contain}.episode-scroll:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.episode-scroll svg{display:block;max-width:none}.episode-span{fill:#1768c4}.episode-point{fill:#135aab}.episode-gap{stroke:#b77908;stroke-width:3;stroke-dasharray:5 4}.episode-row-line{stroke:#e4e8ee;stroke-width:1}.episode-axis-bg,.episode-label-bg{fill:#fff}.episode-label-bg{stroke:#e4e8ee;stroke-width:1}.episode-tick{fill:#626268;font-size:11px}.episode-camera,.episode-label-heading{fill:#273445;font-size:12px;font-weight:600}.episode-question{fill:#626268;font-size:11px}.episode-scroll a:hover .episode-span,.episode-scroll a:focus .episode-span{fill:#084d9b}.episode-legend-active{color:#1768c4}.episode-legend-gap{color:#956100}
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d1d1f;background:#f5f5f7;font-size:15px;--accent:#0066cc;--line:#dcdce0;--muted:#626268}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
 .shell{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}.sidebar{padding:32px 18px;background:#ececf0;position:sticky;top:0;height:100vh;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:auto}
@@ -324,7 +326,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         role = request.scope.get("auth_role") or session.get("role")
         configure = configuring(request)
         navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
-                      ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", "Continuous Observations (Episodes)", "/?view=events"),
+                      ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", EPISODES_TITLE, "/?view=events"),
                       ("metrics", "Trends", "/?view=metrics"), ("settings", "Settings", "/release")]
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
@@ -347,6 +349,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None,
+                         Script(src='/ui/episodes.js', defer=True) if view == 'events' else None,
                          Script(src='/ui/question-counts.js', defer=True) if view == 'questions' else None))
 
     def recorded_label(source_id, answer):
@@ -566,19 +569,22 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     app.state.page, app.state.table = page, table
 
-    def source_buttons(chosen, *, path='/', view=None, extra=()):
+    def source_buttons(chosen, *, path='/', view=None, extra=(), counts=None):
         base = ([('view', view)] if view else []) + list(extra)
-        links = [A('All cameras', href=path + ('?' + urlencode(base) if base else ''),
+        def count(sid=None):
+            value = sum(counts.values()) if sid is None else counts.get(sid, 0)
+            return Span(str(value), cls='source-count', aria_label=f'{value} episodes')
+        links = [A('All cameras', count() if counts is not None else None, href=path + ('?' + urlencode(base) if base else ''),
                    cls='button secondary' if chosen else 'button', role='button', aria_pressed=str(not chosen).lower())]
         for sid in list(pipeline.sources):
             toggled = chosen ^ {sid}
-            links.append(A(source_name(sid), href=path + '?' + urlencode(base + [('source', s) for s in pipeline.sources if s in toggled]),
+            links.append(A(source_name(sid), count(sid) if counts is not None else None, href=path + '?' + urlencode(base + [('source', s) for s in pipeline.sources if s in toggled]),
                            cls='button' if sid in chosen else 'button secondary', role='button', aria_pressed=str(sid in chosen).lower()))
         return Nav(*links, cls='source-selectors', aria_label='Choose cameras to show')
 
     def filters(view, selected="", request=None):
         if view in ('overview', 'events'):
-            return source_buttons(set(request.query_params.getlist('source')) - {''}, view=view)
+            return source_buttons(set(request.query_params.getlist('source')) - {''}, view=view, counts=store.event_counts() if view == 'events' else None)
         if view == 'questions':
             return Nav(*(A(label, href='/?' + urlencode({'view': view, 'source': sid}),
                            cls='button' if sid == selected else 'button secondary',
@@ -715,8 +721,22 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content += [removed_controls(store, pipeline, csrf, view, source_filter=selected or None, editable=operator),
                 Section(H2("Add a question"), *(A("New question · " + s["name"], href=f"/ui/questions/{s['source_id']}/new", cls="button secondary") for s in sources)) if operator else None]
         elif view == "events":
-            event_rows = store.events(source_ids=tuple(sorted(selected_sources)))
+            timeline_rows = store.events(source_ids=tuple(sorted(selected_sources)), limit=1000)
+            event_rows = timeline_rows[:100]
+            names = {}
+            keys = sorted({(e['source_id'],e['question_id'],e['question_version']) for e in timeline_rows})
+            with store.connection() as db:
+                for offset in range(0, len(keys), 300):
+                    batch = keys[offset:offset+300]
+                    values = ','.join('(?,?,?)' for key in batch)
+                    rows = db.execute('SELECT q.source_id,q.question_id,q.version,q.specification FROM question_versions q JOIN (VALUES ' + values + ') wanted ON q.source_id=wanted.column1 AND q.question_id=wanted.column2 AND q.version=wanted.column3',
+                                      tuple(value for key in batch for value in key))
+                    for row in rows:
+                        names[(row['source_id'],row['question_id'],row['version'])] = json.loads(row['specification'])['text']
+            camera_names = {sid:source_name(sid) for sid in {e['source_id'] for e in timeline_rows}}
             content += [P('Episodes group individual observations after the required confirmations. ', A('Open Individual Observations to inspect results, saved images or delete recorded data.', href='/observations', cls='text-link')),
+                P('Camera buttons count all recorded episodes. The timeline shows up to the latest 1,000 episodes for your selection.', cls='muted'),
+                episode_timeline(timeline_rows, camera_names, names, zone),
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(source_name(e["source_id"]) + " · version " + e["question_version"])),
                     Td(local_time(e["started_at_utc"], zone)), Td(local_time(e["ended_at_utc"], zone) if e["ended_at_utc"] else "Not confirmed ended"),
@@ -755,7 +775,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if operator and view == "sources":
             from vop.removal import removed_controls
             content.append(removed_controls(store, pipeline, csrf, view, source_filter=selected or None))
-        return page({"overview": "Observe", "events": "Continuous Observations (Episodes)", "metrics": "Trends", "sources": "Inputs"}.get(view, view.title()), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
+        return page({"overview": "Observe", "events": EPISODES_TITLE, "metrics": "Trends", "sources": "Inputs"}.get(view, view.title()), request, [c for c in content if c is not None], view=view, notice=request.query_params.get("notice"))
+
+    @app.route('/ui/episodes.js', methods=['GET'])
+    def episodes_script():
+        return Response(EPISODES_JS, media_type='application/javascript')
 
     @app.route('/observations', methods=['GET'])
     def observation_list(request):

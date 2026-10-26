@@ -14,12 +14,12 @@ def test_new_names_and_image_setting_are_clear_without_changing_it(app):
         csrf = login(client)
         page = client.get('/observations?source=' + SID).text
         assert '<h1>Individual Observations</h1>' in page
-        assert 'Continuous Observations (Episodes)' not in page  # Configure has setup navigation only.
+        assert 'Episodes (Contiguous active observations)' not in page  # Configure has setup navigation only.
         assert 'Image saving is OFF' in page
         assert 'temporary capture preview is not a saved image' in page
         assert '/ui/sources/' + SID + '#image-saving' in page
         episodes = client.get('/?view=events').text
-        assert '<h1>Continuous Observations (Episodes)</h1>' in episodes
+        assert '<h1>Episodes (Contiguous active observations)</h1>' in episodes
         assert 'not continuous video' in episodes
         form = client.get('/ui/sources/' + SID).text
         assert 'Save images for Individual Observations' in form
