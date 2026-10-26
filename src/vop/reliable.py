@@ -2,7 +2,7 @@
 from dataclasses import asdict
 from datetime import timedelta
 import csv
-from hashlib import sha256
+from hashlib import file_digest, sha256
 from io import StringIO
 import json
 import math
@@ -105,7 +105,14 @@ class Reliable:
         a, b = utc(start).isoformat() if start else None, utc(end).isoformat() if end else None
         with self.store.connection() as db:
             rows = db.execute("SELECT * FROM alerts WHERE (? IS NULL OR source_id=?) AND (? IS NULL OR severity=?) AND (? IS NULL OR question_id=?) AND (? IS NULL OR created_at_utc>=?) AND (? IS NULL OR created_at_utc<?) ORDER BY created_at_utc DESC LIMIT 1000", (source_id, source_id, severity, severity, question_id, question_id, a, a, b, b)).fetchall()
-            return [{**dict(r), "payload": json.loads(r["payload_json"]), "deliveries": [dict(d) for d in db.execute("SELECT channel,status,attempts,next_attempt_utc FROM deliveries WHERE alert_id=?", (r["id"],))]} for r in rows]
+            deliveries = {row['id']: [] for row in rows}
+            # Bound SQL parameters for SQLite builds with a 999-variable limit.
+            for offset in range(0, len(rows), 900):
+                ids = [row['id'] for row in rows[offset:offset + 900]]
+                for delivery in db.execute('SELECT alert_id,channel,status,attempts,next_attempt_utc FROM deliveries WHERE alert_id IN (' + ','.join('?' for _ in ids) + ')', ids):
+                    item = dict(delivery)
+                    deliveries[item.pop('alert_id')].append(item)
+            return [{**dict(r), 'payload': json.loads(r['payload_json']), 'deliveries': deliveries[r['id']]} for r in rows]
 
     def update_alert(self, alert_id, action, note):
         if action not in ("acknowledged", "resolved", "note") or not isinstance(note, str) or len(note) > 4096:
@@ -121,16 +128,30 @@ class Reliable:
 
     def evaluate(self, now=None):
         now = utc(now) if now else utcnow()
+        # Reuse reads within this evaluation only; the next cycle sees configuration/data changes.
+        questions, summaries, controls, observations = {}, {}, {}, {}
+        source_rows = None
+        def observation(oid):
+            if oid and oid not in observations:
+                observations[oid] = self.store.observation(oid)
+            return observations.get(oid)
         for rule in self.rules():
             sid, qid = rule["source_id"], rule["question_id"]
             if sid not in self.pipeline.sources:
                 continue
-            question = next((r for r in self.store.questions(sid) if r["spec"].question_id == qid), None)
+            if sid not in questions:
+                questions[sid] = {r['spec'].question_id: r for r in self.store.questions(sid)}
+            question = questions[sid].get(qid)
             if question is None:
                 continue
             q = question["spec"]
-            summary = self.store.summary(sid, qid, q.version, kind=q.kind, as_of=now)
-            source = self.store.source_control(sid)
+            key = (sid, qid, q.version)
+            if key not in summaries:
+                summaries[key] = self.store.summary(sid, qid, q.version, kind=q.kind, as_of=now)
+            summary = summaries[key]
+            if sid not in controls:
+                controls[sid] = self.store.source_control(sid)
+            source = controls[sid]
             kind = rule["kind"]
             eligible = rule["enabled"] and question["enabled"] and source["enabled"]
             event = next((e for e in reversed(summary["events"]) if e["status"] == "open"), None)
@@ -138,22 +159,23 @@ class Reliable:
                 active = eligible and summary["state"] == "ACTIVE" and event is not None and event["estimated_observed_seconds"] > rule["threshold"]
                 discriminator = event["id"] if event else "none"
             elif kind == "count":
-                counted_events = [e for e in summary["events"] if now - timedelta(seconds=rule["window_seconds"]) <= utc(e["started_at_utc"]) <= now]
+                window_start = now - timedelta(seconds=rule["window_seconds"])
+                counted_events = [e for e in summary["events"] if window_start <= utc(e["started_at_utc"]) <= now]
                 count = len(counted_events)
                 active = eligible and summary["state"] != "UNKNOWN" and count > rule["threshold"]
                 discriminator = "window"
             elif kind == "source_offline":
-                source_row = next(s for s in self.store.sources(tuple(self.pipeline.sources)) if s["source_id"] == sid)
+                if source_rows is None:
+                    source_rows = {s['source_id']: s for s in self.store.sources(tuple(self.pipeline.sources))}
+                source_row = source_rows[sid]
                 active = eligible and source["sample_interval_seconds"] > 0 and (summary["stale"] or source_row["status"] == "DISCONNECTED")
                 discriminator = "health"
             else:
-                latest = self.store.observation(summary["last_observation_id"]) if summary["last_observation_id"] else None
+                latest = observation(summary["last_observation_id"])
                 active = eligible and latest is not None and latest["status"] != "success" and latest["run"]["frame_id"] is not None
                 discriminator = "health"
             state_key = f"{rule['id']}:{rule['revision']}:{q.version}:{discriminator}"
             observation_ids = [e["start_observation_id"] for e in counted_events] if kind == "count" else [summary["last_observation_id"]]
-            recorded_runs = [r["run"] for oid in observation_ids if oid and (r := self.store.observation(oid))]
-            provenance = sorted({(r["engine_id"], r["engine_version"], r["synthetic"]) for r in recorded_runs})
             with self.store.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
                 previous = db.execute("SELECT active,transition FROM rule_states WHERE id=?", (state_key,)).fetchone()
@@ -166,6 +188,8 @@ class Reliable:
                     # Duration is delivered at most once per episode, even after unknown/resume.
                     key = f"{state_key}:{1 if kind == 'duration' else transition}"
                     alert_id = sha256(key.encode()).hexdigest()[:32]
+                    recorded_runs = [r['run'] for oid in observation_ids if (r := observation(oid))]
+                    provenance = sorted({(r['engine_id'], r['engine_version'], r['synthetic']) for r in recorded_runs})
                     payload = {"id": alert_id, "rule_id": rule["id"], "rule_revision": rule["revision"], "kind": kind,
                                "severity": rule["severity"], "source_id": sid, "question_id": qid, "question_version": q.version,
                                "created_at_utc": now.isoformat(), "event_id": event["id"] if event and kind == "duration" else None,
@@ -311,8 +335,8 @@ class Reliable:
                       "raw": db.execute("SELECT count(*) FROM runs WHERE processed_at_utc<? AND result_json NOT LIKE '%\"raw_retained\": false%'", (cutoffs["raw"],)).fetchone()[0],
                       "audit": db.execute("SELECT count(*) FROM audit WHERE created_at_utc<?", (cutoffs["audit"],)).fetchone()[0]}
             if apply:
-                db.execute("UPDATE frames SET evidence_png=NULL WHERE captured_at_utc<?", (cutoffs["evidence"],))
-                for row in db.execute("SELECT id,result_json FROM runs WHERE processed_at_utc<?", (cutoffs["raw"],)).fetchall():
+                db.execute("UPDATE frames SET evidence_png=NULL WHERE captured_at_utc<? AND evidence_png IS NOT NULL", (cutoffs["evidence"],))
+                for row in db.execute("SELECT id,result_json FROM runs WHERE processed_at_utc<? AND result_json NOT LIKE '%\"raw_retained\": false%'", (cutoffs["raw"],)).fetchall():
                     body = json.loads(row["result_json"])
                     body["raw_retained"] = False
                     body["provider_raw"] = None
@@ -365,10 +389,17 @@ def configuration(settings, store, reliable):
             policies.append({"source_id": source.source_id, "question_id": q.question_id, "version": q.version, "enabled": record["enabled"], "policy": asdict(record["policy"])})
         sources.append({"id": source.source_id, "name": source.name, "kind": source.kind, "settings": source.settings,
                         "questions": questions, **store.source_control(source.source_id)})
+    policy_versions = {(p['source_id'], p['question_id'], p['version']) for p in policies}
+    policy_questions = {(p['source_id'], p['question_id']) for p in policies}
     return {"schema_version": 1, "config": {"schema_version": 1, "database": "data/vop.sqlite3", "timezone": settings.timezone_name,
              "engine": getattr(reliable.pipeline, "engine_profile", None) or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}, "sources": sources,
              "capture_timeout_seconds": settings.capture_timeout_seconds, "inference_timeout_seconds": settings.inference_timeout_seconds},
-            "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in {(p['source_id'], p['question_id'], p['version']) for p in policies}], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules() if any(p['source_id'] == r['source_id'] and p['question_id'] == r['question_id'] for p in policies)]}
+            "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in policy_versions], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules() if (r['source_id'], r['question_id']) in policy_questions]}
+
+
+def file_sha256(path):
+    with Path(path).open('rb') as stream:
+        return file_digest(stream, 'sha256').hexdigest()
 
 
 def backup(store, config, destination):
@@ -379,7 +410,7 @@ def backup(store, config, destination):
         with store.connection() as source, sqlite3.connect(destination / "vop.sqlite3") as target:
             source.backup(target)
         (destination / "configuration.json").write_text(dumps(config), encoding="utf-8")
-        manifest = {"schema_version": 1, "database_schema": 3, "files": {name: sha256((destination / name).read_bytes()).hexdigest() for name in ("vop.sqlite3", "configuration.json")}}
+        manifest = {"schema_version": 1, "database_schema": 3, "files": {name: file_sha256(destination / name) for name in ("vop.sqlite3", "configuration.json")}}
         (destination / "manifest.json").write_text(dumps(manifest), encoding="utf-8")
         store.audit("backup", "created")
     except Exception:
@@ -395,7 +426,7 @@ def restore(source, destination):
     if manifest.get("schema_version") != 1 or manifest.get("database_schema") != 3 or set(manifest.get("files", {})) != {"vop.sqlite3", "configuration.json"}:
         raise ValueError("Unsupported backup manifest")
     for name, digest in manifest["files"].items():
-        if sha256((source / name).read_bytes()).hexdigest() != digest:
+        if file_sha256(source / name) != digest:
             raise ValueError("Backup checksum mismatch")
     with sqlite3.connect(f"file:{(source / 'vop.sqlite3').as_posix()}?mode=ro", uri=True) as db:
         if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or db.execute("PRAGMA foreign_key_check").fetchone() or db.execute("PRAGMA user_version").fetchone()[0] != 3:

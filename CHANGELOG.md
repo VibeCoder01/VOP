@@ -1,5 +1,18 @@
 # Specification change log
 
+## Runtime loop efficiency review — 26 October 2026
+
+- Reuse question, source, summary and provenance reads within one alert evaluation;
+  fetch provenance only for a new alert transition. Reload on the next evaluation.
+- Batch notification deliveries and per-camera native answers; aggregate saved-image
+  counts in history previews instead of querying once per capture.
+- Skip already-cleared raw history/images during retention and precompute export
+  membership sets once.
+- Index question/version history order and newest saved-image reads.
+- Stream backup/restore checksums with bounded memory. Keep replay, validation,
+  acquisition deadlines and worker scheduling semantics unchanged.
+- Document the remaining full-history temporal replay cost and bounded cleanup waits.
+
 ## Efficient question deletion — 26 October 2026
 
 - Add an observation lookup index by capture run, including existing databases on

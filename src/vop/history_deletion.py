@@ -35,7 +35,10 @@ def selection(db, *, source_id=None, observation_id=None):
         events.extend(r[0] for r in db.execute('SELECT id FROM events WHERE source_id=? AND question_id=? AND question_version=?', key))
     pairs = {(k[0], k[1]) for k in keys}
     rules = [dict(r) for r in db.execute('SELECT * FROM rules') if (json.loads(r['configuration'])['source_id'], json.loads(r['configuration'])['question_id']) in pairs]
-    evidence = sum(bool(db.execute('SELECT 1 FROM frames WHERE source_id=? AND frame_id=? AND evidence_png IS NOT NULL', (r['source_id'], r['frame_id'])).fetchone()) for r in runs)
+    evidence = db.execute('''SELECT count(*) FROM runs r JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id
+                             WHERE r.source_id=? AND (? IS NULL OR r.id=?) AND f.evidence_png IS NOT NULL
+                             AND EXISTS(SELECT 1 FROM observations o WHERE o.run_id=r.id AND o.status!='retention_gap')''',
+                          (source_id, run_id if observation_id else None, run_id if observation_id else None)).fetchone()[0]
     counts = {'captures': len(runs), 'answers': len(answers), 'images': evidence, 'episodes': len(events), 'alerts': len(alerts),
               'rules': sum(json.loads(r['configuration'])['enabled'] for r in rules),
               'gap_markers': 0 if observation_id else db.execute("SELECT count(*) FROM observations WHERE source_id=? AND status='retention_gap'", (source_id,)).fetchone()[0]}

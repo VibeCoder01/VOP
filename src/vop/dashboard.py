@@ -446,11 +446,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def camera_answer_content(answers, zone):
         rows = []
+        ids = [d['summary']['last_observation_id'] for d in answers if d['summary']['last_observation_id']]
+        native_answers = {}
+        if ids:
+            with store.connection() as db:
+                native_answers = {row['id']: json.loads(row['answer_json']) for row in db.execute(
+                    'SELECT id,answer_json FROM observations WHERE id IN (' + ','.join('?' for _ in ids) + ')', ids)}
         for d in answers:
             summary, spec = d['summary'], d['spec']
-            with store.connection() as db:
-                row = db.execute('SELECT answer_json FROM observations WHERE id=?', (summary['last_observation_id'],)).fetchone()
-            native = json.loads(row[0]) if row else {}
+            native = native_answers.get(summary['last_observation_id'], {})
             rows.append(Tr(Td(StrongText(spec.text), Small('Version ' + spec.version)),
                 Td(badge(summary['state'])), Td(answer_label(summary['latest_value'], spec.levels)),
                 Td(answer_graph(spec, summary['latest_value'], native)),
