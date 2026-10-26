@@ -209,6 +209,15 @@ New answers, image retention/deletion and episode/alert updates do not force rep
 confirmation. Changes to the selected question setup or its alert-rule configuration
 still require a fresh review; deleted IDs remain reserved.
 
+Confirming question deletion opens a **Deleting questions** dialog with an animated
+progress bar. It remains while VOP waits for active work and deletes the data;
+the result or a fresh-review page then appears automatically. The bar has no
+percentage or time estimate because the database change commits in one transaction.
+Keep the page open. Escape does not dismiss the active dialog, and repeat submissions
+are blocked. Without JavaScript or native dialog support, normal form submission
+still works: wait for the result page. Going Back restores the confirmation controls;
+the server still checks whether the selected questions can be deleted.
+
 Deletion erases all versions’ answers, deletion-gap markers, associated saved images,
 raw engine details, episodes, alerts and delivery records. Shared images disappear
 from other questions’ results too; their typed answers remain. Related alert rules

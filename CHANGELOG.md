@@ -1,5 +1,13 @@
 # Specification change log
 
+## Question deletion progress — 26 October 2026
+
+- Show a native modal with an indeterminate progress bar after confirming single or
+  bulk question deletion. Explain that large histories can take time.
+- Keep native result/error navigation, prevent duplicate submits and reset the
+  dialog when returning through browser Back. No invented percentage or time estimate.
+- Preserve the normal form workflow when JavaScript or dialog support is unavailable.
+
 ## Delete questions during monitoring — 26 October 2026
 
 - Bind question deletion confirmation to question/rule configuration, rather than
