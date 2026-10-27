@@ -38,8 +38,8 @@ def test_observe_keeps_each_latest_masked_image_and_tracks_monitoring(app, monke
         assert 'src' not in cards[1].select_one('img').attrs
         assert 'hidden' in cards[1].select_one('img').attrs
         for card in cards:
-            assert card.select_one('summary .show-image').text == 'Show image'
-            assert card.select_one('summary .hide-image').text == 'Hide image'
+            assert card.select_one('summary .show-image').text == 'Show images'
+            assert card.select_one('summary .hide-image').text == 'Hide images'
         assert cards[0]['data-monitoring'] == 'true' and cards[1]['data-monitoring'] == 'false'
         assert '/ui/observe-images.js' in str(soup)
         response = client.get('/ui/live-preview/' + first.source_id)

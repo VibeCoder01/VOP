@@ -28,9 +28,11 @@ from vop.inference.mock import MockInferenceEngine
 from vop.inputs.sources import capture_inline
 from vop.measurements import QueryPolicy, utc, timezone_for
 from vop.ui_readiness import capture_dependencies
+from vop.answer_images import answer_image_reference
 from vop.episodes_ui import TITLE as EPISODES_TITLE, EPISODES_JS, episode_timeline
 
 CSS = """
+.image-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:12px 0}.image-tile{min-width:0}.image-tile>strong{display:block;margin-bottom:8px;font-size:13px}.image-stage{height:200px;border-radius:8px;background:#e8e8ed}.observe-image .image-stage img{width:100%;height:100%;max-height:200px;object-fit:contain}.image-stage:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.observe-image .image-stage:hover img:not([hidden]),.observe-image .image-stage:focus-visible img:not([hidden]){position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(800px,calc(100vw - 48px));height:min(440px,calc(100vh - 48px));max-width:calc(100vw - 48px);max-height:440px;object-fit:contain;z-index:2000;background:#fff;box-shadow:0 10px 50px #0005;pointer-events:none}@media(max-width:600px){.image-pair{grid-template-columns:1fr}}
 .source-selectors .button{gap:8px}.source-count{padding:2px 7px;border-radius:5px;background:#0001;font-size:11px;font-variant-numeric:tabular-nums}.episode-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.episode-toolbar input[type=range]{width:180px;padding:0;min-height:32px;accent-color:var(--accent)}.episode-toolbar [data-zoom-value]{min-width:48px;font-size:13px;font-variant-numeric:tabular-nums}.episode-scroll{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:10px;background:#fff;overscroll-behavior:contain}.episode-scroll:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.episode-scroll svg{display:block;max-width:none}.episode-span{fill:#1768c4}.episode-point{fill:#135aab}.episode-gap{stroke:#b77908;stroke-width:3;stroke-dasharray:5 4}.episode-row-line{stroke:#e4e8ee;stroke-width:1}.episode-axis-bg,.episode-label-bg{fill:#fff}.episode-label-bg{stroke:#e4e8ee;stroke-width:1}.episode-tick{fill:#626268;font-size:11px}.episode-camera,.episode-label-heading{fill:#273445;font-size:12px;font-weight:600}.episode-question{fill:#626268;font-size:11px}.episode-scroll a:hover .episode-span,.episode-scroll a:focus .episode-span{fill:#084d9b}.episode-legend-active{color:#1768c4}.episode-legend-gap{color:#956100}
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d1d1f;background:#f5f5f7;font-size:15px;--accent:#0066cc;--line:#dcdce0;--muted:#626268}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
@@ -139,7 +141,44 @@ refreshPreviews();
 """
 
 
-OBSERVE_ANSWERS_JS = """const panels = document.querySelectorAll('[data-answer-url]');
+OBSERVE_ANSWERS_JS = """async function updateProcessedImage(panel, response) {
+  if (!panel.dataset.processedTarget) return;
+  const tile = document.getElementById(panel.dataset.processedTarget);
+  if (!tile) return;
+  const image = tile.querySelector('img');
+  const empty = tile.querySelector('[data-processed-empty]');
+  const caption = tile.querySelector('[data-processed-caption]');
+  if (response) {
+    tile.dataset.wantedFrame = response.headers.get('X-VOP-Processed-frame') || '';
+    for (const key of ['url','captured','message']) tile.dataset[key] = response.headers.get('X-VOP-Processed-' + key) || '';
+  }
+  function clear(message) {
+    const shown = tile.querySelector('img');
+    shown.hidden=true; shown.removeAttribute('src'); tile.dataset.frame='';
+    empty.hidden=false; empty.textContent=message; caption.textContent='';
+  }
+  if (!tile.dataset.url) { clear(tile.dataset.message || 'Sign in to view the answer image.'); return; }
+  const disclosure = tile.closest('[data-image-panel]');
+  if (!disclosure.open || document.hidden) {
+    if (tile.dataset.frame !== tile.dataset.wantedFrame) clear('Show images to load the latest answer frame.');
+    return;
+  }
+  try {
+    if (tile.dataset.frame !== tile.dataset.wantedFrame || image.hidden || !image.naturalWidth) {
+      const replacement = new Image(); replacement.alt=image.alt; replacement.src=tile.dataset.url;
+      let timer;
+      try {
+        await Promise.race([replacement.decode(),new Promise((_,reject)=>{
+          timer=setTimeout(()=>reject(new Error('Image timed out')),5000);
+        })]);
+      } finally { clearTimeout(timer); }
+      if (!disclosure.open || document.hidden) { clear('Show images to load the latest answer frame.'); return; }
+      image.replaceWith(replacement); tile.dataset.frame=tile.dataset.wantedFrame; empty.hidden=true;
+    }
+    caption.textContent = tile.dataset.message + ' ' + new Date(tile.dataset.captured).toLocaleString(undefined,{timeZone:panel.dataset.zone || undefined});
+  } catch (_) { clear('Answer image unavailable. Retrying…'); }
+}
+const panels = document.querySelectorAll('[data-answer-url]');
 async function refreshAnswers(panel) {
   if (document.hidden || panel.pending) return;
   panel.pending = true;
@@ -148,6 +187,8 @@ async function refreshAnswers(panel) {
     const response = await fetch(panel.dataset.answerUrl + (showing ? '' : '&counts_only=1'), {cache:'no-store', signal:AbortSignal.timeout(5000),
       headers: panel.dataset.etag ? {'If-None-Match':panel.dataset.etag} : {}});
     if (response.status === 200) {
+      const html = await response.text();
+      await updateProcessedImage(panel,response);
       for (const kind of ['active', 'unknown']) {
         const count = response.headers.get('X-VOP-' + kind);
         if (count === null) continue;
@@ -155,12 +196,12 @@ async function refreshAnswers(panel) {
         const total = document.querySelector('[data-condition-count="' + kind + '"]');
         if (total) total.textContent = Array.from(panels).reduce((sum, item) => sum + Number(item.dataset[kind] || 0), 0);
       }
-      const html = await response.text();
       panel.dataset.etag = response.headers.get('ETag') || '';
       if (showing && panel.open && !document.hidden) {
         panel.querySelector('[data-answer-content]').innerHTML = html;
       }
-    }
+    } else if (response.status === 304) await updateProcessedImage(panel);
+    else if (response.status === 401 || response.status === 403) await updateProcessedImage(panel,response);
   } catch (_) { /* Keep the last answers during a temporary connection failure. */ }
   finally { panel.pending = false; }
 }
@@ -404,18 +445,32 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         saved = store.latest_evidence(source_id)
         return (*saved, 'saved', 'image/png') if saved else None
 
-    def observe_image(source, monitoring, csrf):
+    def observe_image(source, monitoring, csrf, answers):
         sid = source['source_id']
         image = latest_image(sid)
         url = '/ui/live-preview/' + sid
+        ids = [d['summary']['last_observation_id'] for d in answers if d['enabled'] and not d['summary'].get('disabled')]
+        processed = answer_image_reference(store,pipeline,sid,ids)
         return Div(Span('Monitoring' if monitoring else 'Paused', data_monitoring_label=''),
-            Details(Summary(Span('Show image', cls='show-image'), Span('Hide image', cls='hide-image'), cls='button secondary'),
-                Img(src=url if image and monitoring else None, alt='Latest privacy-masked image from ' + source['name'], hidden=not (image and monitoring)),
+            Details(Summary(Span('Show images', cls='show-image'), Span('Hide images', cls='hide-image'), cls='button secondary'),
+                Div(Div(StrongText('Live view' if source['kind'] in ('rtsp','usb') else 'Current image'),
+                Div(Img(src=url if image and monitoring else None, alt='Latest privacy-masked image from ' + source['name'], hidden=not (image and monitoring)),
+                    cls='image-stage',tabindex=0,aria_label='Enlarge live image from ' + source['name']),
                 P('Loading image…' if image else 'No image available. Start monitoring or use Observe now.', hidden=bool(image and monitoring), data_preview_empty=''),
                 Noscript(P(A('Open latest image', href=url, cls='text-link'))) if image and not monitoring else None,
                 P(('Latest saved image: ' if image and image[3] == 'saved' else 'Latest image: ') + local_time(image[2], settings.timezone_name) if image else '',
-                  data_preview_caption='', cls='muted'),
-                open=monitoring, data_image_panel='', cls='image-disclosure', aria_label='Image from ' + source['name']),
+                  data_preview_caption='', cls='muted'),cls='image-tile'),
+                Div(StrongText('Last processed image'),
+                    Div(Img(src=processed['url'] if processed['url'] and monitoring else None,
+                            alt='Source frame used for latest answers from ' + source['name'],hidden=not (processed['url'] and monitoring)),
+                        cls='image-stage',tabindex=0,aria_label='Enlarge processed image from ' + source['name']),
+                    P(processed['message'],hidden=bool(processed['url'] and monitoring),data_processed_empty=''),
+                    P(local_time(processed['captured'],settings.timezone_name) if processed['captured'] else '',data_processed_caption='',cls='muted'),
+                    Noscript(P(A('Open processed image',href=processed['url'],cls='text-link'))) if processed['url'] else None,
+                    id='processed-image-' + sid,cls='image-tile',data_processed_image='',data_frame=processed['frame'],
+                    data_url=processed['url'],data_captured=processed['captured'],data_message=processed['message']),cls='image-pair'),
+                Small('Hover over an image or focus it to enlarge.'),
+                open=monitoring, data_image_panel='', cls='image-disclosure', aria_label='Images from ' + source['name']),
             cls='observe-image monitoring' if monitoring else 'observe-image', data_observe_preview=sid,
             data_monitoring=str(monitoring).lower(), data_image_url=url, data_frame=image[0] if image else '', data_csrf=csrf,
             data_lease_url=url + '/keepalive' if pipeline.live_previews.allowed and source['kind'] in ('rtsp', 'usb') else None)
@@ -473,6 +528,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             P('Answers update after each observation. Live images update separately.', cls='muted'),
             Div(camera_answer_content(answers, zone), data_answer_content=''),
             cls='camera-answers', aria_label='Latest answers for ' + source['name'],
+            data_processed_target='processed-image-' + source['source_id'],data_zone=zone,
             data_active=condition_counts(answers)['active'], data_unknown=condition_counts(answers)['unknown'],
             data_answer_url='/ui/camera-answers/' + source['source_id'] + '?' + urlencode({'zone': zone}))
 
@@ -489,20 +545,32 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         records = store.questions(source_id)
         # Cheap change checks avoid replaying the full history on every 0.2-second poll.
         counts_only = request.query_params.get('counts_only') == '1'
-        revision = [app.state.instance_id, zone, counts_only, store.source_control(source_id), records]
+        control = store.source_control(source_id)
+        revision = [app.state.instance_id, zone, counts_only, control, records]
+        image_ids = []
         with store.connection() as db:
             revision.append(tuple(db.execute("SELECT count(*),max(sequence) FROM observations WHERE source_id=? AND status!='retention_gap'", (source_id,)).fetchone()))
             for record in records:
                 spec = record['spec']
-                last = db.execute('SELECT captured_at_utc,processed_at_utc,answer_json FROM observations WHERE source_id=? AND question_id=? AND question_version=? AND temporal_eligible=1 ORDER BY sequence DESC LIMIT 1',
+                last = db.execute('SELECT captured_at_utc,processed_at_utc,answer_json,id,status FROM observations WHERE source_id=? AND question_id=? AND question_version=? AND temporal_eligible=1 ORDER BY sequence DESC LIMIT 1',
                                   (source_id, spec.question_id, spec.version)).fetchone()
                 revision.append(tuple(last) if last else None)
                 revision.append(bool(last and (utcnow() - utc(last[0] or last[1])).total_seconds() > record['policy'].max_gap_seconds))
+                if record['enabled'] and control['enabled']:
+                    image_ids.append(last[3] if last and last[4] != 'retention_gap' else None)
+        processed = answer_image_reference(store,pipeline,source_id,image_ids)
+        revision.append(processed)
         etag = '"' + sha256(json.dumps(revision, default=lambda obj: asdict(obj), sort_keys=True).encode()).hexdigest() + '"'
         if request.headers.get('if-none-match') == etag:
             return Response(status_code=304, headers={'ETag': etag})
         answers = summaries(source_id, zone=zone)
-        headers = {'ETag': etag, **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
+        answer_ids = [d['summary']['last_observation_id'] for d in answers if d['enabled'] and not d['summary'].get('disabled')]
+        if answer_ids != image_ids:
+            # A capture committed during rendering: bind pixels to the actual answer rows.
+            processed = answer_image_reference(store,pipeline,source_id,answer_ids)
+            etag = ''  # Do not validate this newer representation with the earlier revision.
+        headers = {**({'ETag':etag} if etag else {}), **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
+        headers.update({'X-VOP-Processed-' + key: value or '' for key,value in processed.items()})
         content = '' if counts_only else to_xml(camera_answer_content(answers, zone))
         return Response(content, media_type='text/html', headers=headers)
 
@@ -518,7 +586,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                    Div(StrongText('Monitoring is running'), P('This camera takes repeated observations. Cameras take turns; monitoring stays on between samples. Pause monitoring to stop.'),
                        P('Demo engine selected. Answers are synthetic.') if pipeline.engine.synthetic else None, cls='readiness success', role='status') if operator and monitoring else None,
                    dependency_panel(action_problems, ready="Ready to observe. The connection is checked when needed." if not pipeline.engine.synthetic else "Demo engine selected. Answers are synthetic.") if operator and (action_problems or not monitoring) else P("Capture controls require operator access.") if not operator else None,
-                   observe_image(source, monitoring, csrf) if operator and not configure else None,
+                   observe_image(source, monitoring, csrf, answers) if operator and not configure else None,
                    P('Observation scheduled. A fresh image will be captured on this camera’s turn.', cls='notice', role='status') if operator and app.state.sampler.requested(sid) else None,
                    Div(Div(Form(hidden(csrf), Button("Enable and observe" if automatic and not source['enabled'] else "Observe now" if automatic else "Capture once",
                                                 disabled=bool(action_problems)),
@@ -1116,6 +1184,18 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
         headers['Content-Length'] = str(len(payload))
         return Response(b'' if request.method == 'HEAD' else payload, media_type=content_type, headers=headers)
+
+    @app.route('/ui/processed-image/{source_id}/{frame_id}', methods=['GET','HEAD'])
+    def processed_image(source_id: str, frame_id: str, request):
+        if request.scope.get('auth_role') != 'operator':
+            return Response('Images require operator permission',status_code=403)
+        if source_id not in pipeline.sources:
+            return Response(status_code=404)
+        cached = pipeline.processed_previews.get(source_id)
+        payload = cached[1] if cached and cached[0] == frame_id else store.evidence(source_id,frame_id)
+        if payload is None:
+            return Response(status_code=404)
+        return Response(b'' if request.method == 'HEAD' else payload,media_type='image/png',headers={'Content-Length':str(len(payload))})
 
     @app.route("/ui/preview/{source_id}/{frame_id}", methods=["GET"])
     def preview(source_id: str, frame_id: str, request):
