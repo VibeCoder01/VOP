@@ -173,6 +173,8 @@ def install_removal(app, store, pipeline, reliable):
                         db.execute("DELETE FROM release_settings WHERE id=?", (key,))
                     else:
                         db.execute("INSERT INTO release_settings VALUES(?,?)", (key, dumps({"removed_at_utc": utcnow().isoformat()})))
+                        from vop.actions import detach_question
+                        detach_question(db, source_id, question_id)
                         for row in db.execute("SELECT * FROM rules").fetchall():
                             rule = json.loads(row['configuration'])
                             if rule['source_id'] != source_id or question_id is not None and rule['question_id'] != question_id:

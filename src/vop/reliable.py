@@ -391,7 +391,12 @@ def configuration(settings, store, reliable):
                         "questions": questions, **store.source_control(source.source_id)})
     policy_versions = {(p['source_id'], p['question_id'], p['version']) for p in policies}
     policy_questions = {(p['source_id'], p['question_id']) for p in policies}
-    return {"schema_version": 1, "config": {"schema_version": 1, "database": "data/vop.sqlite3", "timezone": settings.timezone_name,
+    action_config = {'actions': [], 'automations': []}
+    with store.connection() as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='action_definitions'").fetchone():
+            for key, table in (('actions', 'action_definitions'), ('automations', 'automations')):
+                action_config[key] = [json.loads(r[0]) for r in db.execute(f'SELECT configuration FROM {table} ORDER BY id')]
+    return {"schema_version": 1, **action_config, "config": {"schema_version": 1, "database": "data/vop.sqlite3", "timezone": settings.timezone_name,
              "engine": getattr(reliable.pipeline, "engine_profile", None) or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}, "sources": sources,
              "capture_timeout_seconds": settings.capture_timeout_seconds, "inference_timeout_seconds": settings.inference_timeout_seconds},
             "policies": policies, "mock_values": [r for r in store.mock_values() if r[:3] in policy_versions], "rules": [{k: v for k, v in r.items() if k != "revision"} for r in reliable.rules() if (r['source_id'], r['question_id']) in policy_questions]}

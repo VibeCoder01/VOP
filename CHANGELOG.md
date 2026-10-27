@@ -1,5 +1,17 @@
 # Specification change log
 
+## 0.6.0 — Actions and Automations (27 October 2026)
+
+- Separate Actions/Automations configuration and Activity view; native forms, named choices,
+  previews, explicit tests, setup help and live delivery results.
+- Durable, expiring action jobs with deduplication, cooldown, schedule, hourly limits,
+  pause/restart handling and cancellation on camera/question removal or history deletion.
+- Browser/Windows beep and uploaded WAV audio; optional python-kasa 0.12.0 adapter for
+  L530 lights and H100 built-in sounds; SMTP SSL email and Twilio outbound SMS.
+- Protected account/recipient bundles, no default destinations, no automatic effects from
+  synthetic observations. Accepted delivery and uncertain outcomes are stated honestly.
+- Hardware/provider acceptance remains manual and opt-in. See docs/actions.md.
+
 ## Observe image pairs — 27 October 2026
 
 - Pair compact live/current images with the completed source frame used by the

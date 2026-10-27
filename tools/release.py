@@ -13,8 +13,13 @@ from vop.measurements import QueryPolicy
 
 def import_configuration(source, destination):
     package = json.loads(Path(source).read_text(encoding="utf-8"))
-    if not isinstance(package, dict) or set(package) != {"schema_version", "config", "policies", "mock_values", "rules"} or package["schema_version"] != 1:
+    required = {"schema_version", "config", "policies", "mock_values", "rules"}
+    if not isinstance(package, dict) or not required <= set(package) or set(package) - required - {'actions', 'automations'} or package["schema_version"] != 1:
         raise ValueError("Unsupported configuration package")
+    if any(not isinstance(package.get(key, []), list) for key in ('actions', 'automations')):
+        raise ValueError('Invalid Actions configuration.')
+    if package.get('actions') or package.get('automations'):
+        raise ValueError('This configuration includes Actions or Automations. Use full backup and restore to preserve actions, audio and queue safely.')
     destination = Path(destination).resolve()
     if destination.exists():
         raise ValueError("Import requires a new destination directory")

@@ -65,21 +65,26 @@ def create_app(settings: Settings, *, token: str | None = None,
     store.replay_all()
     sampler = Sampler(pipeline)
     reliable = Reliable(store, settings, pipeline)
+    from vop.actions import Actions
+    actions = Actions(store, pipeline, settings.timezone_name)
     from vop.live_preview import LivePreviews
     pipeline.live_previews = LivePreviews(pipeline, allowed=allow_live_sources)
     async def lifespan(app):
         sampler.start()
         reliable.start()
+        actions.start()
         try:
             yield
         finally:
             sampler.stop_event.set()
             reliable.stop_event.set()
+            actions.stop_event.set()
             await run_in_threadpool(pipeline.live_previews.stop)
             await run_in_threadpool(sampler.stop)
             await run_in_threadpool(reliable.stop)
+            await run_in_threadpool(actions.stop)
             # Finish background writes before closing the worker or starting a new process.
-            for worker in (sampler, reliable):
+            for worker in (sampler, reliable, actions):
                 if worker.thread:
                     await run_in_threadpool(worker.thread.join)
             await run_in_threadpool(app_session.stop)
@@ -112,6 +117,7 @@ def create_app(settings: Settings, *, token: str | None = None,
     app.state.worker_session = app_session
     app.state.sampler = sampler
     app.state.reliable = reliable
+    app.state.actions = actions
     from vop.lifecycle import install_lifecycle
     install_lifecycle(app, store)
     from vop.operator_workflow import AutoWorker, install_local_login
@@ -120,6 +126,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
     from vop.release_ui import install_release
     install_release(app, settings, store, pipeline, reliable)
+    from vop.actions_ui import install_actions
+    install_actions(app, actions)
     from vop.integration_ui import install_integration
     install_integration(app, settings, store, pipeline)
     from vop.removal import install_removal
@@ -137,6 +145,7 @@ def create_app(settings: Settings, *, token: str | None = None,
                              "queue_depth": 0, "skipped_requests": pipeline.skipped,
                              "sampling_error": sampler.last_error,
                              "rules_error": reliable.last_error,
+                             "actions_error": actions.last_error,
                              "engine": {"id": pipeline.engine.engine_id, "version": pipeline.engine.engine_version,
                                         "synthetic": pipeline.engine.synthetic, "capabilities": list(pipeline.engine.capabilities()),
                                         "worker_health": getattr(pipeline.engine, "last_health", None),

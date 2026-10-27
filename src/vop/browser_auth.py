@@ -58,15 +58,17 @@ class BrowserAuth:
             response = RedirectResponse("/login", status_code=303) if wants_html and not path.startswith("/api/") else JSONResponse({"error": "authentication_required"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
             return await response(scope, receive, send)
         scope["auth_role"] = role
+        if role == 'viewer' and (path == '/actions' or path.startswith('/actions/') or path == '/automations' or path.startswith('/automations/')):
+            return await JSONResponse({'error': 'operator_required'}, status_code=403)(scope, receive, send)
         # Keep observation and evidence reads available in View mode. Configuration,
         # deletion and lifecycle operations require an explicit browser mode switch.
-        read_page = (path in ('/', '/observations', '/configure') or
+        read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/ui/actions.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
                      path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/', '/ui/processed-image/')) and not path.endswith('/delete') or
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/episodes.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False
         preview_control = path.startswith('/ui/live-preview/') and path.endswith('/keepalive')
-        view_action = path in ('/login', '/logout', '/ui/mode') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor')) or preview_control
+        view_action = path in ('/login', '/logout', '/ui/mode', '/automations/pause', '/actions/sound/claim', '/actions/sound/ack') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor')) or preview_control
         needs_configure = not public and not bearer and role == 'operator' and session.get('mode', 'view') != 'configure' and (
             not read_page if method in ('GET', 'HEAD') else not view_action)
         origin = headers.get(b"origin")
@@ -91,7 +93,7 @@ class BrowserAuth:
                 body = bytearray()
                 request = Request(scope, receive)
                 async for chunk in request.stream():
-                    if len(body) + len(chunk) > 65536:
+                    if len(body) + len(chunk) > (4 * 1024 * 1024 if path == '/actions/save' else 65536):
                         return await JSONResponse({"error": "form_too_large"}, status_code=413)(scope, receive, send)
                     body.extend(chunk)
                 try:
@@ -116,7 +118,7 @@ class BrowserAuth:
             if message["type"] == "http.response.start":
                 message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
                                       (b"x-content-type-options", b"nosniff"),
-                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
         if needs_configure:
             response = RedirectResponse('/configure' if method in ('GET', 'HEAD') else '/configure?stale=1', status_code=303) if method in ('GET', 'HEAD') or wants_html else JSONResponse(
@@ -125,7 +127,7 @@ class BrowserAuth:
         monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
         camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
-        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
+        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
         removal = path == '/ui/removed-questions/delete' or (path.startswith(('/ui/sources/', '/ui/questions/')) and path.endswith(('/remove', '/restore', '/delete')))
         wait_for_admission = path in ('/cameras/save', '/integration/camera') or removal
         acquired = admitted and (await run_in_threadpool(self.admission.acquire) if wait_for_admission

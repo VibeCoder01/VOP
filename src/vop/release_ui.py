@@ -90,6 +90,7 @@ def install_release(app, settings, store, pipeline, reliable):
                             Button('Save'), method='post', action='/release/alerts/' + a['id'], cls='form-grid') if is_operator else 'Read only')) for a in alerts])),
                 P('Latest 1,000 matching notifications. Use dates to find older records.', cls='muted')]
         elif tab == 'rules':
+            content.append(P('Use ', A('Automations', href='/automations'), ' to connect episodes to lights, sound, email or text messages. Rules below create dashboard notifications.'))
             rules = reliable.rules()
             chosen = next((r for r in rules if r['id'] == params.get('rule')), {})
             kinds = [('duration', 'Active longer than'), ('count', 'Episode count greater than'), ('source_offline', 'Camera offline'), ('processing_degraded', 'Processing degraded')]

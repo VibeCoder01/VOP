@@ -2,7 +2,9 @@
 
 The version-controlled source of truth is `SRS-v0.2.md`. Phase 0 is merged. The product owner
 authorised **Phase 4 GPU worker and live-camera pilot** on 13 October 2026.
-`CODEX_PHASE_4_PLAN.md` records its scope and exit criteria; Phase 5+ remains unauthorised. Phase-specific restrictions below apply to the
+`CODEX_PHASE_4_PLAN.md` records its scope and exit criteria. The product owner authorised
+**Phase 5 Actions and Automations** on 27 October 2026 by accepting the proposed plan and
+requesting implementation. `CODEX_PHASE_5_PLAN.md` records that scope; Phase 6+ remains unauthorised. Phase-specific restrictions below apply to the
 named phase, not to all future work.
 
 ## Working rules
@@ -26,4 +28,4 @@ named phase, not to all future work.
 Provide changed files, exact commands/results, skipped hardware tests, any actual model
 revision/versions/measurements, open limitations, and a recommendation for the next phase.
 Phase 0 measurements remain historical evidence; do not invent a new model or camera run.
-Stop after Phase 4; Phase 5 requires explicit new authorisation. Do not auto-merge PRs.
+Stop after Phase 5; Phase 6 requires explicit new authorisation. Do not auto-merge PRs.
