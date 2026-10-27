@@ -1,5 +1,15 @@
 # Specification change log
 
+## Observe image pairs — 27 October 2026
+
+- Pair compact live/current images with the completed source frame used by the
+  latest enabled answers; enlarge either on hover or keyboard focus.
+- Separate completed result previews from in-flight and camera-test previews.
+- Pin processed-image requests to answer frame IDs, keep image/answer updates
+  matched, and show explicit missing-image states without older-frame substitution.
+- Preserve masking, operator-only pixels, saved-image settings, automatic image
+  hiding on pause and the independent live refresh loop.
+
 ## Episodes timeline — 26 October 2026
 
 - Rename Continuous Observations (Episodes) to Episodes (Contiguous active observations).

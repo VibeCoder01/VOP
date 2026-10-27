@@ -1027,6 +1027,26 @@ GPU recovery still happen only when observation is requested or saved monitoring
 
 ### Live images on Observe
 
+Each camera shows two smaller images side by side: **Live view** (or Current image
+for a non-live input) and **Last processed image**. Hover over either image, or use
+the keyboard to focus its image area, to enlarge it up to the former display size
+(800 × 440, limited by the screen). Enlargement does not move the page layout.
+Narrow screens stack the pair vertically.
+
+The processed image is the privacy-masked source frame for the latest enabled
+question answers. It is published only after the result is stored. A capture or
+connection-test preview cannot replace it before new answers exist. Cropped/ROI
+questions can use portions of that source frame. New answer text and its processed
+image update together; if the image cannot load, VOP hides the old image and shows
+a retry message rather than pairing old pixels with new answers.
+
+Completed frames stay in a bounded, temporary per-camera cache even when saved-image
+retention is off. Saving images remains a separate setting. After restart or cache
+clearing, VOP uses an exactly matching saved frame if available, never an unrelated
+older image. Otherwise it explains that a new observation is needed. Missing
+capture frames or mixed answer-frame provenance show a message instead of a
+misleading picture. Image deletion/retention clears the temporary cache too.
+
 Each camera refreshes independently, so a slow camera does not hold up the other
 images. Refreshes do not reload the page or overlap requests for the same camera.
 Actual image rate depends on the camera, connection and decoding; 5 fps is a target.
@@ -1040,7 +1060,7 @@ use episode states, not an unconfirmed positive answer or the live preview pixel
 Observe shows privacy-masked live previews for configured RTSP and USB cameras,
 independently of the interval used to answer questions. A **green ring** and Monitoring
 label mean question monitoring is enabled; an **amber ring** and Paused label mean it
-is not. Each camera has a **Show image / Hide image** control. Images start shown
+is not. Each camera has a **Show images / Hide images** control for the pair. Images start shown
 when monitoring is running and hidden when paused. Starting monitoring shows the
 image automatically; pausing hides it. You can show or hide it manually in either
 state. That choice lasts until the next monitoring change or page reload. Answer

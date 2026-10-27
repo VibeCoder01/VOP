@@ -61,7 +61,7 @@ class BrowserAuth:
         # Keep observation and evidence reads available in View mode. Configuration,
         # deletion and lifecycle operations require an explicit browser mode switch.
         read_page = (path in ('/', '/observations', '/configure') or
-                     path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/')) and not path.endswith('/delete') or
+                     path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/', '/ui/processed-image/')) and not path.endswith('/delete') or
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/episodes.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False

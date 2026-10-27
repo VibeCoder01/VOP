@@ -32,8 +32,10 @@ class Pipeline:
                 target = self.removed_sources if store.is_removed(source.source_id) else self.sources
                 target.setdefault(source.source_id, source)
         self.busy = Lock()
+        self.preview_lock = Lock()
         self.skipped = 0
         self.previews = {}  # One masked/downscaled image per configured input (maximum 32).
+        self.processed_previews = {}  # Completed answer frames; capture/test previews must not replace these.
         self._latest_preview = None
         self.stopping = False
 
@@ -44,25 +46,34 @@ class Pipeline:
     @latest_preview.setter
     def latest_preview(self, value):
         if value is None:
-            self.previews.clear()
-            self._latest_preview = None
+            with self.preview_lock:
+                self.previews.clear()
+                self.processed_previews.clear()
+                self._latest_preview = None
             if hasattr(self, 'live_previews'):
                 self.live_previews.clear(None)
         else:
             self.remember_preview(*value)
 
     def remember_preview(self, source_id, frame_id, payload, captured_at=None):
-        self.previews[source_id] = (frame_id, payload, (captured_at or utcnow()).isoformat())
-        self._latest_preview = (source_id, frame_id, payload)
+        preview = (frame_id, payload, (captured_at or utcnow()).isoformat())
+        with self.preview_lock:
+            self.previews[source_id] = preview
+            self._latest_preview = (source_id, frame_id, payload)
+        return preview
 
     def clear_preview(self, source_id, frame_id=None):
         if frame_id is None and hasattr(self, 'live_previews'):
             self.live_previews.clear(source_id)
-        item = self.previews.get(source_id)
-        if item and (frame_id is None or frame_id == item[0]):
-            self.previews.pop(source_id, None)
-        if self._latest_preview and self._latest_preview[0] == source_id and (frame_id is None or self._latest_preview[1] == frame_id):
-            self._latest_preview = None
+        with self.preview_lock:
+            processed = self.processed_previews.get(source_id)
+            if processed and (frame_id is None or processed[0] == frame_id):
+                self.processed_previews.pop(source_id, None)
+            item = self.previews.get(source_id)
+            if item and (frame_id is None or frame_id == item[0]):
+                self.previews.pop(source_id, None)
+            if self._latest_preview and self._latest_preview[0] == source_id and (frame_id is None or self._latest_preview[1] == frame_id):
+                self._latest_preview = None
 
     def source(self, source_id: str):
         if source_id not in self.sources:
@@ -109,7 +120,7 @@ class Pipeline:
                     raise ProviderError("frame_conflict", "Frame ID was reused for different content")
                 return {**previous, "duplicate": True}
             preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
-            self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
+            preview_token = self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
             request = InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=self.settings.inference_timeout_seconds))
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
@@ -156,7 +167,11 @@ class Pipeline:
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
             result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
                                        "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi]}
-            return self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
+            saved = self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
+            with self.preview_lock:
+                if self.previews.get(source_id) is preview_token:
+                    self.processed_previews[source_id] = preview_token
+            return saved
         finally:
             self.busy.release()
 
