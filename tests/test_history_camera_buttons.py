@@ -53,7 +53,7 @@ def test_history_buttons_multiselect_reset_and_invalid_sources(app, url):
             return {s.text.split(' · version')[0] for s in soup.select('.table-wrap tbody tr td:first-child small')}
         all_cameras=page(url)
         buttons=all_cameras.select('nav.source-selectors a')
-        assert [b.text for b in buttons]==['All cameras','Front door','Garden','Side gate']
+        assert [b.contents[0] for b in buttons]==['All cameras','Front door','Garden','Side gate']
         one=page(buttons[1]['href'])
         assert labels(one)=={'Front door'}
         buttons=one.select('nav.source-selectors a')
@@ -66,7 +66,7 @@ def test_history_buttons_multiselect_reset_and_invalid_sources(app, url):
         separator='&' if '?' in url else '?'
         assert client.get(url+separator+'source=missing&source='+SID).status_code==400
         if 'events' in url:
-            assert page(url+'&timezone=Invalid').select_one('h1').text=='Continuous Observations (Episodes)'
+            assert page(url+'&timezone=Invalid').select_one('h1').text=='Episodes (Contiguous active observations)'
         else:
             older=next(a['href'] for a in both.select('a') if a.text=='Older answers')
             assert set(parse_qs(urlparse(older).query)['source'])==set(ids[:2])

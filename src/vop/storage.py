@@ -294,6 +294,10 @@ class Store:
         with self.connection() as connection:
             return connection.execute("SELECT count(*) FROM events WHERE (? IS NULL OR source_id=?)", (source_id, source_id)).fetchone()[0]
 
+    def event_counts(self) -> dict[str, int]:
+        with self.connection() as connection:
+            return dict(connection.execute('SELECT source_id,count(*) FROM events GROUP BY source_id'))
+
     def evidence(self, source_id: str, frame_id: str) -> bytes | None:
         with self.connection() as connection:
             row = connection.execute("SELECT evidence_png FROM frames WHERE source_id=? AND frame_id=?", (source_id, frame_id)).fetchone()

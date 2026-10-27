@@ -1,5 +1,14 @@
 # Specification change log
 
+## Episodes timeline — 26 October 2026
+
+- Rename Continuous Observations (Episodes) to Episodes (Contiguous active observations).
+- Show all-time episode counts beside camera names, retaining multiple selection.
+- Add a scrollable SVG timeline with centred zoom, Fit, pinned labels/time axis,
+  per-camera/question/version rows, episode links and recorded-gap distinctions.
+- Limit the timeline to the latest 1,000 matching episodes and retain 100 detail rows;
+  explain the scope. No inferred duration is added after the last recorded sample.
+
 ## Runtime loop efficiency review — 26 October 2026
 
 - Reuse question, source, summary and provenance reads within one alert evaluation;
