@@ -3,6 +3,7 @@ import json
 import secrets
 
 from fasthtml.components import A, Button, Details, Div, Form, H2, H3, Input, Label, Option, P, Pre, Select, Summary, Td, Tr
+from fasthtml.core import to_xml
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
@@ -343,7 +344,7 @@ def install_actions(app, actions):
 
     @app.route('/activity/rows', methods=['GET'])
     def rows(request):
-        return activity_rows(request)
+        return Response(to_xml(activity_rows(request)), media_type='text/html')
 
     @app.route('/activity', methods=['GET'])
     def activity(request):

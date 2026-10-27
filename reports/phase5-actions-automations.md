@@ -61,7 +61,7 @@ Commands used the repository's Windows Python 3.11 virtual environment:
   the final audio-digest/backup and remediation refinements. The earlier full run was
   430 passed, 4 skipped; old script-count and JSON import expectations were corrected.
 - Final focused `.\.venv\Scripts\python.exe -m pytest -q tests/test_actions.py tests/test_action_browser.py tests/test_settings_tabs.py`
-  — **22 passed in 11.09s**. Covers the final refinements, permissions, browser disable/claim
+  — **22 passed**. Covers the final refinements, permissions, browser disable/claim
   race, audio replacement, full backup and JSON import boundary. Current collection: 438 tests,
   including the four opt-in hardware tests. Final complete Windows/Ubuntu CI results will be
   recorded on the pull request after push; this report does not presume CI success.

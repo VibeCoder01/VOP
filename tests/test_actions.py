@@ -235,6 +235,9 @@ def test_actions_routes_csrf_modes_preview_and_real_test_is_only_queued(app):
     assert client.post('/actions/bell/test', headers=HEADERS).status_code == 200
     assert actions.jobs()[0]['status'] == 'queued'
     assert client.get('/activity', headers={'Authorization':'Bearer ' + VIEWER}).status_code == 200
+    fragment = client.get('/activity/rows', headers=HEADERS)
+    assert fragment.status_code == 200 and '<table' in fragment.text
+    assert '<html' not in fragment.text and '<title' not in fragment.text
     assert client.get('/actions/edit?kind=sms', headers={'Authorization':'Bearer ' + VIEWER}).status_code == 403
     assert client.get('/actions/audio/private', headers={'Authorization':'Bearer ' + VIEWER}).status_code == 403
     assert client.post('/actions/bell/test', headers={'Authorization':'Bearer ' + VIEWER}).status_code == 403
