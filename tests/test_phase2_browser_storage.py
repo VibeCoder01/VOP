@@ -159,9 +159,9 @@ def test_all_views_native_markup_and_no_external_assets(settings):
             assets = re.findall(r'<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"', response.text)
             assert all(not url.startswith(('http:', 'https:', '//')) for url in assets)
             scripts = re.findall(r'<script\b([^>]*)>(.*?)</script>', response.text, re.S)
-            assert len(scripts) == (1 if view in ('metrics', 'questions', 'events') else 0)
+            assert len(scripts) == (2 if view in ('metrics', 'questions', 'events') else 1)
             asset = {'metrics':'/ui/trends-refresh.js','questions':'/ui/question-counts.js','events':'/ui/episodes.js'}.get(view)
-            assert all(f'src="{asset}"' in attrs and not body.strip() for attrs, body in scripts)
+            assert all((f'src="{asset}"' in attrs or 'src="/ui/actions.js"' in attrs) and not body.strip() for attrs, body in scripts)
             assert 'name="viewport"' in response.text
         assert client.get("/api/v1/metrics").json()["metrics"][0]["summary"]["state"] == "UNKNOWN"
         assert client.get("/?view=metrics&timezone=invalid/timezone").status_code == 200

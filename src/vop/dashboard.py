@@ -368,23 +368,26 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         configure = configuring(request)
         navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
                       ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", EPISODES_TITLE, "/?view=events"),
-                      ("metrics", "Trends", "/?view=metrics"), ("settings", "Settings", "/release")]
+                      ("metrics", "Trends", "/?view=metrics"), ('activity', 'Activity', '/activity'),
+                      ('actions', 'Actions', '/actions'), ('automations', 'Automations', '/automations'), ("settings", "Settings", "/release")]
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href='/cameras' if configure else '/', cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation
-                                         if configure and key in ('cameras', 'engines', 'questions', 'settings') or not configure and key in ("overview", "observations", "events", "metrics")), cls="navigation", aria_label="Main"),
+                                         if configure and key in ('cameras', 'engines', 'questions', 'actions', 'automations', 'settings') or not configure and key in ("overview", "observations", "events", "metrics", 'activity')), cls="navigation", aria_label="Main"),
                                    Div(P('Configure mode' if configure else 'View mode', cls='mode-label', role='status'),
                                    Form(hidden(csrf), Input(type='hidden', name='mode', value='view' if configure else 'configure'),
                                         Button('View mode' if configure else 'Configure mode', cls='secondary', aria_label='Switch to View mode' if configure else 'Switch to Configure mode'), method='post', action='/ui/mode') if role == 'operator' else None, cls='mode-switch', role='group', aria_label='Workspace mode'),
+                                   Button('Enable sound', type='button', data_enable_sound='', data_csrf=csrf) if role == 'operator' else None,
                                    Small("Local observation workspace", P("Viewer access" if role == "viewer" else "Operator access")),
                                    restart_control(csrf) if configure and app.state.shutdown_request else None,
                                    action("Sign out", "/logout", csrf, secondary=True), cls="sidebar"),
                              Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and configure else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace trends-workspace" if view == "metrics" else "workspace", id="workspace"), cls="shell"),
+                         Script(src='/ui/actions.js', defer=True) if role == 'operator' or view == 'activity' else None,
                          Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,

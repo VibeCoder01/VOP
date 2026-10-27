@@ -1,10 +1,11 @@
-# Visual Observability Platform — Phase 4 GPU worker and camera integration
+# Visual Observability Platform — Actions and Automations
 
 Phase 4 adds an authenticated process-isolated inference worker, explicit dashboard backend
 selection, protected Tapo credentials and repeatable camera connection tests. Actual pinned
 d1-3B CUDA/BF16 execution and a laptop→antec fixture request passed. Default inference remains
 mock until deliberately changed. C200/C210 live validation needs local credential setup;
-C510W is reported temporarily unavailable. Phase 5 is not authorised.
+C510W was reported temporarily unavailable during that pilot. Phase 5 Actions and Automations
+was authorised on 27 October 2026; see [setup and limitations](docs/actions.md).
 
 ## Everyday use on this laptop
 
@@ -664,7 +665,7 @@ uses an explicitly labelled fixture for secret retrieval. Manual load evidence i
 only). See `reports/phase4-validation.md` for completed measurements and honest pending gates.
 Real human-presence accuracy still needs owner-approved labelled frames for each camera; no face
 identity, tracking, person count, calibrated confidence or real-time-video promise is made.
-Stop after Phase 4; Phase 5 requires separate authorisation.
+Phase 5 Actions and Automations was separately authorised on 27 October 2026.
 
 ## Phase 1 historical foundation (v0.2)
 
@@ -973,7 +974,7 @@ requires independent review before intended use/redistribution. No model weights
 real camera images or private network configuration are committed. Repository visibility remains
 unchanged. The SRS and accepted ADRs remain the architectural baseline.
 
-**Phase 4 is authorised; Phase 5 requires explicit new authorisation.**
+**Phase 5 Actions and Automations is authorised. Phase 6 requires explicit new authorisation.**
 
 ### Reading Trends and testing cameras
 
@@ -1122,3 +1123,21 @@ which option was selected. Score percentages are model outputs, not calibrated a
 or probabilities; hover over a bar for its meaning. Unknown, failed, disabled or stale
 answers show **No current value**, rather than a zero bar. Displayed values use one
 decimal place; stored values keep full precision.
+## Actions and Automations (Phase 5)
+
+Configure mode now has **Actions** and **Automations**. Create named beep, WAV audio,
+Tapo L530 light, H100 hub sound, SMTP email or Twilio SMS actions; connect them to
+confirmed episodes, answer values or observation availability. Use **Preview automation**
+before enabling it. **Test action** performs the real action. No destinations or enabled
+automations are supplied by default.
+
+View mode **Activity** shows queued, completed, provider-accepted, blocked, uncertain and
+expired actions without reloading the page. Browser audio needs **Enable sound**; computer
+audio plays on the dashboard computer, independently of Antec inference. Global pause
+stops automations while camera monitoring continues. Saved definitions and audio survive
+restart; old queued actions are not replayed. Full backup includes the Actions database
+extension; OS-protected account details remain in the local vault.
+
+See [Actions setup and limitations](docs/actions.md) and the
+[authorised Phase 5 contract](CODEX_PHASE_5_PLAN.md). Tapo support is an optional pinned
+installation: `.\.venv\Scripts\python.exe -m pip install ".[tapo]"`.

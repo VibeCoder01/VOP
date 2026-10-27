@@ -47,6 +47,10 @@ def selection(db, *, source_id=None, observation_id=None):
 
 
 def delete_related_alerts(db, chosen):
+    from vop.actions import detach_question
+    pairs = {(chosen['source_id'], chosen['question_id'])} if 'question_id' in chosen else {(k[0], k[1]) for k in chosen['keys']}
+    for sid, qid in pairs:
+        detach_question(db, sid, qid, erase=True)
     for aid in chosen['alerts']:
         db.execute('DELETE FROM deliveries WHERE alert_id=?', (aid,))
         db.execute('DELETE FROM alerts WHERE id=?', (aid,))
