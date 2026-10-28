@@ -62,13 +62,14 @@ class BrowserAuth:
             return await JSONResponse({'error': 'operator_required'}, status_code=403)(scope, receive, send)
         # Keep observation and evidence reads available in View mode. Configuration,
         # deletion and lifecycle operations require an explicit browser mode switch.
-        read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/ui/actions.js', '/ui/audio-editor.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
+        read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/diagnostics', '/ui/actions.js', '/ui/audio-editor.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
+                     path.startswith('/integration/cameras/') and path.endswith('/test') or
                      path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/', '/ui/processed-image/')) and not path.endswith('/delete') or
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/episodes.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False
         preview_control = path.startswith('/ui/live-preview/') and path.endswith('/keepalive')
-        view_action = path in ('/login', '/logout', '/ui/mode', '/automations/pause', '/actions/sound/claim', '/actions/sound/ack') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor')) or preview_control
+        view_action = path in ('/login', '/logout', '/ui/mode', '/automations/pause', '/actions/sound/claim', '/actions/sound/ack', '/diagnostics/reconnect') or path.startswith('/integration/cameras/') and path.endswith('/test') or path.startswith('/ui/sources/') and path.endswith(('/capture', '/monitor')) or preview_control
         needs_configure = not public and not bearer and role == 'operator' and session.get('mode', 'view') != 'configure' and (
             not read_page if method in ('GET', 'HEAD') else not view_action)
         origin = headers.get(b"origin")
@@ -127,7 +128,7 @@ class BrowserAuth:
         monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
         camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
-        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode')
+        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode', '/diagnostics/reconnect')
         removal = path == '/ui/removed-questions/delete' or (path.startswith(('/ui/sources/', '/ui/questions/')) and path.endswith(('/remove', '/restore', '/delete')))
         wait_for_admission = path in ('/cameras/save', '/integration/camera') or removal
         acquired = admitted and (await run_in_threadpool(self.admission.acquire) if wait_for_admission

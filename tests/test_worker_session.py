@@ -49,6 +49,7 @@ def test_session_duration_is_bounded(minutes):
 
 
 def test_session_owns_one_tunnel_and_stops_via_stdin(monkeypatch):
+    monkeypatch.setattr('vop.worker_session.antec_target', lambda: ('antec.local', []))
     commands = []
     class Process:
         def __init__(self): self.stdin = io.BytesIO(); self.exit = None; self.stopped = False

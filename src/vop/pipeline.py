@@ -38,6 +38,7 @@ class Pipeline:
         self.processed_previews = {}  # Completed answer frames; capture/test previews must not replace these.
         self._latest_preview = None
         self.stopping = False
+        self.activity = None
 
     @property
     def latest_preview(self):
@@ -91,18 +92,21 @@ class Pipeline:
             self.store.audit("capture_skipped", "overload")
             raise ProviderError("overloaded", "An inference is in flight; this request was not queued")
         try:
+            self.activity = {'source_id': source_id, 'stage': 'Preparing observation', 'started_at_utc': utcnow().isoformat()}
             if self.stopping:
                 raise ProviderError('application_stopping', 'VOP is restarting. Wait for the workspace to reconnect.')
             source = self.source(source_id)
             if not source.questions:
                 raise ProviderError("no_active_questions", "Enable at least one question before capturing")
             if getattr(self, 'auto_worker', None):
+                self.activity = {**self.activity, 'stage': 'Connecting engine'}
                 try:
                     self.auto_worker.ensure_ready()
                 except ProviderError as exc:
-                    self.save_capture_error(source, exc)
+                    self.save_capture_error(source, exc, stage='engine')
                     raise
             if frame is None:
+                self.activity = {**self.activity, 'stage': 'Capturing image'}
                 try:
                     frame = (self.live_previews.capture(source, self.capture_adapter.capture)
                              if hasattr(self, 'live_previews') else self.capture_adapter.capture(source))
@@ -125,6 +129,7 @@ class Pipeline:
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
             else:
+                self.activity = {**self.activity, 'stage': 'Answering questions'}
                 records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
                 groups = {}
                 for record in records:
@@ -167,20 +172,23 @@ class Pipeline:
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
             result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
                                        "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi]}
+            self.activity = {**self.activity, 'stage': 'Saving result'}
             saved = self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
             with self.preview_lock:
                 if self.previews.get(source_id) is preview_token:
                     self.processed_previews[source_id] = preview_token
             return saved
         finally:
+            self.activity = None
             self.busy.release()
 
-    def save_capture_error(self, source, error: ProviderError) -> dict:
+    def save_capture_error(self, source, error: ProviderError, *, stage='capture') -> dict:
         result = {"status": str(error.status), "engine_id": self.engine.engine_id,
                   "engine_version": self.engine.engine_version, "source_id": source.source_id,
                   "frame_id": None, "captured_at_utc": None, "processed_at_utc": utcnow().isoformat(),
                   "elapsed_ms": None, "synthetic": self.engine.synthetic, "usage": None, "provider_raw": None,
-                  "error": {"code": error.code, "message": "Source frame was unavailable", "status": str(error.status)},
+                  "failure_stage": stage,
+                  "error": {"code": error.code, "message": "The engine was unavailable; capture was not attempted" if stage == 'engine' else "Source frame was unavailable", "status": str(error.status)},
                   "answers": [{"question_id": q.question_id, "question_version": q.version, "kind": str(q.kind),
                                "status": str(error.status), "value": None, "error": {"code": error.code}}
                               for q in source.questions]}

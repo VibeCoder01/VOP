@@ -128,6 +128,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_release(app, settings, store, pipeline, reliable)
     from vop.actions_ui import install_actions
     install_actions(app, actions)
+    from vop.diagnostics import install_diagnostics
+    install_diagnostics(app)
     from vop.integration_ui import install_integration
     install_integration(app, settings, store, pipeline)
     from vop.removal import install_removal

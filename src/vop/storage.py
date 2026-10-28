@@ -365,7 +365,7 @@ class Store:
                     connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (processed, "late_observation", "excluded_from_live_state"))
                 self._rebuild(connection, source_id, answer["question_id"], answer["question_version"])
             connection.execute("UPDATE sources SET status=?,last_frame_utc=COALESCE(?,last_frame_utc) WHERE id=?",
-                               ("HEALTHY" if frame else "DISCONNECTED", result["captured_at_utc"], source_id))
+                               ("HEALTHY" if frame else "WAITING_FOR_ENGINE" if result.get('failure_stage') == 'engine' else "DISCONNECTED", result["captured_at_utc"], source_id))
             connection.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (processed, "capture_inference", result["status"]))
         return {"run_id": run_id, "result": result, "duplicate": False}
 

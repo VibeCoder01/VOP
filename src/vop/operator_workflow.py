@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from vop.contracts import ProviderError
 from vop.inference.remote import RemoteInferenceEngine
 from vop.inference.liquid_d1 import CHECKPOINT_REVISION
+from vop.worker_session import antec_target
 
 
 def is_antec(engine):
@@ -58,8 +59,9 @@ class AutoWorker:
         if not ssh:
             raise ProviderError('ssh_missing', 'VOP needs SSH installed to reconnect to Antec')
         try:
+            host, identity_options = antec_target()
             result = subprocess.run([ssh, '-T', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
-                                     '-o', 'ConnectTimeout=5', 'antec.local',
+                                     '-o', 'ConnectTimeout=5', *identity_options, host,
                                      'head -c 257 ~/.local/share/vop/phase4/worker.token'],
                                     capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             key = result.stdout.decode('ascii').strip()
@@ -103,6 +105,7 @@ class AutoWorker:
                 if health.get('busy'):
                     raise ProviderError('overloaded', 'Antec is processing another observation. Retry shortly')
                 engine.allow_remote = True
+                self.last_failure, self.retry_after = None, 0
                 return
             code = health.get('error') if health else None
             if isinstance(code, str) and code in ('gpu_capacity', 'host_capacity', 'device_mismatch', 'model_load_failed'):
@@ -119,6 +122,7 @@ class AutoWorker:
                         if health.get('busy'):
                             raise ProviderError('overloaded', 'Antec is processing another observation. Retry shortly')
                         engine.allow_remote = True
+                        self.last_failure, self.retry_after = None, 0
                         return
                     code = health.get('error')
                     if isinstance(code, str) and code in ('gpu_capacity', 'host_capacity', 'device_mismatch', 'model_load_failed'):
@@ -152,11 +156,16 @@ def recovery_message(code):
         'worker_starting': 'Antec is still loading the model. Wait a moment and retry.',
         'tunnel_in_use': 'Another connection is using the Antec port. Check the existing worker connection before starting another.',
         'gpu_capacity': 'Antec does not have enough free GPU memory. Check its other workload, then retry.',
+        'host_capacity': 'Antec does not have enough free system memory. Close unneeded work on Antec, then reconnect.',
+        'model_load_failed': 'The engine could not load its model. Check the engine setup and reconnect.',
+        'device_mismatch': 'The engine is using a different device than configured. Check the engine setup.',
+        'sampling_failed': 'An observation could not finish. Open Diagnostics for recent results; restart VOP if this persists.',
         'capture_open_failed': 'The camera could not connect. Check its power and saved address, then retry.',
         'capture_timeout': 'The camera did not respond. Check its power and network connection, then retry.',
         'overloaded': 'An observation is already running. Wait a moment, then retry.',
         'recovery_busy': 'VOP is already connecting to Antec. Wait a moment, then retry.',
         'worker_reconnect_failed': 'VOP could not reconnect to Antec. Check that it is awake and on the network, then retry.',
+        'antec_name_unresolved': 'This computer cannot find Antec on the network. Check that Antec is on and connected, then select Reconnect engine in Diagnostics.',
         'ssh_missing': 'SSH is not installed on this computer. Install OpenSSH or Git for Windows, then reopen VOP.',
         'worker_identity': 'The connected worker does not match the saved model. Check advanced connection settings.',
         'clock_skew': 'The computer clocks do not agree. Synchronise Windows and Antec time, then retry.',
