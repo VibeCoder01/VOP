@@ -42,6 +42,14 @@ The four Windows skips in the full run are Linux-only offline remote-helper case
 hardware tests. Full Windows and Ubuntu CI results will be recorded on the pull request
 after push; they are not presumed by this report.
 
+Initial CI: both Ubuntu jobs and the Windows push job passed. The Windows PR job had
+**452 passed, 4 skipped, 1 failed**: the existing remove/restore concurrency test exceeded
+its five-second deadline while following the success redirect into a history page. The
+test now checks the mutation's HTTP 303 directly, retaining all lock-wait, health,
+atomicity and history-preservation assertions. It does not raise the time limit or bypass
+locking. `.venv\Scripts\python.exe -m pytest tests/test_removed_question_bulk.py::test_remove_restore_wait_for_active_work -q`:
+**2 passed** in 4.82 seconds. No runtime code changed in this CI follow-up.
+
 Managed local restart returned HTTP **202**, then a new **ready** instance. Observation
 count advanced **34666 → 34672** while existing monitoring completed work and resumed.
 Only protected JSON health/source metadata was read; no live page or image was inspected.

@@ -285,7 +285,9 @@ def test_remove_restore_wait_for_active_work(app, monkeypatch, question, restore
         for lock in held:
             lock.acquire()
         with ThreadPoolExecutor(max_workers=1) as executor:
-            pending = executor.submit(client.post, base+('/restore' if restore else '/remove'), data={'csrf':csrf})
+            # Exercise the mutation/lock contract, not the redirected history page's
+            # render time (which varies considerably on shared Windows runners).
+            pending = executor.submit(client.post, base+('/restore' if restore else '/remove'), data={'csrf':csrf}, follow_redirects=False)
             try:
                 for lock in (admission, busy, reliable):
                     assert lock.waiting.wait(3)
@@ -298,7 +300,8 @@ def test_remove_restore_wait_for_active_work(app, monkeypatch, question, restore
                 for lock in held:
                     lock.release()
             response = pending.result(timeout=5)
-        assert response.status_code == 200
+        assert response.status_code == 303
+        assert response.headers['location'].startswith('/?view=sources&notice=')
         assert app.state.store.is_removed(SID, qid) != restore
         after = app.state.store.observations(SID, limit=100)
         assert all(row in after for row in before)  # Removal can append an intentional gap.
