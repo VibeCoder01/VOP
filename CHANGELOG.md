@@ -1,5 +1,14 @@
 # Specification change log
 
+## 0.6.3 — Browser session recovery (28 October 2026)
+
+- Keep browser sign-in for up to 14 days of inactivity, with explicit Sign out unchanged.
+- Stop background network polling after expired authentication; show recovery instructions
+  without redirecting or discarding the current page. Check authentication before Trends reloads.
+- Coalesce repeated authentication/permission audit denials to one per category per minute.
+- Explain unconfirmed Tapo results in Activity and avoid a duplicate final off command after
+  a successful flash. Existing library session retries remain bounded; no action replay is added.
+
 ## 0.6.2 — Capture diagnostics and Antec name recovery (28 October 2026)
 
 - Add Diagnostics in both modes: passive, redacted scheduler/engine/camera status, recent

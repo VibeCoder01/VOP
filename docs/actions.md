@@ -147,6 +147,15 @@ lock. Existing full-history replay on new samples remains a separate performance
 
 ## Persistence and recovery
 
+Tapo can reject an expired device session with HTTP 403 even after authentication.
+The pinned python-kasa library resets the session and retries with a fresh handshake.
+A console 403 alone does not establish whether the action ultimately failed: check Activity
+for the final result. An unconfirmed result stays **uncertain** and is not automatically
+replayed. Check the physical device before retrying, then use **Edit action → Check device**.
+If that check fails, verify power, LAN address and TP-Link account access. Flash sequences
+finish off, but do not send a second final off command when the last off was acknowledged.
+Device delivery runs in the separate action worker; it does not change browser sign-in.
+
 Definitions, automations, queue and uploaded WAVs are in the existing SQLite database using
 an additive Actions storage extension (version 1, recorded in release_settings). Existing
 Phase 4 schema version 3 and backup validation remain compatible. Full database backups

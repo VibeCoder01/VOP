@@ -44,16 +44,20 @@ global.document = {hidden:false, activeElement:null, querySelector:() => filters
 global.FormData = class { constructor(form) {this.form = form;} [Symbol.iterator]() {return this.form.values[Symbol.iterator]();} };
 global.location = {href:'http://127.0.0.1/?view=metrics&source=fixture&source=garden&from=2026-10-01&through=2026-10-31', reload:() => reloads++};
 global.setInterval = (fn, ms) => {timer=fn; delay=ms;};
-global.fetch = () => {throw new Error('Refresh must not request a capture or worker operation');};
+global.window = global;
+global.fetch = async url => {assert.equal(url,'/api/v1/health'); return {ok:true};};
+(async () => {
 new Function(SOURCE)();
 assert.equal(delay,10000);
-timer(); assert.equal(reloads,1);
-document.hidden=true; timer(); assert.equal(reloads,1);
-document.hidden=false; document.activeElement='filter'; timer(); assert.equal(reloads,1);
-document.activeElement=null; filters.values[1][1]='unsaved'; timer(); assert.equal(reloads,1);
-filters.values[1][1]='fixture'; timer(); assert.equal(reloads,2);
+await timer(); assert.equal(reloads,1);
+document.hidden=true; await timer(); assert.equal(reloads,1);
+document.hidden=false; document.activeElement='filter'; await timer(); assert.equal(reloads,1);
+document.activeElement=null; filters.values[1][1]='unsaved'; await timer(); assert.equal(reloads,1);
+filters.values[1][1]='fixture'; await timer(); assert.equal(reloads,2);
+window.vopSessionExpired=true; await timer(); assert.equal(reloads,2);
 assert.equal(location.href,'http://127.0.0.1/?view=metrics&source=fixture&source=garden&from=2026-10-01&through=2026-10-31');
 timer=null; document.querySelector=() => null; new Function(SOURCE)(); assert.equal(timer,null);
+})().catch(error => {console.error(error); process.exitCode=1;});
 '''.replace('SOURCE', json.dumps(TRENDS_REFRESH_JS))
     result = subprocess.run([shutil.which('node'), '-e', script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

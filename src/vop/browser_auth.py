@@ -25,6 +25,7 @@ class BrowserAuth:
         self.admission = Lock()
         self.login_attempts = deque()
         self.login_lock = Lock()
+        self.denial_times = {}
 
     def credential_role(self, supplied: bytes):
         if hmac.compare_digest(supplied, self.token):
@@ -34,6 +35,13 @@ class BrowserAuth:
         return None
 
     async def audit_denial(self, action):
+        # Polling tabs can all discover an expired session together. Record the
+        # denial once per category per minute, rather than queueing DB writes.
+        now = monotonic()
+        with self.login_lock:
+            if now - self.denial_times.get(action, float('-inf')) < 60:
+                return
+            self.denial_times[action] = now
         try:
             await run_in_threadpool(self.store.audit, action, "denied")
         except sqlite3.Error:

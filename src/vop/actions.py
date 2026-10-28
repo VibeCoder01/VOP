@@ -561,7 +561,11 @@ class Actions:
                     return 'uncertain', 'Twilio returned a server error. Check its delivery log before trying again.'
                 return 'blocked', 'Check the Twilio account, sender and recipient in Edit action.'
         if kind in ('tapo', 'hub'):
-            asyncio.run(asyncio.wait_for(tapo(config, protected, self.stop_event), timeout=35))
+            try:
+                asyncio.run(asyncio.wait_for(tapo(config, protected, self.stop_event), timeout=35))
+            except Exception:
+                return 'uncertain', ('The device did not confirm the result. Check the light or hub before retrying. '
+                                     'In Edit action, use Check device. If that fails, check power, LAN address and TP-Link account access.')
             return 'completed', 'The device acknowledged the command.'
         return 'blocked', 'Choose a supported action type.'
 
@@ -689,16 +693,20 @@ async def tapo(config, protected, stopped):
             await device.turn_off()
         else:
             # Bounded on/off pulses, finishing OFF; never restore an old user state.
+            needs_off = False
             try:
                 for _ in range(int(config['seconds'] / 2)):
                     if stopped.is_set():
                         break
+                    needs_off = True
                     await device.turn_on()
                     await asyncio.sleep(1)
                     await device.turn_off()
+                    needs_off = False
                     await asyncio.sleep(1)
             finally:
-                await device.turn_off()
+                if needs_off:
+                    await device.turn_off()
     finally:
         await device.disconnect()
 

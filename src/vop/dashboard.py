@@ -74,7 +74,27 @@ if (form) {
 }
 """
 
-WORKSPACE_JS = """document.addEventListener('submit', (event) => {
+WORKSPACE_JS = """(() => {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const target = new URL(args[0] instanceof Request ? args[0].url : args[0], location.href);
+    if (target.origin !== location.origin) return originalFetch(...args);
+    if (window.vopSessionExpired) return new Response('', {status:401});
+    const response = await originalFetch(...args);
+    if (response.status === 401) {
+      if (!window.vopSessionExpired) {
+        window.vopSessionExpired = true;
+        const warning = document.createElement('div');
+        warning.className = 'notice'; warning.setAttribute('role', 'alert');
+        warning.textContent = 'Sign-in expired. Open Start VOP to sign in again, then reload this page. Monitoring continues. Unsaved changes are still on this page.';
+        document.querySelector('main').prepend(warning);
+      }
+    }
+    return response;
+  };
+})();
+document.addEventListener('submit', (event) => {
+  if (window.vopSessionExpired) { event.preventDefault(); return; }
   const button = event.submitter;
   if (!button) return;
   button.setAttribute('aria-busy', 'true');
@@ -222,10 +242,13 @@ for (const panel of panels) {
 TRENDS_REFRESH_JS = """const filters = document.querySelector('form.filters');
 if (filters) {
   const saved = new URLSearchParams(new FormData(filters)).toString();
-  setInterval(() => {
+  setInterval(async () => {
     if (document.hidden || filters.contains(document.activeElement)) return;
     if (new URLSearchParams(new FormData(filters)).toString() !== saved) return;
-    location.reload();
+    try {
+      const response = await fetch('/api/v1/health', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+      if (response.ok && !window.vopSessionExpired) location.reload();
+    } catch (_) {}
   }, 10000);
 }
 """
@@ -391,8 +414,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                              Main(Header(Div(H1(title), P(descriptions.get(view, ""))),
                                          A("Demo engine" if pipeline.engine.synthetic else pipeline.engine.engine_id, href="/engines", cls="tag") if view == "overview" and configure else None, cls="top"),
                                   Div(notice, cls="notice", role="status") if notice else None, *content, cls="workspace trends-workspace" if view == "metrics" else "workspace", id="workspace"), cls="shell"),
+                         Script(src='/ui/workspace.js', defer=True),
                          Script(src='/ui/actions.js', defer=True) if role == 'operator' or view == 'activity' else None,
-                         Script(src='/ui/workspace.js', defer=True) if getattr(pipeline, 'auto_worker', None) else None,
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,

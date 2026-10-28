@@ -284,6 +284,12 @@ def test_tapo_l530_and_h100_adapter_contracts_without_network(monkeypatch):
     config.update(operation='off')
     asyncio.run(tapo(config, {'username':'test','password':'test'}, Event()))
     assert calls[-2:] == ['off','disconnect']
+    calls.clear()
+    async def no_wait(_): pass
+    monkeypatch.setattr('vop.actions.asyncio.sleep', no_wait)
+    config.update(operation='flash', seconds=4)
+    asyncio.run(tapo(config, {'username':'test','password':'test'}, Event()))
+    assert calls == ['update', 'on', 'off', 'on', 'off', 'disconnect']
 
 
 def test_synthetic_observations_never_automatically_send(app):
@@ -297,6 +303,23 @@ def test_synthetic_observations_never_automatically_send(app):
     assert len(actions.jobs()) == 1
     assert actions.jobs()[0]['status'] == 'suppressed'
     assert actions.claim_sound('tab') is None
+
+
+def test_tapo_unconfirmed_result_has_remediation_without_action_replay(app, monkeypatch):
+    actions = app.state.actions
+    actions.secrets = Vault()
+    actions.save_action({'id':'light', 'kind':'tapo', 'name':'Light', 'address':'192.168.1.2',
+                         'operation':'off'}, protected={'username':'test','password':'test'})
+    monkeypatch.setattr(actions, 'dependency', lambda config: '')
+    calls = []
+    async def rejected(*args):
+        calls.append('send')
+        raise RuntimeError('private transport details')
+    monkeypatch.setattr('vop.actions.tapo', rejected)
+    status, detail = actions.send(actions.definitions()[0], {}, 'test-job')
+    assert status == 'uncertain' and calls == ['send']
+    assert 'Check device' in detail and 'before retrying' in detail
+    assert 'private transport details' not in detail
 
 
 def test_message_adapters_acceptance_rejection_and_ambiguous_send(app, monkeypatch):

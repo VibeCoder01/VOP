@@ -109,7 +109,7 @@ def create_app(settings: Settings, *, token: str | None = None,
         return JSONResponse({"error": "storage_unavailable"}, status_code=503)
 
     app = FastHTML(default_hdrs=False, sess_cls=None, secret_key=token,
-                   middleware=[Middleware(SessionMiddleware, secret_key=token, session_cookie="vop_session", max_age=3600, same_site="strict"),
+                   middleware=[Middleware(SessionMiddleware, secret_key=token, session_cookie="vop_session", max_age=14 * 24 * 3600, same_site="strict"),
                                Middleware(BrowserAuth, token=token, viewer_token=viewer_token, store=store, pipeline=pipeline)],
                    lifespan=lifespan,
                    exception_handlers={ProviderError: provider_error, ValueError: bad_request, sqlite3.Error: database_error})

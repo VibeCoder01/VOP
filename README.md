@@ -389,7 +389,12 @@ Retained frames and previews require operator access; viewers get 403. Deletion 
 clears the matching in-memory preview and checkpoints SQLite with secure deletion enabled.
 It cannot retract copies already made by users or externally managed backups.
 
-Browser login uses a signed HttpOnly/SameSite=Strict one-hour cookie; write forms require CSRF
+Browser login uses a signed HttpOnly/SameSite=Strict cookie lasting up to 14 days since
+the last authenticated request; Sign out clears it immediately. Expired pages stop background
+network polling and show a sign-in message without discarding unsaved changes. Open Start VOP
+to sign in again, then reload the old page. Monitoring runs independently of browser sign-in.
+Repeated denied requests are audited once per category per minute to avoid a polling write storm.
+Write forms require CSRF
 and same-origin checks. Optional read-only access uses a distinct `VOP_VIEWER_TOKEN` set before
 startup (same 32–256 ASCII-character requirement). Viewers can inspect metadata/metrics, but cannot
 capture, edit, sample or access image evidence. There are no individual user accounts or SSO.
