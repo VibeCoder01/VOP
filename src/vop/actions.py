@@ -169,7 +169,7 @@ class Actions:
                 if audio is not None:
                     db.execute('INSERT OR REPLACE INTO action_audio VALUES(?,?)', (aid, wav_bytes(audio)))
                 if kind == 'audio' and not db.execute('SELECT 1 FROM action_audio WHERE id=?', (aid,)).fetchone():
-                    raise ValueError('Choose a WAV file for this action.')
+                    raise ValueError('Record a clip or choose an audio file for this action.')
                 if kind == 'audio':
                     config['audio_digest'] = sha256(bytes(db.execute('SELECT payload FROM action_audio WHERE id=?', (aid,)).fetchone()[0])).hexdigest()
                 db.execute('INSERT OR REPLACE INTO action_definitions VALUES(?,?,?)', (aid, (old['revision'] if old else 0) + 1, dumps(config)))
