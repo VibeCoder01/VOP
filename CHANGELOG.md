@@ -1,5 +1,13 @@
 # Specification change log
 
+## 0.6.1 — Record and import audio clips (28 October 2026)
+
+- Play audio can record a microphone clip, stop, preview and discard it before Save action.
+- Accept MP3, M4A and other browser-supported files; convert locally to compatible PCM WAV.
+- Stop capture at 00:01:00, when leaving the page, or when the tab becomes hidden. Cancellation
+  and errors preserve previous audio; late permission grants release their stream immediately.
+- No new audio/codec dependencies, automatic microphone activation or extra network service.
+
 ## 0.6.0 — Actions and Automations (27 October 2026)
 
 - Separate Actions/Automations configuration and Activity view; native forms, named choices,

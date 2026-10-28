@@ -1125,6 +1125,11 @@ answers show **No current value**, rather than a zero bar. Displayed values use 
 decimal place; stored values keep full precision.
 ## Actions and Automations (Phase 5)
 
+**Play audio** supports microphone recording with start/stop, preview and discard. It also
+imports MP3, M4A, WAV and other browser-supported clips up to 00:01:00/10 MB, converting them
+automatically for playback. Browser microphone permission is requested only after Start
+recording. Nothing is stored until Save action. See [audio setup](docs/actions.md#sound-destination).
+
 Configure mode now has **Actions** and **Automations**. Create named beep, WAV audio,
 Tapo L530 light, H100 hub sound, SMTP email or Twilio SMS actions; connect them to
 confirmed episodes, answer values or observation availability. Use **Preview automation**

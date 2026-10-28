@@ -32,9 +32,32 @@ automatically reassigned: this avoids duplicate playback. Browser sounds expire 
 dashboard, not necessarily the camera or GPU worker. Its audio device/system volume must
 be available. Beeps and audio use the configured amplitude, with system volume applied.
 
-Audio uploads use PCM WAV, 16-bit mono/stereo, 8–48 kHz, maximum 00:01:00 and 2 MB.
-JavaScript is needed to upload. The audio bytes are stored in the database and full backups;
-configuration JSON does not contain audio bytes.
+**Play audio** offers both **Choose an audio file** and **Start recording**. MP3, M4A,
+WAV and other browser-supported formats can be imported (up to 10 MB and 00:01:00).
+Codec support varies by browser. Files whose duration cannot be read are rejected with
+guidance to use MP3, M4A or WAV; some WebM files lack readable duration metadata.
+
+Select Start recording, allow the browser's microphone prompt, then Stop recording.
+Recording also stops at 00:01:00 or when the tab becomes hidden. Cancel and page navigation
+release the microphone, including when permission is granted after cancellation. Recording
+is available only when the browser supports MediaRecorder, microphone capture and Web Audio
+decoding in a secure context (loopback localhost qualifies). If the in-app browser does not
+allow a microphone, open VOP in a current Edge/Chrome browser or import an audio file.
+
+Use the native player to review the clip. Discard clears the unsaved selection; cancelling
+or a failed import/recording preserves previous audio. **Save action** is required to store
+or replace a clip. Save is blocked while capture/conversion is running. No audio is sent to
+the server before saving. No microphone request is made on page load.
+
+Files and recordings are converted locally to mono, 16 kHz, 16-bit PCM WAV for notification
+playback. This keeps Windows playback compatible without an additional codec dependency and
+fits the existing 2 MB stored-clip limit; it is speech/alert quality, not a music editor.
+WAV is the internal representation, not a format the user must supply. JavaScript is required.
+Stored audio is included in the database and full backups; configuration JSON does not contain
+audio bytes. Native device alarm sounds such as H100 chimes still use their separate action.
+
+Browser API references: [MediaRecorder](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder),
+[decodeAudioData](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData).
 
 ## Tapo L530 and H100
 

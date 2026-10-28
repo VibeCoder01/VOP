@@ -8,23 +8,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from vop.actions import KINDS, TRIGGERS, beep_wav
+from vop.audio_recording import audio_editor, SCRIPT as AUDIO_SCRIPT
 from vop.dashboard import badge, field, hidden, local_time
 from vop.display import duration, duration_input
 
 
 SCRIPT = r"""(() => {
-  const upload = document.querySelector('[data-audio-upload]');
-  if (upload) upload.addEventListener('change', async () => {
-    const file = upload.files[0], data = document.querySelector('[name=audio_data]');
-    data.value = '';
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { upload.setCustomValidity('Choose a WAV file smaller than 2 MB.'); return; }
-    upload.setCustomValidity('Loading the audio file. Wait a moment.');
-    const reader = new FileReader();
-    reader.onload = () => { data.value = reader.result.split(',')[1]; upload.setCustomValidity(''); };
-    reader.onerror = () => upload.setCustomValidity('The file could not be read. Choose it again.');
-    reader.readAsDataURL(file);
-  });
   const activity = document.querySelector('[data-action-activity]');
   let activityBusy = false, lastActivity = '';
   if (activity) setInterval(async () => {
@@ -104,6 +93,10 @@ def install_actions(app, actions):
     def script():
         return Response(SCRIPT, media_type='application/javascript')
 
+    @app.route('/ui/audio-editor.js', methods=['GET'])
+    def audio_script():
+        return Response(AUDIO_SCRIPT, media_type='application/javascript')
+
     @app.route('/actions', methods=['GET'])
     def listing(request):
         token = csrf(request)
@@ -146,10 +139,7 @@ def install_actions(app, actions):
                 P('Browser sound needs an open VOP page and Enable sound. Computer sound plays on the machine running the dashboard, independently of the inference engine.', cls='muted'),
                 field('Volume (0–100)', 'volume', existing.get('volume', 60), type='number', min=0, max=100, required=True)]
         if kind == 'audio':
-            fields += [Div(Label('Audio file (leave empty to keep the saved file)', _for='audio-file'),
-                       Input(type='file', accept='.wav,audio/wav', id='audio-file', data_audio_upload=''),
-                       Input(type='hidden', name='audio_data'), cls='field'),
-                       P('PCM WAV, 16-bit, mono or stereo, 8–48 kHz. Maximum 00:01:00 and 2 MB. JavaScript is needed to upload.', cls='muted')]
+            fields += [audio_editor(saved=bool(existing))]
         if kind == 'tapo':
             fields += [field('Light LAN address', 'address', existing.get('address', ''), required=True),
                        choose('Operation', 'operation', [('on', 'Turn on'), ('off', 'Turn off'), ('flash', 'Flash, then turn off')], existing.get('operation', 'on')),

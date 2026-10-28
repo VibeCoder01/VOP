@@ -62,7 +62,7 @@ class BrowserAuth:
             return await JSONResponse({'error': 'operator_required'}, status_code=403)(scope, receive, send)
         # Keep observation and evidence reads available in View mode. Configuration,
         # deletion and lifecycle operations require an explicit browser mode switch.
-        read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/ui/actions.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
+        read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/ui/actions.js', '/ui/audio-editor.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
                      path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/', '/ui/processed-image/')) and not path.endswith('/delete') or
                      path in ('/ui/workspace.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/episodes.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
@@ -118,7 +118,7 @@ class BrowserAuth:
             if message["type"] == "http.response.start":
                 message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
                                       (b"x-content-type-options", b"nosniff"),
-                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                                      (b"content-security-policy", b"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
             await send(message)
         if needs_configure:
             response = RedirectResponse('/configure' if method in ('GET', 'HEAD') else '/configure?stale=1', status_code=303) if method in ('GET', 'HEAD') or wants_html else JSONResponse(
