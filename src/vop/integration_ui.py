@@ -14,7 +14,7 @@ from fasthtml.common import to_xml
 from vop.display import duration, duration_input
 
 from vop.config import SourceSpec, identifier
-from vop.contracts import AnswerKind, ProviderError, QuestionSpec
+from vop.contracts import AnswerKind, ProviderError, QuestionSpec, utcnow
 from vop.dashboard import field, hidden, evidence_image, dependency_panel, action
 from vop.inference.liquid_d1 import CHECKPOINT_REVISION
 from vop.inference.mock import MockInferenceEngine
@@ -615,6 +615,7 @@ def install_integration(app, settings, store, pipeline):
             diagnostic = {"source_id": source_id, "status": exc.code}
         except Exception:
             diagnostic = {"source_id": source_id, "status": "capture_failed"}
+        diagnostic['checked_at_utc'] = utcnow().isoformat()
         store.audit("camera_connection_test", dumps(diagnostic))
         with store.connection() as db:
             db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_test:" + source_id, dumps(diagnostic)))

@@ -10,6 +10,17 @@ from threading import Lock
 from vop.contracts import ProviderError, utcnow
 
 
+def antec_target():
+    """Use the short name only with the existing canonical SSH host-key identity."""
+    for host in ('antec.local', 'antec'):
+        try:
+            socket.getaddrinfo(host, 22, type=socket.SOCK_STREAM)
+            return host, ([] if host == 'antec.local' else ['-o', 'HostKeyAlias=antec.local'])
+        except socket.gaierror:
+            continue
+    raise ProviderError('antec_name_unresolved', 'This computer cannot find Antec on the network. Check its power and network, then reconnect.')
+
+
 def session_script(minutes):
     if type(minutes) is not int or minutes not in (15, 30, 60):
         raise ValueError("Choose a 15, 30 or 60 minute session")
@@ -52,6 +63,7 @@ class WorkerSession:
         self.process = None
         self.expires_at = None
         self.lock = Lock()
+        self.connection_host = None
 
     def status(self):
         active = self.process is not None and self.process.poll() is None
@@ -73,10 +85,12 @@ class WorkerSession:
                     listener.bind(("127.0.0.1", 8878))
             except OSError:
                 raise ProviderError("tunnel_in_use", "Port 8878 is already in use. Test the existing worker connection before starting another session") from None
+            host, identity_options = antec_target()
+            self.connection_host = host
             command = [ssh, "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                        "-o", "ConnectTimeout=5", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=10",
                        "-o", "ServerAliveCountMax=3", "-L", "127.0.0.1:8878:127.0.0.1:8878",
-                       "antec.local", "bash -c " + shlex.quote(script)]
+                       *identity_options, host, "bash -c " + shlex.quote(script)]
             try:
                 self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                                                 stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)

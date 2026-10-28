@@ -13,6 +13,7 @@ class Sampler:
         self.deadlines = {}
         self.failures = {}
         self.last_error = None
+        self.source_errors = {}
         self.last_source = None
         self.pending = set()
         self.pending_lock = Lock()
@@ -49,6 +50,7 @@ class Sampler:
             self.thread.join(timeout=3)
 
     def tick(self, now=None):
+        live_clock = now is None
         now = monotonic() if now is None else now
         # User-requested connection tests take the next free slot, before sampling.
         with self.pending_lock:
@@ -93,14 +95,24 @@ class Sampler:
                 failed = result["result"]["status"] != "success"
                 self.failures[source_id] = self.failures.get(source_id, 0) + 1 if failed else 0
                 if failed:
-                    self.deadlines[source_id] = now + min(300, interval * 2 ** min(self.failures[source_id], 5))
+                    self.source_errors[source_id] = (result['result'].get('error') or {}).get('code', result['result']['status'])
+                    self.deadlines[source_id] = (monotonic() if live_clock else now) + min(300, max(1, interval) * 2 ** min(self.failures[source_id], 5))
+                else:
+                    self.source_errors.pop(source_id, None)
                 self.last_error = None
             except ProviderError as exc:
                 self.last_error = exc.code
                 if manual and exc.code == 'overloaded':
                     return
+                if exc.code not in ('overloaded', 'recovery_busy'):
+                    self.source_errors[source_id] = exc.code
+                    self.failures[source_id] = self.failures.get(source_id, 0) + 1
+                    self.deadlines[source_id] = (monotonic() if live_clock else now) + min(300, max(1, interval) * 2 ** min(self.failures[source_id], 5))
             except Exception:
                 self.last_error = "sampling_failed"
+                self.source_errors[source_id] = 'sampling_failed'
+                self.failures[source_id] = self.failures.get(source_id, 0) + 1
+                self.deadlines[source_id] = (monotonic() if live_clock else now) + min(300, max(1, interval) * 2 ** min(self.failures[source_id], 5))
             if manual:
                 with self.pending_lock:
                     self.pending.discard(source_id)

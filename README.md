@@ -9,6 +9,19 @@ was authorised on 27 October 2026; see [setup and limitations](docs/actions.md).
 
 ## Everyday use on this laptop
 
+**Diagnostics** is available in View and Configure modes. It separates monitoring settings,
+scheduler progress, engine connection failures and camera failures, with last attempt/image
+times, retry delays and explicit **Check and reconnect engine** / **Test camera connection**
+controls. Opening the page is passive; it does not connect to cameras or start an engine.
+Use Refresh diagnostics for a new snapshot. Camera tests run without inference.
+Large traffic lights show green for recent success/running services, amber for paused,
+waiting or unverified checks, and red for reported failures. Each light has a text label;
+the top summary points out any component needing attention. They do not indicate detection accuracy.
+
+If `antec.local` cannot resolve, the verified Antec pilot can use `antec` while still checking
+the original `antec.local` SSH host key. Unknown/changed keys remain rejected. No address or
+credential changes are needed for this fallback. Existing enabled monitoring resumes normally.
+
 Ordinal answers show their configured level names. Liquid d1 returns an expected position:
 for levels Low, Medium, High, a score of 0 is shown as **Low (0.0)** and 0.25 as
 **Between Low and Medium (0.2)**. This is not a rounded category or a calibrated

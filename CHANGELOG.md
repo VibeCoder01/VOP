@@ -1,5 +1,17 @@
 # Specification change log
 
+## 0.6.2 — Capture diagnostics and Antec name recovery (28 October 2026)
+
+- Add Diagnostics in both modes: passive, redacted scheduler/engine/camera status, recent
+  result and camera-test times, active observation stage, retry timing and remediation controls.
+- Prominent three-lamp traffic lights and a summary distinguish green success, amber paused/
+  waiting/unverified conditions and red failures, with visible and accessible text labels.
+- Recover the verified Antec connection through its short name when `.local` cannot resolve,
+  preserving the original trusted SSH host-key identity and strict checks.
+- Distinguish engine failures before capture from camera disconnection; preserve UNKNOWN
+  observations. Add bounded backoff for failed engine preparation and clear recovered errors.
+- Retain settings and deployment neutrality; no camera probes or engine starts on page load.
+
 ## 0.6.1 — Record and import audio clips (28 October 2026)
 
 - Play audio can record a microphone clip, stop, preview and discard it before Save action.

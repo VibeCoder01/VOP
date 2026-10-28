@@ -25,6 +25,7 @@ class Session:
 
 
 def workflow(app, monkeypatch, outcomes, *, active=False, seconds=1):
+    monkeypatch.setattr('vop.operator_workflow.antec_target', lambda: ('antec.local', []))
     engine = RemoteInferenceEngine(PROFILE)
     app.state.pipeline.engine = engine
     session = Session(active)
