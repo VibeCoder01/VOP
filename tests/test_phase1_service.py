@@ -55,7 +55,8 @@ def test_every_route_requires_authentication_and_denials_audited(settings, path)
         assert client.get(path).status_code == 401
         assert client.get(path, headers={"Authorization": "Bearer wrong"}).status_code == 401
     with app.state.store.connection() as connection:
-        assert connection.execute("SELECT count(*) FROM audit WHERE outcome='denied'").fetchone()[0] == 2
+        # Repeated denials are coalesced for one minute to bound background writes.
+        assert connection.execute("SELECT count(*) FROM audit WHERE outcome='denied'").fetchone()[0] == 1
 
 
 @pytest.mark.parametrize("token", ["", "weak", "a" * 31, "a " * 20, "é" * 40])

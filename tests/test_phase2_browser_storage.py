@@ -65,6 +65,45 @@ def test_browser_login_cookie_csrf_logout_and_host_policy(settings):
         assert client.get("/login", headers={"Host": "evil.example"}).status_code == 400
 
 
+def test_session_survives_idle_hour_but_expires_after_two_weeks(settings, monkeypatch):
+    from itsdangerous import TimestampSigner
+    now = 1800000000
+    monkeypatch.setattr(TimestampSigner, 'get_timestamp', lambda self: now)
+    with TestClient(create_app(settings, token=OWNER)) as client:
+        login(client)
+        cookie = client.cookies.get('vop_session')
+        now += 3601
+        assert client.get('/api/v1/health').status_code == 200
+        client.cookies.set('vop_session', cookie, domain='testserver.local', path='/')
+        now += 14 * 24 * 3600
+        assert client.get('/api/v1/health').status_code == 401
+
+
+def test_expired_polling_denials_are_coalesced(settings, monkeypatch):
+    now = 0
+    monkeypatch.setattr('vop.browser_auth.monotonic', lambda: now)
+    app = create_app(settings, token=OWNER)
+    with TestClient(app) as client:
+        for _ in range(12):
+            assert client.get('/api/v1/health').status_code == 401
+        with app.state.store.connection() as db:
+            assert db.execute("SELECT COUNT(*) FROM audit WHERE action='authentication' AND outcome='denied'").fetchone()[0] == 1
+        now = 61
+        assert client.get('/api/v1/health').status_code == 401
+        with app.state.store.connection() as db:
+            assert db.execute("SELECT COUNT(*) FROM audit WHERE action='authentication' AND outcome='denied'").fetchone()[0] == 2
+
+
+def test_shared_session_guard_precedes_polling_scripts(settings):
+    with TestClient(create_app(settings, token=OWNER)) as client:
+        login(client)
+        html = client.get('/').text
+        assert html.index('/ui/workspace.js') < html.index('/ui/actions.js')
+        script = client.get('/ui/workspace.js').text
+        assert 'window.vopSessionExpired' in script
+        assert 'Unsaved changes are still on this page' in script
+
+
 def test_question_edit_persists_version_and_xss_escaped(settings):
     app = create_app(settings, token=OWNER)
     with TestClient(app) as client:
@@ -159,9 +198,9 @@ def test_all_views_native_markup_and_no_external_assets(settings):
             assets = re.findall(r'<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"', response.text)
             assert all(not url.startswith(('http:', 'https:', '//')) for url in assets)
             scripts = re.findall(r'<script\b([^>]*)>(.*?)</script>', response.text, re.S)
-            assert len(scripts) == (2 if view in ('metrics', 'questions', 'events') else 1)
+            assert len(scripts) == (3 if view in ('metrics', 'questions', 'events') else 2)
             asset = {'metrics':'/ui/trends-refresh.js','questions':'/ui/question-counts.js','events':'/ui/episodes.js'}.get(view)
-            assert all((f'src="{asset}"' in attrs or 'src="/ui/actions.js"' in attrs) and not body.strip() for attrs, body in scripts)
+            assert all((f'src="{asset}"' in attrs or 'src="/ui/actions.js"' in attrs or 'src="/ui/workspace.js"' in attrs) and not body.strip() for attrs, body in scripts)
             assert 'name="viewport"' in response.text
         assert client.get("/api/v1/metrics").json()["metrics"][0]["summary"]["state"] == "UNKNOWN"
         assert client.get("/?view=metrics&timezone=invalid/timezone").status_code == 200
