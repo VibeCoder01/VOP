@@ -36,6 +36,7 @@ TRIGGERS = {'start': 'Episode starts', 'duration': 'Episode stays active', 'end'
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS action_definitions(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,configuration TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS automations(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,configuration TEXT NOT NULL,state TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS automations_source ON automations(json_extract(configuration,'$.source_id'));
 CREATE TABLE IF NOT EXISTS action_jobs(id TEXT PRIMARY KEY,automation_id TEXT,action_id TEXT NOT NULL,
  created TEXT NOT NULL,expires TEXT NOT NULL,due TEXT NOT NULL,status TEXT NOT NULL,attempts INTEGER NOT NULL,
  configuration TEXT NOT NULL,context TEXT NOT NULL,detail TEXT NOT NULL,claim TEXT);

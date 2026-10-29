@@ -166,7 +166,7 @@ let image=new Image();image.hidden=true;
 const empty={},caption={},disclosure={open:true},content={innerHTML:'old answers'};
 const tile={dataset:{frame:''},closest:()=>disclosure,
   querySelector:q=>q==='img'?image:q==='[data-processed-empty]'?empty:caption};
-const panel={open:true,dataset:{processedTarget:'processed-fixture',zone:'UTC',answerUrl:'/answers?zone=UTC'},querySelector:()=>content};
+const panel={open:true,dataset:{processedTarget:'processed-fixture',zone:'UTC',answerUrl:'/answers?zone=UTC'},querySelector:()=>content,querySelectorAll:()=>[]};
 global.document={hidden:false,querySelectorAll:()=>[],getElementById:()=>tile};
 const response=(frame,status=200)=>({status,text:async()=>`answers ${frame}`,headers:{get(key){
   return {'X-VOP-Processed-frame':frame,'X-VOP-Processed-url':frame?'/image/'+frame:'',

@@ -30,6 +30,8 @@ from vop.measurements import QueryPolicy, utc, timezone_for
 from vop.ui_readiness import capture_dependencies
 from vop.answer_images import answer_image_reference
 from vop.episodes_ui import TITLE as EPISODES_TITLE, EPISODES_JS, episode_timeline
+from vop.mask_editor import editor as mask_editor, parse_regions, CSS as MASK_CSS
+from vop.automation_markers import markers as automation_markers, marker as automation_marker, CSS as MARKER_CSS, SCRIPT as MARKER_JS
 
 CSS = """
 .diagnostic-signal{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:15px;font-weight:650;line-height:1.4}.signal-lights{display:inline-flex;flex:0 0 auto;gap:8px;padding:9px;background:#172a3a;border-radius:24px;box-shadow:0 2px 5px #0002}.signal-lamp{display:block;width:22px;height:22px;border-radius:50%;background:#66727e;border:2px solid #8b97a1;opacity:.45}.signal-lamp.lit{opacity:1;border-color:white;box-shadow:0 0 0 3px #ffffff25}.signal-lamp.red.lit{background:#ff4757}.signal-lamp.amber.lit{background:#ffbd2e}.signal-lamp.green.lit{background:#20d584}.diagnostic-summary{padding:18px 22px;margin-bottom:22px;border:2px solid #bdcbd6;border-radius:12px;background:#f4f8fb}.diagnostic-summary .diagnostic-signal{font-size:21px;margin:0}.diagnostic-summary .signal-lamp{width:28px;height:28px}.diagnostic-summary .signal-lights{padding:12px}
@@ -58,6 +60,8 @@ details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{
 @media(max-width:1000px){.object-row{align-items:start;flex-direction:column;gap:14px}.workspace{padding:36px 30px}.stats{gap:14px}.stat strong{font-size:27px}}
 @media(max-width:700px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:static;padding:18px;border-right:0;border-bottom:1px solid var(--line)}.navigation{display:flex;overflow:auto;gap:4px;margin:18px 0 0;padding-bottom:4px}.navigation a{white-space:nowrap}.sidebar small,.subtitle{display:none}.sidebar>form{align-self:end;margin-top:12px}.workspace{padding:28px 20px 48px}.top{margin-bottom:26px;flex-direction:column;gap:14px}h1{font-size:30px}.stats{grid-template-columns:1fr 1fr;gap:20px}.pair{grid-template-columns:1fr;gap:0}.surface{padding:22px 20px}.section-heading{align-items:start}.object-row .actions{flex-shrink:1}.filters .field{max-width:none}}
 """
+
+CSS += MASK_CSS + MARKER_CSS
 
 QUESTION_EDITOR_JS = """const form = document.querySelector('[data-question-editor]');
 if (form) {
@@ -164,7 +168,7 @@ refreshPreviews();
 """
 
 
-OBSERVE_ANSWERS_JS = """async function updateProcessedImage(panel, response) {
+OBSERVE_ANSWERS_JS = MARKER_JS + """async function updateProcessedImage(panel, response) {
   if (!panel.dataset.processedTarget) return;
   const tile = document.getElementById(panel.dataset.processedTarget);
   if (!tile) return;
@@ -226,9 +230,10 @@ async function refreshAnswers(panel) {
     } else if (response.status === 304) await updateProcessedImage(panel);
     else if (response.status === 401 || response.status === 403) await updateProcessedImage(panel,response);
   } catch (_) { /* Keep the last answers during a temporary connection failure. */ }
-  finally { panel.pending = false; }
+  finally { panel.pending = false; armAutomationMarkers(panel); }
 }
 for (const panel of panels) {
+  armAutomationMarkers(panel);
   panel.addEventListener('toggle', () => { if (panel.open) refreshAnswers(panel); });
   async function poll() {
     await refreshAnswers(panel);
@@ -532,8 +537,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          'Native model option score; not a calibrated probability.' if scored else 'Selected category only; no option score was returned.')
                      for name, _ in spec.choices), cls='answer-options')
 
-    def camera_answer_content(answers, zone):
+    def camera_answer_content(answers, zone, markers=None):
         rows = []
+        if markers is None:
+            markers = automation_markers(store, answers[0]['source_id'], {d['spec'].question_id:d['spec'].version for d in answers}) if answers else {}
         ids = [d['summary']['last_observation_id'] for d in answers if d['summary']['last_observation_id']]
         native_answers = {}
         if ids:
@@ -543,7 +550,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         for d in answers:
             summary, spec = d['summary'], d['spec']
             native = native_answers.get(summary['last_observation_id'], {})
-            rows.append(Tr(Td(StrongText(spec.text), Small('Version ' + spec.version)),
+            rows.append(Tr(Td(StrongText(spec.text), automation_marker(markers.get(spec.question_id)), Small('Version ' + spec.version)),
                 Td(badge(summary['state'])), Td(answer_label(summary['latest_value'], spec.levels)),
                 Td(answer_graph(spec, summary['latest_value'], native)),
                 Td(local_time(summary['last_observed_at_utc'], zone))))
@@ -577,6 +584,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         counts_only = request.query_params.get('counts_only') == '1'
         control = store.source_control(source_id)
         revision = [app.state.instance_id, zone, counts_only, control, records]
+        markers = automation_markers(store, source_id, {r['spec'].question_id:r['spec'].version for r in records})
+        revision.append(markers)
         image_ids = []
         with store.connection() as db:
             revision.append(tuple(db.execute("SELECT count(*),max(sequence) FROM observations WHERE source_id=? AND status!='retention_gap'", (source_id,)).fetchone()))
@@ -601,7 +610,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             etag = ''  # Do not validate this newer representation with the earlier revision.
         headers = {**({'ETag':etag} if etag else {}), **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
         headers.update({'X-VOP-Processed-' + key: value or '' for key,value in processed.items()})
-        content = '' if counts_only else to_xml(camera_answer_content(answers, zone))
+        content = '' if counts_only else to_xml(camera_answer_content(answers, zone, markers))
         return Response(content, media_type='text/html', headers=headers)
 
     def capture_controls(source, csrf, operator, configure, answers=(), zone=None):
@@ -994,6 +1003,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             Div(Label("Ordinal levels — one description per line, lowest first", _for="levels"), Textarea("\n".join(q.levels), name="levels", id="levels", disabled=selected_kind != AnswerKind.ORDINAL),
                 P("Enter 2–10 nonempty levels in increasing order, for example: Low, Medium, High (on separate lines).", cls="muted"),
                 data_answer_kind="ordinal", hidden=selected_kind != AnswerKind.ORDINAL),
+            mask_editor(source_id, policy.include_regions, policy.exclude_regions),
             Details(Summary('Advanced: observation settings'),
             P('These settings apply to this question. Set how often images are captured in the camera observation settings: ',
               A('Open camera observation settings', href=f'/ui/sources/{source_id}', cls='text-link'), cls='muted'),
@@ -1010,7 +1020,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     (AnswerKind.ORDINAL, "Mock answer preset (zero-based level number)", "0"))) if isinstance(engine, MockInferenceEngine) else (),
             P("Each save creates an immutable version." + (" Mock presets are synthetic instructions, not image analysis." if isinstance(engine, MockInferenceEngine) else ""), cls="muted"),
             Button("Save changes" if record else "Add question"), method="post", action=f"/ui/questions/{source_id}/{question_id}", cls="editor", data_question_editor=""),
-            Script(src="/ui/question-editor.js", defer=True)], view="questions")
+            Script(src="/ui/question-editor.js", defer=True), Script(src='/ui/mask-editor.js', defer=True)], view="questions")
 
     @app.route("/ui/questions/{source_id}/{question_id}", methods=["POST"])
     async def save_question(source_id: str, question_id: str, request):
@@ -1044,9 +1054,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if len(q.text) > 4096:
             raise ValueError("Question text exceeds 4096 characters")
         roi_text = str(form.get("roi", "")).strip()
+        previous_policy = next((r['policy'] for r in store.questions(source_id) if r['spec'].question_id == qid), QueryPolicy())
         policy = QueryPolicy(int(form.get("positive_confirmations", "2")) if binary else 2, int(form.get("negative_confirmations", "2")) if binary else 2,
                              duration_input(form["max_gap_seconds"]), str(form.get("unknown_gap_policy", "resume")) if binary else "resume",
-                             tuple(float(v) for v in roi_text.split(",")) if roi_text else None)
+                             tuple(float(v) for v in roi_text.split(",")) if roi_text else None,
+                             parse_regions(str(form.get('include_regions', json.dumps(previous_policy.include_regions)))),
+                             parse_regions(str(form.get('exclude_regions', json.dumps(previous_policy.exclude_regions)))))
         mock = str(form.get("mock_answer", "")).strip()
         value = None
         if isinstance(engine, MockInferenceEngine) and mock:

@@ -136,7 +136,8 @@ class BrowserAuth:
         monitoring_control = path.startswith('/ui/sources/') and path.endswith('/monitor')
         scheduled_capture = path.startswith('/ui/sources/') and path.endswith('/capture')
         camera_test = path.startswith('/integration/cameras/') and path.endswith('/test')
-        admitted = method == "POST" and not monitoring_control and not camera_test and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode', '/diagnostics/reconnect')
+        mask_grab = path.startswith('/ui/question-mask/') and path.endswith('/grab')
+        admitted = method == "POST" and not monitoring_control and not camera_test and not mask_grab and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode', '/diagnostics/reconnect')
         removal = path == '/ui/removed-questions/delete' or (path.startswith(('/ui/sources/', '/ui/questions/')) and path.endswith(('/remove', '/restore', '/delete')))
         wait_for_admission = path in ('/cameras/save', '/integration/camera') or removal
         acquired = admitted and (await run_in_threadpool(self.admission.acquire) if wait_for_admission

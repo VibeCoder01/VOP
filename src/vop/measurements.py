@@ -32,6 +32,15 @@ def rectangle(value) -> tuple[float, float, float, float] | None:
     return tuple(float(v) for v in value)
 
 
+def regions(value):
+    if not isinstance(value, (list, tuple)) or len(value) > 16:
+        raise ValueError('Use up to 16 rectangles per mask type')
+    result = tuple(rectangle(item) for item in value)
+    if any(item is None for item in result):
+        raise ValueError('Mask areas must be rectangles inside the image')
+    return result
+
+
 @dataclass(frozen=True)
 class QueryPolicy:
     positive_confirmations: int = 2
@@ -39,6 +48,8 @@ class QueryPolicy:
     max_gap_seconds: float = 60
     unknown_gap_policy: str = "resume"
     roi: tuple[float, float, float, float] | None = None
+    include_regions: tuple = ()
+    exclude_regions: tuple = ()
 
     def __post_init__(self):
         if any(type(n) is not int or not 1 <= n <= 100 for n in (self.positive_confirmations, self.negative_confirmations)):
@@ -48,6 +59,8 @@ class QueryPolicy:
         if self.unknown_gap_policy not in ("resume", "split", "manual_review"):
             raise ValueError("Gap policy must be resume, split or manual_review")
         object.__setattr__(self, "roi", rectangle(self.roi))
+        object.__setattr__(self, 'include_regions', regions(self.include_regions))
+        object.__setattr__(self, 'exclude_regions', regions(self.exclude_regions))
 
 
 def replay(observations: list[dict], policy: QueryPolicy, *, kind: str = "binary",

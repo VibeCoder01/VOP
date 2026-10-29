@@ -124,6 +124,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     pipeline.auto_worker = AutoWorker(pipeline, app_session, store) if auto_recover else None
     install_local_login(app, store)
     install_dashboard(app, settings, store, pipeline, engine, token, viewer_token)
+    from vop.mask_editor import install as install_mask_editor
+    install_mask_editor(app)
     from vop.release_ui import install_release
     install_release(app, settings, store, pipeline, reliable)
     from vop.actions_ui import install_actions

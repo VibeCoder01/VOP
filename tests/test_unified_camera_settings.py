@@ -10,6 +10,7 @@ from vop.config import SourceSpec
 from vop.inputs.sources import SourceAdapters
 from vop.service import create_app
 from test_phase4_worker import OWNER
+import json
 
 
 def body(csrf, **changes):
@@ -26,7 +27,7 @@ def test_one_form_all_settings_persist_and_old_editor_redirects(app, monkeypatch
         page=client.get('/cameras/tapo-c200/edit')
         soup=BeautifulSoup(page.text,'html.parser')
         form=soup.select_one('form.camera-editor')
-        assert [h.text for h in form.select('section > h2')]==['Camera','Connection','Observations','Recorded images']
+        assert [h.text for h in form.select('section > h2')]==['Camera','Connection','Observations','Recorded images','Privacy mask']
         assert form['action']=='/cameras/save'
         assert form.select_one('[name=password]').get('value','')==''
         assert all(form.select_one('[name='+name+']') for name in ('endpoint','username','enabled','sample_interval_seconds','retain_evidence'))
@@ -45,6 +46,34 @@ def test_one_form_all_settings_persist_and_old_editor_redirects(app, monkeypatch
     restarted=create_app(app.state.pipeline.settings,token=OWNER)
     assert restarted.state.pipeline.sources['tapo-c200'].name=='Driveway'
     assert restarted.state.store.source_control('tapo-c200')==app.state.store.source_control('tapo-c200')
+
+
+def test_camera_privacy_editor_saves_and_clears_for_rtsp_and_usb(app,monkeypatch):
+    monkeypatch.setattr(SourceAdapters,'capture',lambda *_:pytest.fail('Saving privacy must not capture'))
+    with TestClient(app) as client:
+        csrf=login(client)
+        assert client.post('/cameras/save',data=body(csrf,privacy_masks='[[0,0,0.25,1]]')).status_code==200
+        source=app.state.pipeline.sources['tapo-c200']
+        assert source.settings['privacy_masks']==((0.,0.,.25,1.),)
+        html=BeautifulSoup(client.get('/cameras/tapo-c200').text,'html.parser')
+        assert json.loads(html.select_one('[name=privacy_masks]')['value'])==[[0,0,.25,1]]
+        # Existing connection-only clients must not silently discard saved privacy.
+        assert client.post('/cameras/save',data=body(csrf,password='')).status_code==200
+        restarted=create_app(app.state.pipeline.settings,token=OWNER)
+        assert restarted.state.pipeline.sources['tapo-c200'].settings['privacy_masks']==[[0,0,.25,1]]
+        before=app.state.secrets.get('tapo-c200-endpoint')
+        assert client.post('/cameras/save',data=body(csrf,privacy_masks='[[0,0,2,1]]')).status_code==400
+        assert app.state.secrets.get('tapo-c200-endpoint')==before
+        assert client.post('/cameras/save',data=body(csrf,password='',privacy_masks='[]')).status_code==200
+        assert not app.state.pipeline.sources['tapo-c200'].settings['privacy_masks']
+        usb=SourceSpec('usb-fixture','Desk camera','usb',{'device':0},source.questions)
+        app.state.store.configure(replace(app.state.pipeline.settings,sources=(usb,)))
+        app.state.pipeline.sources[usb.source_id]=usb
+        response=client.post('/cameras/save',data={'csrf':csrf,'source_id':usb.source_id,'name':usb.name,'privacy_masks':'[[0,0,0.5,1]]'})
+        assert response.status_code==200
+    settings=replace(app.state.pipeline.settings,sources=(usb,))
+    restarted=create_app(settings,token=OWNER)
+    assert restarted.state.pipeline.sources[usb.source_id].settings['privacy_masks']==[[0,0,.5,1]]
 
 
 def test_invalid_interval_changes_nothing_and_pause_keeps_connection(app):
@@ -99,7 +128,7 @@ def test_single_camera_entry_opens_complete_page_and_legacy_edit_redirects(app, 
         assert soup.select_one('a[href="/?view=questions&source=tapo-c200"]')
         assert soup.select_one('a[href="/ui/sources/tapo-c200/remove"]')
         assert form.select_one('button[name=connect]')['value']=='1'
-        assert form.select_one('button').text=='Save settings'  # Enter must not trigger a connection test.
+        assert form.select_one('button:not([type]),button[type=submit]').text=='Save settings'  # Enter must not trigger a connection test.
         assert 'Open camera' not in page.text and 'Edit settings' not in page.text
         assert client.get('/cameras/tapo-c200/edit').url.path=='/cameras/tapo-c200'
 
