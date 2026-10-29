@@ -37,6 +37,29 @@ def test_camera_tests_take_priority_and_do_not_need_enabled_questions(settings):
     assert not pipeline.busy.locked()
 
 
+def test_editor_grabs_and_connection_tests_coalesce_independently(settings):
+    app=create_app(settings,token=TOKEN)
+    sampler=app.state.sampler
+    calls=[]
+    sampler.request_camera_test('synthetic-scene',lambda:calls.append('connection'))
+    sampler.request_camera_test('synthetic-scene',lambda:calls.append('mask'),purpose='question-mask')
+    sampler.request_camera_test('synthetic-scene',lambda:pytest.fail('Duplicate mask capture'),purpose='question-mask')
+    assert len(sampler.camera_tests)==2
+    sampler.tick();sampler.tick()
+    assert calls==['connection','mask'] and not sampler.camera_tests
+
+
+def test_replacing_an_executing_editor_request_does_not_drop_the_new_request(settings):
+    app=create_app(settings,token=TOKEN)
+    sampler=app.state.sampler;calls=[]
+    def first():
+        calls.append('old')
+        sampler.request_camera_test('synthetic-scene',lambda:calls.append('new'),purpose='question-mask',replace_pending=True)
+    sampler.request_camera_test('synthetic-scene',first,purpose='question-mask')
+    sampler.tick();assert len(sampler.camera_tests)==1
+    sampler.tick();assert calls==['old','new'] and not sampler.camera_tests
+
+
 @pytest.fixture
 def settings(tmp_path):
     body = json.loads((Path(__file__).resolve().parents[1] / "sample-config" / "phase1.json").read_text(encoding="utf-8"))

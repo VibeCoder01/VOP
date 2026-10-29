@@ -1,5 +1,16 @@
 # Specification change log
 
+## 0.6.6 — Automation markers and image mask editors (29 October 2026)
+
+- Show an asterisk beside Observe questions with linked automations; pulse for eight
+  seconds after an automation queues work. Tooltips distinguish triggers from delivery.
+- Add per-question include/exclude rectangles drawn on an explicitly grabbed camera image,
+  with coordinate entry, undo, clear and immutable policy persistence.
+- Add camera-wide privacy editing in the existing Camera settings form, including USB/RTSP
+  persistence. Apply privacy before question masks/ROI for every inference backend.
+- Queue camera-only grabs without inference or stored observations; expire/clear temporary
+  editor images and keep independent requests from dropping or duplicating each other.
+
 ## 0.6.5 — Deletion lifecycle audit (29 October 2026)
 
 - Delete unused action/engine credentials, including recoverable Windows legacy copies;

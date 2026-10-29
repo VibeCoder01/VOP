@@ -36,6 +36,7 @@ class Pipeline:
         self.skipped = 0
         self.previews = {}  # One masked/downscaled image per configured input (maximum 32).
         self.processed_previews = {}  # Completed answer frames; capture/test previews must not replace these.
+        self.mask_grabs = {}  # One temporary, privacy-masked editor image per source.
         self._latest_preview = None
         self.stopping = False
         self.activity = None
@@ -50,6 +51,7 @@ class Pipeline:
             with self.preview_lock:
                 self.previews.clear()
                 self.processed_previews.clear()
+                self.mask_grabs.clear()
                 self._latest_preview = None
             if hasattr(self, 'live_previews'):
                 self.live_previews.clear(None)
@@ -67,6 +69,8 @@ class Pipeline:
         if frame_id is None and hasattr(self, 'live_previews'):
             self.live_previews.clear(source_id)
         with self.preview_lock:
+            if frame_id is None:
+                self.mask_grabs.pop(source_id, None)
             processed = self.processed_previews.get(source_id)
             if processed and (frame_id is None or processed[0] == frame_id):
                 self.processed_previews.pop(source_id, None)
@@ -126,19 +130,20 @@ class Pipeline:
             preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
             preview_token = self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
             request = InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=self.settings.inference_timeout_seconds))
+            records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
             else:
                 self.activity = {**self.activity, 'stage': 'Answering questions'}
-                records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
                 groups = {}
                 for record in records:
-                    groups.setdefault(record["policy"].roi, []).append(record["spec"])
+                    policy = record['policy']
+                    groups.setdefault((policy.roi, policy.include_regions, policy.exclude_regions), []).append(record["spec"])
                 outcomes = []
                 masks = source.settings.get("privacy_masks", [])
-                for roi, group in groups.items():
+                for (roi, include, exclude), group in groups.items():
                     # Strip original metadata for every backend before optional remote transmission.
-                    input_frame = preprocess(frame, masks, roi)
+                    input_frame = preprocess(frame, masks, roi, include_regions=include, exclude_regions=exclude)
                     group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
                     group_result = infer(self.engine, group_request)
                     if (group_result.frame_id != frame.frame_id or group_result.source_id != source_id
@@ -171,7 +176,9 @@ class Pipeline:
                 outcome = failed(request, self.engine, ProviderError("provider_contract", "Provider fields are not finite JSON values"))
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
             result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
-                                       "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi]}
+                                       "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi],
+                                       'question_masks': {r['spec'].question_id: {'include': r['policy'].include_regions, 'exclude': r['policy'].exclude_regions}
+                                                          for r in records if r['policy'].include_regions or r['policy'].exclude_regions}}
             self.activity = {**self.activity, 'stage': 'Saving result'}
             saved = self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
             with self.preview_lock:

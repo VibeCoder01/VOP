@@ -2,6 +2,7 @@
 from dataclasses import replace
 from io import BytesIO
 from hashlib import sha256
+from math import ceil
 
 from PIL import Image, ImageDraw
 
@@ -19,10 +20,21 @@ def mask_image(image, masks):
     return image
 
 
-def preprocess(frame: FrameEnvelope, masks: list | tuple = (), roi=None, *, preview: bool = False) -> FrameEnvelope:
+def preprocess(frame: FrameEnvelope, masks: list | tuple = (), roi=None, *, preview: bool = False,
+               include_regions=(), exclude_regions=()) -> FrameEnvelope:
     with Image.open(BytesIO(frame.payload)) as original:
         image = original.convert("RGB")
     mask_image(image, masks)
+    if include_regions or exclude_regions:
+        selection = Image.new('L', image.size, 0 if include_regions else 255)
+        draw = ImageDraw.Draw(selection)
+        for areas, fill in ((include_regions, 255), (exclude_regions, 0)):
+            for area in areas:
+                x, y, width, height = rectangle(area)
+                draw.rectangle((int(x * image.width), int(y * image.height),
+                                min(image.width, ceil((x + width) * image.width)) - 1,
+                                min(image.height, ceil((y + height) * image.height)) - 1), fill=fill)
+        image = Image.composite(image, Image.new('RGB', image.size, 'black'), selection)
     if roi is not None:
         x, y, width, height = rectangle(roi)
         box = (int(x * image.width), int(y * image.height),

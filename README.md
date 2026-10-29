@@ -9,6 +9,17 @@ was authorised on 27 October 2026; see [setup and limitations](docs/actions.md).
 
 ## Everyday use on this laptop
 
+In Observe, **Show answers** displays `*` beside questions with linked automations. It
+pulses for eight seconds when an automation queues an action; Activity shows the delivery
+result. Paused/review-needed links still have an asterisk, explained by its tooltip.
+
+In Configure → Questions → Edit/New, use **Question mask → Grab image**, choose **Include
+areas** or **Exclude areas**, then drag rectangles and save the question. Coordinates,
+Remove, Undo and Clear areas are available too. Saving creates a new question version;
+review its linked automations. In **Cameras → Manage camera → Privacy mask**, draw areas
+to hide from every future preview, inference request and saved image. Old saved images
+are unchanged. See [mask behaviour and limits](docs/image-masks.md).
+
 To check deletion integrity without changing data, run
 `.\.venv\Scripts\python.exe tools\audit_deletions.py --check-vault`.
 It reports missing relationships, dangling saved frames/audio, deleted-question answer

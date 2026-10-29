@@ -14,10 +14,10 @@ def test_answers_and_counts_poll_without_reloading_or_changing_closed_content():
 const assert = require('node:assert/strict');
 let calls = 0, release, fail, listener, scheduled;
 const content = {innerHTML:'old answers'};
-const panel = {open:false, dataset:{answerUrl:'/fixture?zone=UTC'},
+const panel = {open:false, dataset:{answerUrl:'/fixture?zone=UTC'}, querySelectorAll:()=>[],
   querySelector() { return content; }, addEventListener(event, callback) { listener = callback; }};
 const totals = {active:{textContent:'0'}, unknown:{textContent:'0'}};
-global.document = {hidden:false, querySelectorAll() { return [panel, {dataset:{active:'2',unknown:'1'}, open:false, addEventListener(){}, pending:true}]; }, querySelector(selector) { return totals[selector.includes('active') ? 'active' : 'unknown']; }};
+global.document = {hidden:false, querySelectorAll() { return [panel, {dataset:{active:'2',unknown:'1'}, open:false, addEventListener(){}, querySelectorAll:()=>[], pending:true}]; }, querySelector(selector) { return totals[selector.includes('active') ? 'active' : 'unknown']; }};
 global.setTimeout = (callback, delay) => { assert.ok([200,1000].includes(delay)); scheduled=callback; };
 global.fetch = (url, options) => {
   calls++; assert.equal(url, '/fixture?zone=UTC' + (panel.open ? '' : '&counts_only=1')); assert.equal(options.cache,'no-store');

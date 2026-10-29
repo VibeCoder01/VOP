@@ -149,6 +149,10 @@ def delete_question_data(db, chosen):
             continue
         body = json.loads(run['result_json'])
         body['answers'] = [a for a in body['answers'] if a['question_id'] != qid]
+        preprocessing = body.get('preprocessing', {})
+        preprocessing.get('question_masks', {}).pop(qid, None)
+        if 'roi_question_ids' in preprocessing:
+            preprocessing['roi_question_ids'] = [key for key in preprocessing['roi_question_ids'] if key != qid]
         # Opaque shared payloads can contain any answer. Keep typed answers and
         # provenance, following the existing raw-retention policy for provider data.
         body.update(raw_retained=False, provider_raw=None, usage=None, error=None)

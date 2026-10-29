@@ -19,13 +19,17 @@ class Sampler:
         self.pending_lock = Lock()
         self.camera_tests = {}
 
-    def request_camera_test(self, source_id, callback):
+    def request_camera_test(self, source_id, callback, *, purpose='camera', replace_pending=False):
         with self.pending_lock:
-            self.camera_tests.setdefault(source_id, callback)
+            key = (source_id, purpose)
+            if replace_pending:
+                self.camera_tests[key] = callback
+            else:
+                self.camera_tests.setdefault(key, callback)
 
-    def camera_test_requested(self, source_id):
+    def camera_test_requested(self, source_id, *, purpose='camera'):
         with self.pending_lock:
-            return source_id in self.camera_tests
+            return (source_id, purpose) in self.camera_tests
 
     def request(self, source_id):
         """Coalesce one pending intent per camera; acquire its fresh frame on its turn."""
@@ -52,9 +56,14 @@ class Sampler:
     def tick(self, now=None):
         live_clock = now is None
         now = monotonic() if now is None else now
+        if self.pipeline.mask_grabs:
+            with self.pipeline.preview_lock:
+                for sid, item in list(self.pipeline.mask_grabs.items()):
+                    if item['expires'] < monotonic():
+                        self.pipeline.mask_grabs.pop(sid, None)
         # User-requested connection tests take the next free slot, before sampling.
         with self.pending_lock:
-            self.camera_tests = {sid: task for sid, task in self.camera_tests.items() if sid in self.pipeline.sources}
+            self.camera_tests = {key: task for key, task in self.camera_tests.items() if key[0] in self.pipeline.sources}
             test = next(iter(self.camera_tests.items()), None)
         if test:
             if self.stop_event.is_set() or not self.pipeline.busy.acquire(False):
@@ -63,7 +72,8 @@ class Sampler:
                 test[1]()
             finally:
                 with self.pending_lock:
-                    self.camera_tests.pop(test[0], None)
+                    if self.camera_tests.get(test[0]) is test[1]:
+                        self.camera_tests.pop(test[0], None)
                 self.pipeline.busy.release()
             return
         source_ids = list(self.pipeline.sources)

@@ -7,7 +7,7 @@ import re
 import secrets as random_secrets
 from urllib.parse import urlsplit
 
-from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary
+from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary, Script
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fasthtml.common import to_xml
@@ -22,6 +22,7 @@ from vop.inference.remote import RemoteInferenceEngine, profile
 from vop.inputs.sources import SourceAdapters
 from vop.preprocessing import preprocess
 from vop.secrets import SecretStore, reference
+from vop.mask_editor import editor as mask_editor, parse_regions
 from vop.storage import dumps
 from vop.ui_readiness import camera_dependencies, worker_dependencies
 
@@ -60,6 +61,8 @@ def restore_cameras(store, settings, pipeline):
         rows = db.execute("SELECT value_json FROM release_settings WHERE id LIKE 'camera_profile:%'").fetchall()
         names = {row[0].removeprefix('camera_name:'): json.loads(row[1]) for row in
                  db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_name:%'")}
+        privacy = {row[0].removeprefix('camera_privacy:'): json.loads(row[1]) for row in
+                   db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_privacy:%'")}
     for row in rows:
         source = camera_source(json.loads(row[0]))
         source = replace(source, name=names.get(source.source_id, source.name))
@@ -68,8 +71,9 @@ def restore_cameras(store, settings, pipeline):
         target[source.source_id] = source
     for sources in (pipeline.sources, pipeline.removed_sources):
         for sid, source in list(sources.items()):
-            if source.kind in ('rtsp', 'usb') and sid in names and source.name != names[sid]:
-                sources[sid] = replace(source, name=names[sid])
+            if source.kind in ('rtsp', 'usb') and (sid in names or sid in privacy):
+                sources[sid] = replace(source, name=names.get(sid,source.name),
+                                       settings={**source.settings, 'privacy_masks':privacy.get(sid,source.settings.get('privacy_masks', []))})
                 store.configure(replace(settings, sources=(sources[sid],)))
 
 
@@ -209,11 +213,14 @@ def install_integration(app, settings, store, pipeline):
                      Label(Input(type='checkbox', name='retain_evidence', checked=control['retain_evidence']), ' Save images with observations'),
                      P('Off by default. When on, future observations keep a privacy-masked still image for Individual Observations. Questions from the same capture share one image.', cls='muted'),
                      P('Turning this off keeps images already saved. It cannot recover earlier unsaved or deleted images.', cls='muted'), id='image-saving'),
+                 mask_editor(source_id, exclude=selected.settings.get('privacy_masks', ()), privacy=True) if selected else
+                 P('Save the camera before adding a privacy mask.', cls='muted'),
                  P('Save waits for the current observation. Changes apply to the next one.', cls='muted'),
                  Div(Button('Save settings' if selected else 'Add camera'),
                      Button('Save and test connection', name='connect', value='1', cls='secondary') if selected and not usb else None,
                      A('Cancel', href='/cameras', cls='button secondary'), cls='actions'),
                  method='post', action='/cameras/save', cls='editor camera-editor'),
+            Script(src='/ui/mask-editor.js', defer=True) if selected else None,
             Section(H2('Questions'), P('Choose what this camera observes.'),
                     A('Manage questions', href='/?view=questions&source=' + source_id, cls='button secondary'), cls='camera-related') if selected else None,
             Section(H2('Remove camera'), P('Stop using this camera. Its history and protected details remain. You can restore it.'),
@@ -515,6 +522,8 @@ def install_integration(app, settings, store, pipeline):
                 requested_id = base + '-' + str(number)
         sid = identifier(requested_id)
         is_new = sid not in pipeline.sources
+        previous_masks = pipeline.sources[sid].settings.get('privacy_masks', ()) if not is_new else ()
+        privacy_masks = parse_regions(str(form.get('privacy_masks', dumps(previous_masks))))
         controls = None
         if form.get('observation_settings') == '1':
             interval = duration_input(form.get('sample_interval_seconds', ''))
@@ -529,10 +538,11 @@ def install_integration(app, settings, store, pipeline):
                 raise ValueError('Enter a camera name with 1 to 128 characters.')
             await run_in_threadpool(pipeline.busy.acquire)
             try:
-                source = replace(source, name=name)
+                source = replace(source, name=name, settings={**source.settings, 'privacy_masks':privacy_masks})
                 store.configure(replace(settings, sources=(source,)))
                 with store.connection() as db:
                     db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
+                    db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_privacy:' + sid, dumps(privacy_masks)))
                 pipeline.sources[sid] = source
                 if controls is not None:
                     previous = store.source_control(sid)
@@ -563,9 +573,8 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError("Source ID already belongs to another input")
         if sid not in pipeline.sources and len(pipeline.sources) >= 32:
             raise ValueError("At most 32 sources")
-        if sid in pipeline.sources and pipeline.sources[sid].settings.get("privacy_masks"):
-            record["privacy_masks"] = pipeline.sources[sid].settings["privacy_masks"]
-            source = replace(source, settings={**source.settings, "privacy_masks": record["privacy_masks"]})
+        record['privacy_masks'] = privacy_masks
+        source = replace(source, settings={**source.settings, 'privacy_masks':privacy_masks})
         username, password = str(form.get("username", "")), str(form.get("password", ""))
         if username and (len(username) > 128 or any(ord(c) < 32 for c in username)):
             raise ValueError('Invalid camera account username')
@@ -587,6 +596,7 @@ def install_integration(app, settings, store, pipeline):
             with store.connection() as db:
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES(?,?)", ("camera_profile:" + sid, dumps(record)))
                 db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_name:' + sid, dumps(name)))
+                db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('camera_privacy:' + sid, dumps(privacy_masks)))
             pipeline.sources[sid] = source
             pipeline.clear_preview(sid)
             if controls is not None:
