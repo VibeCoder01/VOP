@@ -1,5 +1,13 @@
 # Specification change log
 
+## 0.6.7 — Trends time navigation (29 October 2026)
+
+- Add horizontal scrolling, time-proportional zoom, Fit/Latest and an optional
+  scroll/zoom lock across Trends graphs. Preserve navigation through auto-refresh.
+- Show all selected-range samples with visible gaps, rendering only the visible
+  slice on zoom. Use native controls/canvas without a plotting dependency.
+- Mark questions with configured Include, Exclude or ROI areas in the Questions list.
+
 ## 0.6.6 — Automation markers and image mask editors (29 October 2026)
 
 - Show an asterisk beside Observe questions with linked automations; pulse for eight

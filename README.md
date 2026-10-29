@@ -129,6 +129,15 @@ Trends refreshes every 10 seconds while its tab is visible. Automatic refresh pa
 you focus or change its filters; apply changes to resume. Selected camera, date range and time
 zone stay in the page URL. Trends has no page entrance movement on refresh. Refresh
 updates recorded results and does not start monitoring.
+Each numeric Trends graph has **Earlier**, **Later**, horizontal scrolling, a **Zoom**
+slider, **Fit** and **Latest**. Drag the plot to pan, or use Ctrl + wheel to zoom.
+Keyboard users can focus the plot and use arrows, +/−, Home and End. Samples use
+their recorded timestamps; unknown intervals remain gaps. All selected-range samples
+are available, rather than only the latest 60. **Lock scroll and zoom** puts every
+graph on the same time window; leave it off to explore graphs independently.
+Auto-refresh preserves these views and the lock within this browser tab, and waits
+while you navigate. **Latest** follows new results; a historical view stays put.
+Applying different camera/date filters resets navigation to fit that selection.
 With JavaScript disabled, use **Refresh now** instead.
 
 Images are optional and saving is **off by default**. A capture can show a temporary preview

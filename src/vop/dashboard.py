@@ -32,6 +32,7 @@ from vop.answer_images import answer_image_reference
 from vop.episodes_ui import TITLE as EPISODES_TITLE, EPISODES_JS, episode_timeline
 from vop.mask_editor import editor as mask_editor, parse_regions, CSS as MASK_CSS
 from vop.automation_markers import markers as automation_markers, marker as automation_marker, CSS as MARKER_CSS, SCRIPT as MARKER_JS
+from vop.trends_ui import graph as trend_graph, domain as trend_domain, CSS as TREND_CSS, SCRIPT as TRENDS_JS
 
 CSS = """
 .diagnostic-signal{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:15px;font-weight:650;line-height:1.4}.signal-lights{display:inline-flex;flex:0 0 auto;gap:8px;padding:9px;background:#172a3a;border-radius:24px;box-shadow:0 2px 5px #0002}.signal-lamp{display:block;width:22px;height:22px;border-radius:50%;background:#66727e;border:2px solid #8b97a1;opacity:.45}.signal-lamp.lit{opacity:1;border-color:white;box-shadow:0 0 0 3px #ffffff25}.signal-lamp.red.lit{background:#ff4757}.signal-lamp.amber.lit{background:#ffbd2e}.signal-lamp.green.lit{background:#20d584}.diagnostic-summary{padding:18px 22px;margin-bottom:22px;border:2px solid #bdcbd6;border-radius:12px;background:#f4f8fb}.diagnostic-summary .diagnostic-signal{font-size:21px;margin:0}.diagnostic-summary .signal-lamp{width:28px;height:28px}.diagnostic-summary .signal-lights{padding:12px}
@@ -61,7 +62,7 @@ details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{
 @media(max-width:700px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:static;padding:18px;border-right:0;border-bottom:1px solid var(--line)}.navigation{display:flex;overflow:auto;gap:4px;margin:18px 0 0;padding-bottom:4px}.navigation a{white-space:nowrap}.sidebar small,.subtitle{display:none}.sidebar>form{align-self:end;margin-top:12px}.workspace{padding:28px 20px 48px}.top{margin-bottom:26px;flex-direction:column;gap:14px}h1{font-size:30px}.stats{grid-template-columns:1fr 1fr;gap:20px}.pair{grid-template-columns:1fr;gap:0}.surface{padding:22px 20px}.section-heading{align-items:start}.object-row .actions{flex-shrink:1}.filters .field{max-width:none}}
 """
 
-CSS += MASK_CSS + MARKER_CSS
+CSS += MASK_CSS + MARKER_CSS + TREND_CSS
 
 QUESTION_EDITOR_JS = """const form = document.querySelector('[data-question-editor]');
 if (form) {
@@ -248,11 +249,14 @@ TRENDS_REFRESH_JS = """const filters = document.querySelector('form.filters');
 if (filters) {
   const saved = new URLSearchParams(new FormData(filters)).toString();
   setInterval(async () => {
-    if (document.hidden || filters.contains(document.activeElement)) return;
+    if (document.hidden || filters.contains(document.activeElement) || window.vopTrends?.busy()) return;
     if (new URLSearchParams(new FormData(filters)).toString() !== saved) return;
     try {
       const response = await fetch('/api/v1/health', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-      if (response.ok && !window.vopSessionExpired) location.reload();
+      if (response.ok && !window.vopSessionExpired && !document.hidden && !filters.contains(document.activeElement)
+          && !window.vopTrends?.busy() && new URLSearchParams(new FormData(filters)).toString() === saved) {
+        window.vopTrends?.save(); location.reload();
+      }
     } catch (_) {}
   }, 10000);
 }
@@ -424,6 +428,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
                          Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,
+                         Script(src='/ui/trends.js', defer=True) if view == 'metrics' else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None,
                          Script(src='/ui/episodes.js', defer=True) if view == 'events' else None,
                          Script(src='/ui/question-counts.js', defer=True) if view == 'questions' else None))
@@ -732,6 +737,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def trends_refresh_script():
         return Response(TRENDS_REFRESH_JS, media_type='application/javascript')
 
+    @app.route('/ui/trends.js', methods=['GET'])
+    def trends_script():
+        return Response(TRENDS_JS, media_type='application/javascript')
+
     @app.route("/favicon.ico", methods=["GET"])
     def favicon():
         return Response(status_code=204)
@@ -856,6 +865,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             content += [P('Auto refresh: every 00:00:10.0. ', A('Refresh now', href=str(request.url), cls='text-link')),
                         P('Updates recorded results; it does not start monitoring. Refresh pauses while you edit filters. Apply your changes to resume.', cls='muted'),
                         Noscript(P('Automatic refresh requires JavaScript. Use Refresh now to update the page.', cls='notice'))]
+            bounds = trend_domain([d['summary']['trend'] for d in data], range_start, range_end)
+            content.append(Label(Input(type='checkbox', data_trend_lock='', disabled=True), 'Lock scroll and zoom', cls='trend-lock'))
             for d in data:
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]
@@ -865,11 +876,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         ("Estimated active time" if q.kind == "binary" else "Covered time", duration(summary["estimated_active_seconds"] if q.kind == "binary" else summary["covered_seconds"]) if summary["covered_seconds"] > 0 else "No interval data"),
                         ("Observation coverage", "No interval data" if summary["coverage_fraction"] is None else f"{summary['coverage_fraction']:.1%}"),
                         ("Condition active", "No eligible data" if occupancy is None else f"{occupancy:.1%}"))), cls="stats"),
-                    chart(summary["trend"][-60:], q.text),
+                    trend_graph(summary['trend'], q.text, key=f"{d['source_id']}/{q.question_id}/{q.version}", bounds=bounds, zone=zone, fallback=chart),
                     P(metric_label("Episode rate"), ": " + (f"{summary['episodes_per_hour']:.1f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval"),
                       " · ", metric_label("Unobserved time"), f": {duration(summary['unknown_seconds'])}", cls="muted") if q.kind == "binary" else None,
                     P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". The score is an expected position and can fall between levels. It is not a physical unit or a selected category.", cls="muted") if q.kind == "ordinal" else None,
-                    Small(f"Latest 60 samples, equally spaced by sample order. Failed samples or gaps over {duration(d['policy'].max_gap_seconds)} break the line. Hover over points for timestamps in " + zone)))
+                    Small(f"All samples in the selected time range. Positions use recorded timestamps. Failed samples or gaps over {duration(d['policy'].max_gap_seconds)} break the line.")))
         else:
             content += [Section(H2("Processing and access"), P("One inference slot; no queued frames. Live capture and model loading require explicit operator setup."),
                                 P("Current browser role: " + ("operator" if operator else "viewer")),

@@ -7,6 +7,9 @@ mask. The image comes from the saved camera connection. It is a camera-only requ
 no inference, saved observation, retained evidence or GPU preparation is requested.
 Grabs queue for the next free capture slot, even when monitoring is running or paused.
 Opening the editor does not connect to the camera.
+The Questions list shows **\*** beside questions with Include, Exclude or advanced
+ROI areas. Hover over the marker to see which kinds are set; open Edit to change them.
+Camera privacy alone does not add this question-specific marker.
 
 - **Include areas**: draw one or more green rectangles. Only their combined area is
   visible to that question; everything outside is black. No include rectangles means
