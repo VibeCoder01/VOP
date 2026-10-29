@@ -48,6 +48,23 @@ def test_include_union_exclude_and_camera_privacy_order(app):
     assert QueryPolicy().include_regions==QueryPolicy().exclude_regions==()
 
 
+def test_question_list_marks_only_question_areas_and_removes_marker_when_cleared(app):
+    store = app.state.store
+    records = store.questions(SID)
+    store.edit_question(SID,records[0]['spec'],QueryPolicy(include_regions=((0,0,.5,1),)))
+    store.edit_question(SID,records[1]['spec'],QueryPolicy(exclude_regions=((0,0,.5,1),)))
+    store.edit_question(SID,records[2]['spec'],QueryPolicy(roi=(0,0,.5,1)))
+    with TestClient(app) as client:
+        login(client)
+        doc=BeautifulSoup(client.get('/?view=questions').text,'html.parser')
+        markers=doc.select('.question-area-marker')
+        assert len(markers)==3
+        assert ['Include','Exclude','Region of interest']==[m['title'].split(': ')[1].split('.')[0] for m in markers]
+        for record in store.questions(SID):
+            store.edit_question(SID,record['spec'],QueryPolicy())
+        assert not BeautifulSoup(client.get('/?view=questions').text,'html.parser').select('.question-area-marker')
+
+
 def test_pipeline_groups_by_full_question_mask_and_preserves_provenance(app):
     pipeline,store=app.state.pipeline,app.state.store
     seen={}

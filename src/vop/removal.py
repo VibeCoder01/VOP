@@ -3,7 +3,7 @@ from dataclasses import asdict, replace
 import json
 from hashlib import sha256
 
-from fasthtml.components import A, Button, Dialog, Div, Form, H2, Input, Noscript, P, Progress, Script, Section, Small, Table, Tbody, Td, Th, Thead, Tr
+from fasthtml.components import A, Button, Dialog, Div, Form, H2, Input, Noscript, P, Progress, Script, Section, Small, Span, Table, Tbody, Td, Th, Thead, Tr
 from starlette.responses import RedirectResponse, Response
 from fasthtml.common import to_xml
 from urllib.parse import urlencode
@@ -27,10 +27,12 @@ def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=
             continue
         for record in store.questions(sid, include_removed=True):
             question = record['spec']
+            policy = record['policy']
+            areas = (['Include'] if policy.include_regions else []) + (['Exclude'] if policy.exclude_regions else []) + (['Region of interest'] if policy.roi else [])
             url = f'/ui/questions/{sid}/{question.question_id}'
             rows.append(Tr(Td(Input(type='checkbox', name='selection', value=dumps([sid, question.question_id]),
                                    form='question-selection', aria_label=f'Select {question.text} on {source.name}') if editable else ''),
-                Td(source.name or sid), Td(question.text, Small(question.question_id), Small(answer_kind(question.kind) + ' · version ' + question.version + (' · Enabled' if record['enabled'] else ' · Paused')), Small('Awaiting deletion', cls='status warning') if store.is_removed(sid, question.question_id) else None),
+                Td(source.name or sid), Td(question.text, Span(' *', title='Image areas set: ' + ', '.join(areas) + '. Open Edit to see or change them.', aria_label='Image areas set', cls='question-area-marker') if areas else None, Small(question.question_id), Small(answer_kind(question.kind) + ' · version ' + question.version + (' · Enabled' if record['enabled'] else ' · Paused')), Small('Awaiting deletion', cls='status warning') if store.is_removed(sid, question.question_id) else None),
                 *(Td('Loading…', data_count=key, data_source=sid, data_question=question.question_id)
                   for key in ('answers', 'images', 'episodes', 'alerts')),
                 Td(Div(A('Edit', href=url, cls='button secondary') if not store.is_removed(sid, question.question_id) else None,
