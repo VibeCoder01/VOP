@@ -55,9 +55,19 @@ def owned_dashboard(process, port):
 
 def trusted_listener(port):
     try:
-        return any(entry.status == psutil.CONN_LISTEN and entry.laddr.ip == '127.0.0.1'
+        if any(entry.status == psutil.CONN_LISTEN and entry.laddr.ip == '127.0.0.1'
                    and entry.laddr.port == port and entry.pid and owned_dashboard(psutil.Process(entry.pid), port)
-                   for entry in psutil.net_connections(kind='tcp'))
+                   for entry in psutil.net_connections(kind='tcp')):
+            return True
+        # Windows can report LISTEN with PID 0 and the owning bound socket as
+        # NONE. Verify the server side of a fresh connection instead; a bound
+        # socket alone is not evidence that its process accepted this connection.
+        with socket.create_connection(('127.0.0.1', port), timeout=.5) as probe:
+            peer = probe.getsockname()
+            return any(entry.status == psutil.CONN_ESTABLISHED
+                       and entry.laddr == ('127.0.0.1', port) and entry.raddr == peer
+                       and entry.pid and owned_dashboard(psutil.Process(entry.pid), port)
+                       for entry in psutil.net_connections(kind='tcp'))
     except (psutil.Error, OSError):
         return False
 

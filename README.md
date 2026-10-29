@@ -36,6 +36,11 @@ worker sessions; after a bounded wait it clears stale processes and their childr
 applications, other installations, other Windows accounts and other ports are left alone.
 If another application owns the port, the launcher explains the conflict and stops.
 
+Windows can report a listening socket with PID 0 even when VOP is accepting connections.
+The launcher then checks the server-side owner of a fresh loopback connection before sending
+the sign-in key. An unrelated process, a bound socket alone, or an unverified owner is rejected.
+This avoids a false startup timeout without replacing keys or changing saved setup.
+
 Use **Restart VOP** in the sidebar or **Settings → Restart VOP** to restart from the browser.
 The workspace reconnects automatically when JavaScript is enabled. The current observation
 finishes before shutdown; background sampling stops before worker cleanup. Saved camera

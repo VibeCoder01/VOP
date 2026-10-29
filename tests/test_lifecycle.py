@@ -88,6 +88,30 @@ def test_owned_dashboard_matches_installation_runtime_account_and_port(monkeypat
     assert not run_dashboard.owned_dashboard(process, 9876)
 
 
+@pytest.mark.parametrize('server_pid,peer_port,status,expected', [
+    (42, 54321, 'ESTABLISHED', True),
+    (99, 54321, 'ESTABLISHED', False),
+    (42, 54322, 'ESTABLISHED', False),
+    (42, 54321, 'NONE', False),
+    (0, 54321, 'ESTABLISHED', False),
+])
+def test_listener_pid_zero_requires_owned_server_connection(monkeypatch, server_pid, peer_port, status, expected):
+    endpoint = run_dashboard.psutil._common.addr('127.0.0.1', 8765)
+    listener = SimpleNamespace(status='LISTEN', laddr=endpoint, raddr=(), pid=0)
+    bound = SimpleNamespace(status='NONE', laddr=endpoint, raddr=(), pid=42)
+    accepted = SimpleNamespace(status=status, laddr=endpoint, raddr=('127.0.0.1', peer_port), pid=server_pid)
+    tables = iter(([listener, bound], [listener, bound, accepted]))
+    monkeypatch.setattr(run_dashboard.psutil, 'net_connections', lambda **kwargs: next(tables))
+    monkeypatch.setattr(run_dashboard.psutil, 'Process', lambda pid: pid)
+    monkeypatch.setattr(run_dashboard, 'owned_dashboard', lambda pid, port: pid == 42 and port == 8765)
+    class Probe:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def getsockname(self): return ('127.0.0.1', 54321)
+    monkeypatch.setattr(run_dashboard.socket, 'create_connection', lambda *args, **kwargs: Probe())
+    assert run_dashboard.trusted_listener(8765) is expected
+
+
 def test_stale_cleanup_excludes_launcher_ancestors_and_unrelated_processes(monkeypatch):
     calls = []
     class Process:
