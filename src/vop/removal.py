@@ -198,6 +198,7 @@ def install_removal(app, store, pipeline, reliable):
                     source, target = (pipeline.removed_sources, pipeline.sources) if restore else (pipeline.sources, pipeline.removed_sources)
                     target[source_id] = source.pop(source_id)
                 pipeline.clear_preview(source_id)
+                app.state.actions.clear_history_cache(source_id)
             finally:
                 reliable.lock.release()
         finally:
@@ -275,6 +276,7 @@ def install_removal(app, store, pipeline, reliable):
                                    (utcnow().isoformat(), 'question_delete', dumps({'source_id': sid, 'question_id': qid})))
                 for sid in {sid for sid, _ in pairs}:
                     pipeline.clear_preview(sid)
+                    app.state.actions.clear_history_cache(sid)
                 checkpoint(store)
                 return True
             finally:

@@ -1,5 +1,14 @@
 # Specification change log
 
+## 0.6.5 — Deletion lifecycle audit (29 October 2026)
+
+- Delete unused action/engine credentials, including recoverable Windows legacy copies;
+  preserve shared keys and in-flight delivery access. Journal cleanup for retry after failures.
+- Clear deleted-question test answers and cached summaries; include empty captures and
+  unreferenced saved frames when deleting all input history.
+- Add a read-only metadata/vault-filename audit tool. Preserve explicit historical records,
+  reserved IDs, retired camera setup and shared resources.
+
 ## 0.6.4 — Windows launcher ownership recovery (29 October 2026)
 
 - When Windows reports LISTEN with PID 0, verify the server-side process of a fresh

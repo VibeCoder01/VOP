@@ -9,6 +9,12 @@ was authorised on 27 October 2026; see [setup and limitations](docs/actions.md).
 
 ## Everyday use on this laptop
 
+To check deletion integrity without changing data, run
+`.\.venv\Scripts\python.exe tools\audit_deletions.py --check-vault`.
+It reports missing relationships, dangling saved frames/audio, deleted-question answer
+residuals and pending credential cleanup. On Windows it also counts unused canonical and
+legacy vault filenames without reading their contents. See [deletion rules](docs/deletion.md).
+
 **Diagnostics** is available in View and Configure modes. It separates monitoring settings,
 scheduler progress, engine connection failures and camera failures, with last attempt/image
 times, retry delays and explicit **Check and reconnect engine** / **Test camera connection**

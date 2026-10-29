@@ -45,6 +45,7 @@ def observation_for(app, run_id):
 
 def test_capture_delete_removes_shared_data_and_replays_with_unknown_gap(app):
     runs = captures(app)
+    app.state.actions.summary_cache[(SID, 'red_square', '1')] = (None, {'fixture': 'old answer'})
     oid = observation_for(app, runs[1][0])['id']
     before = app.state.store.summary(SID, 'red_square', '1')
     assert before['covered_seconds'] > 0
@@ -56,6 +57,7 @@ def test_capture_delete_removes_shared_data_and_replays_with_unknown_gap(app):
         assert len(app.state.store.observations()) == 9  # GET is read-only.
         result = client.post(url, data={'csrf': csrf, 'expected': expected(preview)})
         assert result.status_code == 200 and result.url.path == '/observations'
+        assert not any(key[0] == SID for key in app.state.actions.summary_cache)
         assert app.state.store.observation(oid) is None
         assert app.state.store.evidence(SID, runs[1][1].frame_id) is None
         assert client.get('/ui/observations/' + oid).status_code == 404
@@ -164,7 +166,7 @@ def test_bulk_delete_requires_paused_monitoring_and_transaction_rolls_back(app, 
     client.close()
 
 
-def test_engine_delete_selected_guard_and_key_preservation(app):
+def test_engine_delete_selected_guard_and_unused_key_cleanup(app):
     with TestClient(app) as client:
         csrf = login(client)
         current = app.state.pipeline.engine
@@ -181,7 +183,9 @@ def test_engine_delete_selected_guard_and_key_preservation(app):
         preview = client.get(url)
         assert client.post(url, data={'csrf': csrf, 'expected': expected(preview)}).url.path == '/engines'
         assert client.get('/engines/disposable').status_code == 400
-        assert app.state.secrets.get(record['profile']['secret_ref']) == 't' * 40
+        from vop.contracts import ProviderError
+        with pytest.raises(ProviderError):
+            app.state.secrets.get(record['profile']['secret_ref'])
         assert app.state.pipeline.engine is current
 
 

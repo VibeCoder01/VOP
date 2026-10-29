@@ -26,7 +26,7 @@ def selection(db, *, source_id=None, observation_id=None):
     else:
         if not db.execute('SELECT 1 FROM sources WHERE id=?', (source_id,)).fetchone():
             raise ValueError('This input does not exist')
-        runs = db.execute("SELECT id,source_id,frame_id FROM runs WHERE source_id=? AND id IN (SELECT run_id FROM observations WHERE status!='retention_gap') ORDER BY id", (source_id,)).fetchall()
+        runs = db.execute("SELECT id,source_id,frame_id FROM runs r WHERE source_id=? AND (NOT EXISTS(SELECT 1 FROM observations o WHERE o.run_id=r.id) OR EXISTS(SELECT 1 FROM observations o WHERE o.run_id=r.id AND o.status!='retention_gap')) ORDER BY id", (source_id,)).fetchall()
         answers = db.execute("SELECT sequence,source_id,question_id,question_version,captured_at_utc,processed_at_utc,temporal_eligible FROM observations WHERE source_id=? AND status!='retention_gap' ORDER BY sequence", (source_id,)).fetchall()
         keys = [tuple(r) for r in db.execute('SELECT source_id,question_id,version FROM question_versions WHERE source_id=?', (source_id,))]
     alerts, events = [], []
@@ -39,6 +39,8 @@ def selection(db, *, source_id=None, observation_id=None):
                              WHERE r.source_id=? AND (? IS NULL OR r.id=?) AND f.evidence_png IS NOT NULL
                              AND EXISTS(SELECT 1 FROM observations o WHERE o.run_id=r.id AND o.status!='retention_gap')''',
                           (source_id, run_id if observation_id else None, run_id if observation_id else None)).fetchone()[0]
+    if not observation_id:
+        evidence = db.execute('SELECT count(*) FROM frames WHERE source_id=? AND evidence_png IS NOT NULL', (source_id,)).fetchone()[0]
     counts = {'captures': len(runs), 'answers': len(answers), 'images': evidence, 'episodes': len(events), 'alerts': len(alerts),
               'rules': sum(json.loads(r['configuration'])['enabled'] for r in rules),
               'gap_markers': 0 if observation_id else db.execute("SELECT count(*) FROM observations WHERE source_id=? AND status='retention_gap'", (source_id,)).fetchone()[0]}
@@ -75,6 +77,7 @@ def delete_selected(db, chosen, *, whole_source=False):
     if whole_source:
         db.execute("DELETE FROM observations WHERE source_id=? AND status='retention_gap'", (sid,))
         db.execute('DELETE FROM runs WHERE source_id=? AND id NOT IN (SELECT run_id FROM observations)', (sid,))
+        db.execute('DELETE FROM frames WHERE source_id=? AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.source_id=frames.source_id AND runs.frame_id=frames.frame_id)', (sid,))
     else:
         eligible = [row for row in chosen['answers'] if row['temporal_eligible']]
         if eligible:
@@ -135,6 +138,7 @@ def delete_question_data(db, chosen):
     """Purge one question; preserve other normalised answers from shared captures."""
     sid, qid = chosen['source_id'], chosen['question_id']
     delete_related_alerts(db, chosen)
+    db.execute('DELETE FROM mock_values WHERE source_id=? AND question_id=?', (sid, qid))
     db.execute('DELETE FROM observations WHERE source_id=? AND question_id=?', (sid, qid))
     db.execute('DELETE FROM events WHERE source_id=? AND question_id=?', (sid, qid))
     for run in chosen['runs']:
@@ -190,6 +194,7 @@ def install_history_deletion(app, store, pipeline, reliable):
                     for key in chosen['keys']:
                         store._rebuild(db, *key)
                 pipeline.clear_preview(chosen['source_id'])
+                app.state.actions.clear_history_cache(chosen['source_id'])
                 checkpoint(store)
                 return chosen['source_id']
             finally:

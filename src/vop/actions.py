@@ -16,6 +16,7 @@ import re
 import smtplib
 import ssl
 from threading import Event, Lock, Thread
+from time import monotonic
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, ProxyHandler
@@ -79,6 +80,8 @@ class Actions:
         self.stop_event, self.lock = Event(), Lock()
         self.thread = None
         self.last_error = None
+        self.cleanup_error = None
+        self.cleanup_retry_after = 0
         self.summary_cache = {}
         with store.connection() as db:
             db.executescript(SCHEMA)
@@ -300,16 +303,46 @@ class Actions:
         if kind not in ('action', 'automation'):
             raise ValueError('Unknown item.')
         with self.lock, self.store.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
             if kind == 'action':
                 if any(key in m['actions'] for m in self.automations()):
                     raise ValueError('Remove this action from its automations first. Open Automations to edit them.')
+                from vop.secret_cleanup import queue
+                row = db.execute('SELECT configuration FROM action_definitions WHERE id=?', (key,)).fetchone()
+                if row:
+                    queue(db, json.loads(row[0]).get('secret'))
                 db.execute('DELETE FROM action_definitions WHERE id=?', (key,))
                 db.execute('DELETE FROM action_audio WHERE id=?', (key,))
             else:
                 db.execute('DELETE FROM automations WHERE id=?', (key,))
             column = 'action_id' if kind == 'action' else 'automation_id'
             db.execute(f"UPDATE action_jobs SET status='cancelled',detail='Configuration deleted.' WHERE {column}=? AND status IN ('queued','retry')", (key,))
+            self.summary_cache.clear()
         self.store.audit(kind + '_deleted', key)
+        self.cleanup_secrets()
+
+    def cleanup_secrets(self):
+        from vop.secret_cleanup import clean
+        if monotonic() < self.cleanup_retry_after:
+            return
+        with self.store.connection() as db:
+            if not db.execute("SELECT 1 FROM release_settings WHERE id LIKE 'pending_secret_delete:%' LIMIT 1").fetchone():
+                return
+        if not self.pipeline.busy.acquire(blocking=False):
+            return
+        try:
+            with self.lock:
+                self.cleanup_error = clean(self.store, self.secrets, self.pipeline)
+                self.last_error = self.cleanup_error
+                self.cleanup_retry_after = monotonic() + 30 if self.cleanup_error else 0
+        finally:
+            self.pipeline.busy.release()
+
+    def clear_history_cache(self, source_id):
+        with self.lock:
+            for key in list(self.summary_cache):
+                if key[0] == source_id:
+                    self.summary_cache.pop(key)
 
     def evaluate(self, now=None):
         now = utc(now) if now else utcnow()
@@ -584,7 +617,8 @@ class Actions:
                 with self.lock:
                     self.evaluate()
                 self.deliver()
-                self.last_error = None
+                self.last_error = self.cleanup_error
+                self.cleanup_secrets()
             except Exception:
                 self.last_error = 'Actions need attention. Check Activity and the saved automation settings.'
             self.stop_event.wait(0.5)

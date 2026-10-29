@@ -31,6 +31,49 @@ def test_migration_publish_never_replaces_a_concurrent_saved_value(tmp_path):
     assert not list(tmp_path.glob('*.tmp'))
 
 
+@pytest.mark.skipif(os.name != 'nt', reason='Windows DPAPI vault files')
+def test_deleted_secret_cannot_reappear_from_legacy_copies(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'AppData/Local'))
+    monkeypatch.delenv('VOP_SECRET_DIR', raising=False)
+    vault = SecretStore()
+    vault.set('deleted-account', 'fixture-only')
+    vault.set('shared-account', 'keep-fixture')
+    canonical = vault.root / 'deleted-account.dpapi'
+    legacy = tmp_path / 'AppData/Local/VOP/secrets/deleted-account.dpapi'
+    redirected = tmp_path / 'AppData/Local/Packages/OpenAI.Codex_fixture/LocalCache/Local/VOP/secrets/deleted-account.dpapi'
+    for path in (legacy, redirected):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(canonical.read_bytes())
+    vault.delete('deleted-account')
+    vault.delete('deleted-account')
+    assert not any(path.exists() for path in (canonical, legacy, redirected))
+    with pytest.raises(ProviderError): vault.get('deleted-account')
+    assert vault.get('shared-account') == 'keep-fixture'
+
+
+def test_invalid_secret_deletion_name_never_touches_vault(tmp_path):
+    with pytest.raises(ValueError): SecretStore(tmp_path).delete('../outside')
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux Secret Service command contract')
+@pytest.mark.parametrize('remaining,failed', [(b'',False), (b'[locked-fixture]',True)])
+def test_secret_service_delete_confirms_absence_without_logging_output(tmp_path, monkeypatch, remaining, failed):
+    from types import SimpleNamespace
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        assert kwargs['stderr'] == __import__('subprocess').DEVNULL
+        return SimpleNamespace(returncode=1 if command[1]=='clear' else 0, stdout=remaining)
+    monkeypatch.setattr('vop.secrets.subprocess.run', run)
+    if failed:
+        with pytest.raises(ProviderError): SecretStore(tmp_path).delete('-fixture')
+    else:
+        SecretStore(tmp_path).delete('-fixture')
+    assert calls == [['secret-tool','clear','--','application','vop','reference','-fixture'],
+                     ['secret-tool','search','--all','--','application','vop','reference','-fixture']]
+
+
 @pytest.mark.skipif(os.name != 'nt', reason='Windows DPAPI and MSIX vault migration')
 def test_windows_migrates_redirected_dpapi_and_keeps_canonical_authoritative(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, 'home', lambda: tmp_path)

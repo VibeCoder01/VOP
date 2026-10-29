@@ -380,16 +380,20 @@ def install_integration(app, settings, store, pipeline):
                 busy()
                 try:
                     with store.connection() as db:
+                        from vop.secret_cleanup import queue
+                        db.execute('BEGIN IMMEDIATE')
+                        queue(db, record['profile'].get('secret_ref'))
                         db.execute('DELETE FROM release_settings WHERE id=?', ('saved_engine:' + engine_id,))
                     store.audit('engine_profile', 'deleted')
                 finally: pipeline.busy.release()
+                app.state.actions.cleanup_secrets()
                 return RedirectResponse('/engines?notice=Engine+profile+deleted.', status_code=303)
             changed = True
         return app.state.page('Delete engine profile', request, [
             P(record['name']), P('The profile changed. Review it before you confirm.', cls='readiness warning') if changed else None,
             P('Select another engine before you delete this one.', cls='readiness warning') if selected else None,
             A('Choose another engine', href='/engines', cls='button') if selected else None,
-            P('This deletes the saved profile. Recorded observations, model files and protected keys remain.'),
+            P('This deletes the saved profile and its unused protected key. Keys shared with another configuration stay. Recorded observations and shared model files remain.'),
             P('This cannot be undone in VOP.'),
             Form(hidden(csrf(request)), Input(type='hidden', name='expected', value=expected), Button('Delete profile', cls='danger', disabled=selected), method='post', action=request.url.path),
             A('Cancel', href='/engines/' + engine_id, cls='button secondary')
