@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vop"
-version = "0.6.3"
+version = "0.6.4"
 description = "Provider-neutral visual observability foundation and local API"
 requires-python = ">=3.11"
 dependencies = ["Pillow==12.3.0", "psutil==7.1.0", "python-fasthtml==0.14.13", "tzdata==2026.5"]

@@ -1,5 +1,12 @@
 # Specification change log
 
+## 0.6.4 — Windows launcher ownership recovery (29 October 2026)
+
+- When Windows reports LISTEN with PID 0, verify the server-side process of a fresh
+  loopback connection before sending the launcher key. Preserve installation, runtime,
+  account and port checks; never trust a bound socket alone.
+- Fix false startup/sign-in timeouts while the background service is already ready.
+
 ## 0.6.3 — Browser session recovery (28 October 2026)
 
 - Keep browser sign-in for up to 14 days of inactivity, with explicit Sign out unchanged.
