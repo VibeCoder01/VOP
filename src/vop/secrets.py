@@ -64,12 +64,42 @@ class SecretStore:
             if temporary:
                 temporary.unlink(missing_ok=True)
 
-    def _legacy_path(self, name):
+    def _legacy_roots(self):
         roots = [Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'VOP/secrets']
         packages = Path.home() / 'AppData/Local/Packages'
         roots.extend(package / 'LocalCache/Local/VOP/secrets' for package in packages.glob('OpenAI.Codex_*'))
-        paths = [root / (name + '.dpapi') for root in roots if (root / (name + '.dpapi')).is_file()]
+        return roots
+
+    def _legacy_paths(self, name):
+        return [root / (name + '.dpapi') for root in self._legacy_roots() if (root / (name + '.dpapi')).is_file()]
+
+    def _legacy_path(self, name):
+        paths = self._legacy_paths(name)
         return max(paths, key=lambda path: path.stat().st_mtime_ns) if paths else None
+
+    def delete(self, name):
+        """Remove an explicitly unreferenced value, including recoverable legacy copies."""
+        name = reference(name)
+        try:
+            if os.name == 'nt':
+                paths = [self.root / (name + '.dpapi')]
+                if self.migrate_legacy:
+                    paths.extend(self._legacy_paths(name))
+                for path in paths:
+                    path.unlink(missing_ok=True)
+            else:
+                attributes = ['--', 'application', 'vop', 'reference', name]
+                subprocess.run(['secret-tool', 'clear', *attributes],
+                               check=False, timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # clear returns nonzero when nothing matched, including an already
+                # removed value after a crash. search --all also exposes locked
+                # matches; empty successful output alone confirms absence. Never log it.
+                remaining = subprocess.run(['secret-tool', 'search', '--all', *attributes],
+                                           check=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                if remaining.stdout.strip():
+                    raise ProviderError('secret_store_unavailable', 'Protected-setting cleanup is pending; unlock the OS vault')
+        except (OSError, subprocess.SubprocessError):
+            raise ProviderError('secret_store_unavailable', 'Protected-setting cleanup is pending; the OS vault could not remove it') from None
 
     def _crypt(self, data, decrypt=False):
         buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)

@@ -154,6 +154,7 @@ def app(tmp_path, monkeypatch):
         return values[name]
     monkeypatch.setattr(SecretStore, "set", set_secret)
     monkeypatch.setattr(SecretStore, "get", get_secret)
+    monkeypatch.setattr(SecretStore, 'delete', lambda self, name: values.pop(name, None))
     path = tmp_path / "config.json"
     body = json.loads((Path(__file__).resolve().parents[1]/"sample-config/phase1.json").read_text())
     body["database"] = "data/test.sqlite3"

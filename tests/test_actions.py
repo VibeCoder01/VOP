@@ -21,6 +21,7 @@ class Vault:
     def __init__(self): self.values = {}
     def get(self, key): return self.values[key]
     def set(self, key, value): self.values[key] = value
+    def delete(self, key): self.values.pop(key, None)
 
 
 def sound(actions, aid='bell', location='browser'):
