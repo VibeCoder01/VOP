@@ -107,10 +107,10 @@ def test_one_mode_toggle_and_no_observe_in_configure_or_duplicate_history(settin
         mode_form('/configure', 'Configure mode')
         client.post('/ui/mode', data={'csrf': token, 'mode': 'configure'})
         configuration = mode_form('/cameras', 'View mode')
-        assert [a.get_text() for a in configuration.find('nav').find_all('a')] == ['Cameras', 'Engines', 'Questions', 'Actions', 'Automations', 'Diagnostics', 'Settings']
+        assert [a.get_text() for a in configuration.find('nav').find_all('a')] == ['Questions', 'Actions', 'Automations', 'Cameras', 'Engines', 'Settings', 'Diagnostics']
         for path in ('/?view=questions', '/?view=settings'):
             links = BeautifulSoup(client.get(path).text, 'html.parser').find('nav').find_all('a')
-            assert [a.get_text() for a in links] == ['Cameras', 'Engines', 'Questions', 'Actions', 'Automations', 'Diagnostics', 'Settings']
+            assert [a.get_text() for a in links] == ['Questions', 'Actions', 'Automations', 'Cameras', 'Engines', 'Settings', 'Diagnostics']
         assert 'Manage saved data' in client.get('/?view=settings').text
         assert configuration.find('a', class_='brand')['href'] == '/cameras'
         assert client.get('/').url.path == '/cameras'
