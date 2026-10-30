@@ -114,7 +114,8 @@ engines, questions, monitoring intervals, image saving, deletion and restart. Th
 indicator and switch are visually grouped in one sidebar panel. Choose **View mode**
 when finished. No extra access key is required. The selected mode stays in this browser
 session; a fresh sign-in returns to View mode. Viewer credentials cannot enter Configure mode.
-Configure mode opens Cameras and lists only Cameras, Engines, Questions and Settings;
+Configure mode opens Cameras. Its navigation order is Questions, Actions, Automations,
+Cameras, Engines, Settings, Diagnostics.
 Individual Observations, Episodes (Contiguous active observations) and Trends stay in View mode.
 Saved-data deletion remains available through Settings → Manage saved data. Use the same sidebar switch to return to View mode.
 Old setup links direct you to the single sidebar mode switch. A stale form submitted in View mode

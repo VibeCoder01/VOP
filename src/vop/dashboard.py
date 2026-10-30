@@ -410,10 +410,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         csrf = session.setdefault("csrf", secrets.token_urlsafe(24))
         role = request.scope.get("auth_role") or session.get("role")
         configure = configuring(request)
-        navigation = [("overview", "Observe", "/"), ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"),
-                      ("questions", "Questions", "/?view=questions"), ("observations", "Individual Observations", "/observations"), ("events", EPISODES_TITLE, "/?view=events"),
-                      ("metrics", "Trends", "/?view=metrics"), ('activity', 'Activity', '/activity'),
-                      ('actions', 'Actions', '/actions'), ('automations', 'Automations', '/automations'), ('diagnostics', 'Diagnostics', '/diagnostics'), ("settings", "Settings", "/release")]
+        navigation = [("overview", "Observe", "/"),
+                      ("questions", "Questions", "/?view=questions"), ('actions', 'Actions', '/actions'), ('automations', 'Automations', '/automations'),
+                      ("cameras", "Cameras", "/cameras"), ("engines", "Engines", "/engines"), ("settings", "Settings", "/release"),
+                      ("observations", "Individual Observations", "/observations"), ("events", EPISODES_TITLE, "/?view=events"),
+                      ("metrics", "Trends", "/?view=metrics"), ('activity', 'Activity', '/activity'), ('diagnostics', 'Diagnostics', '/diagnostics')]
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
