@@ -125,7 +125,8 @@ video recording. URLs and existing records are unchanged.
 The VOP title at the far left shows the installed version in small text; browser-tab titles include it too.
 Observation lists, episode lists, Trends and result pages use the camera/input name when available,
 with its stable ID as the fallback. IDs remain unchanged in URLs and technical details.
-Trends refreshes every 10 seconds while its tab is visible. Automatic refresh pauses while
+Trends updates its existing graphs and figures every 10 seconds while its tab is visible,
+without reloading the page or replacing graph controls. Automatic refresh pauses while
 you focus or change its filters; apply changes to resume. Selected camera, date range and time
 zone stay in the page URL. Trends has no page entrance movement on refresh. Refresh
 updates recorded results and does not start monitoring.
@@ -135,10 +136,12 @@ Keyboard users can focus the plot and use arrows, +/−, Home and End. Samples u
 their recorded timestamps; unknown intervals remain gaps. All selected-range samples
 are available, rather than only the latest 60. **Lock scroll and zoom** puts every
 graph on the same time window; leave it off to explore graphs independently.
-Auto-refresh preserves these views and the lock within this browser tab, and waits
+Auto-refresh preserves these views, the lock and page position within this browser tab, and waits
 while you navigate. **Latest** follows new results; a historical view stays put.
 Applying different camera/date filters resets navigation to fit that selection.
 With JavaScript disabled, use **Refresh now** instead.
+If question setup changes in another tab, Trends asks you to use **Refresh now** to
+load that new layout. Temporary update failures keep the current graphs and retry.
 
 Images are optional and saving is **off by default**. A capture can show a temporary preview
 without keeping it. On the camera page, **Recorded images → Change image-saving setting**

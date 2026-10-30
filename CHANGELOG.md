@@ -1,5 +1,14 @@
 # Specification change log
 
+## 0.6.8 — Stable Trends updates (30 October 2026)
+
+- Refresh Trends canvases and figures in place instead of reloading the whole page.
+  Keep graph controls, focus, zoom, sync and historical time windows intact.
+- Reserve numeric graph space before the first result, retain figure height when
+  placeholder text becomes a number, and avoid overlapping refresh requests.
+- Keep old results on temporary failures, retry automatically and request a manual
+  refresh for changed question layouts. Preserve expired-session handling.
+
 ## 0.6.7 — Trends time navigation (29 October 2026)
 
 - Add horizontal scrolling, time-proportional zoom, Fit/Latest and an optional

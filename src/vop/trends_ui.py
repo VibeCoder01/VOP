@@ -1,5 +1,6 @@
 """Native time navigation: full selected samples, canvas rendering and local view state."""
 from hashlib import sha256
+from datetime import datetime, timezone
 import json
 import math
 
@@ -13,14 +14,16 @@ def domain(series, start=None, end=None):
     # Temporal summaries are chronological; only endpoints are needed for a common axis.
     stamps = [utc(point['at_utc']).timestamp()*1000 for values in series if values for point in (values[0], values[-1])]
     if not stamps:
-        return None
+        right = utc(end).timestamp()*1000 if end else datetime.now(timezone.utc).timestamp()*1000
+        left = utc(start).timestamp()*1000 if start else right-3600000
+        return left, max(left+1000,right), right
     left = utc(start).timestamp()*1000 if start else min(stamps)
     right = utc(end).timestamp()*1000 if end else max(stamps)
     return (left, max(left+1000, right), max(stamps))
 
 
-def graph(points, label, *, key, bounds, zone, fallback):
-    if not bounds or not any(isinstance(p['value'], (int,float)) for p in points):
+def graph(points, label, *, key, bounds, zone, fallback, numeric=True):
+    if not numeric:
         return P('No numeric observations in this view.', cls='muted')
     data = []
     for point in points:
@@ -50,12 +53,13 @@ def graph(points, label, *, key, bounds, zone, fallback):
 
 CSS = """
 .trend-graph [hidden]{display:none!important}
+.trend-refresh-status{min-height:40px;margin:8px 0;font-size:12px;color:var(--muted)}
 .trend-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:20px 0 8px}.trend-toolbar input[type=range]{width:150px;padding:0;min-height:30px;accent-color:var(--accent)}.trend-toolbar [data-trend-scale]{display:inline-block;min-width:72px;font-size:12px;font-variant-numeric:tabular-nums}.trend-window{min-height:40px;font-size:12px;font-variant-numeric:tabular-nums;margin:8px 0}.trend-plot{position:relative;height:220px;width:100%}.trend-plot canvas{display:block;width:100%;height:220px;cursor:grab;touch-action:pan-y}.trend-plot canvas:active{cursor:grabbing}.trend-fallback{position:absolute;inset:0;overflow:hidden}.trend-scroll{overflow-x:auto;overflow-y:hidden;height:22px;border-bottom:1px solid #dcdce0;overscroll-behavior-x:contain}.trend-scroll svg{display:block;max-width:none}.trend-readout{min-height:24px;margin:8px 0;font-size:12px;font-variant-numeric:tabular-nums}.trend-lock{display:inline-flex;align-items:center;gap:8px;margin:12px 0 4px}.trend-graph{margin:16px 0 8px}
 """
 
 SCRIPT = r"""(() => {
-const roots=Array.from(document.querySelectorAll('[data-trend]'));if(!roots.length)return;
-const lock=document.querySelector('[data-trend-lock]');
+const roots=Array.from(document.querySelectorAll('[data-trend]'));
+const lock=document.querySelector('[data-trend-lock]');if(!lock)return;
 const filters=document.querySelector('form.filters');
 const scope=location.pathname+'?'+(filters?new URLSearchParams(new FormData(filters)).toString():location.search);
 let stored={};try{const value=JSON.parse(sessionStorage.getItem('vop-trend-view')||'{}');if(value.scope===scope)stored=value;}catch(_){}
@@ -70,15 +74,16 @@ function sync(source){
   syncing=false;
 }
 for(const root of roots){
- const samples=JSON.parse(root.dataset.points),begin=Number(root.dataset.start),end=Number(root.dataset.end),range=end-begin;
- const latest=Math.max(begin,Math.min(end,Number(root.dataset.latest)||end));
+ let samples,begin,end,range,latest,maximum,hasNumeric;
+ function read(data){samples=JSON.parse(data.points);begin=Number(data.start);end=Number(data.end);range=end-begin;
+   latest=Math.max(begin,Math.min(end,Number(data.latest)));maximum=1;hasNumeric=false;for(const sample of samples)if(sample[1]!==null){maximum=Math.max(maximum,sample[1]);hasNumeric=true;}}
+ read(root.dataset);
  const canvas=root.querySelector('[data-trend-canvas]'),ctx=canvas.getContext('2d');if(!ctx)continue;
  const scroll=root.querySelector('[data-trend-scroll]'),track=root.querySelector('[data-trend-track]'),zoom=root.querySelector('[data-trend-zoom]');
  const readout=root.querySelector('[data-trend-readout]'),windowLabel=root.querySelector('[data-trend-window]');
  const date=new Intl.DateTimeFormat(undefined,{timeZone:root.dataset.zone,day:'2-digit',month:'short',year:'numeric'});
  const time=new Intl.DateTimeFormat(undefined,{timeZone:root.dataset.zone,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
  const stamp=value=>date.format(new Date(value))+' '+time.format(new Date(value));
- let maximum=1;for(const sample of samples)if(sample[1]!==null)maximum=Math.max(maximum,sample[1]);
  let scale=1,width=680,span=range,from=begin,follow=true,fit=true,pending=false,drag=null,appliedScroll=null;
  const left=48,right=16,top=16,bottom=165,height=220;
  function lower(value){let a=0,b=samples.length;while(a<b){const m=(a+b)>>1;if(samples[m][0]<value)a=m+1;else b=m;}return a;}
@@ -101,7 +106,9 @@ for(const root of roots){
    for(let i=first;i<last;i++){const [t,v,gapBefore]=samples[i];if(v===null){connected=false;continue;}if(!connected||gapBefore)ctx.moveTo(x(t),y(v));else ctx.lineTo(x(t),y(v));connected=true;}
    ctx.stroke();ctx.fillStyle='#0066cc';
    if(last-first<=1000)for(let i=first;i<last;i++){const [t,v]=samples[i];if(v!==null){ctx.beginPath();ctx.arc(x(t),y(v),2.5,0,Math.PI*2);ctx.fill();}}
-   ctx.restore();ctx.fillStyle='#626268';const ticks=Math.max(1,Math.floor(plot/160));
+   ctx.restore();ctx.fillStyle='#626268';
+   if(!hasNumeric){ctx.textAlign='center';ctx.fillText('No numeric observations in this view.',left+plot/2,90);}
+   const ticks=Math.max(1,Math.floor(plot/160));
    for(let i=0;i<=ticks;i++){const t=from+span*i/ticks,px=left+plot*i/ticks;ctx.textAlign=i===0?'left':i===ticks?'right':'center';ctx.fillText(date.format(new Date(t)),px,190);ctx.fillText(time.format(new Date(t)),px,207);}
    windowLabel.textContent=stamp(from)+' — '+stamp(from+span)+' · '+root.dataset.zone+(follow?' · Following latest':'');
    root.querySelector('[data-trend-scale]').textContent=scale.toFixed(1)+' ×';zoom.value=String(Math.log2(scale));zoom.setAttribute('aria-valuetext',scale.toFixed(1)+' times');
@@ -118,7 +125,7 @@ for(const root of roots){
  }
  function zoomAt(next,fraction=.5){const anchor=from+span*fraction;const nextSpan=range/Math.max(1,Math.min(1024,next));apply({start:anchor-nextSpan*fraction,span:nextSpan,follow:false,fit:next<=1});}
  function pan(fraction){apply({start:from+span*fraction,span,follow:false,fit:false});}
- const api={key:root.dataset.trend,state,apply};charts.push(api);
+ const api={key:root.dataset.trend,state,apply,update(data){const view=state();read(data);apply(view,false);}};charts.push(api);
  root.querySelector('[data-trend-fallback]').hidden=true;canvas.hidden=false;
  for(const input of root.querySelectorAll('button,input'))input.disabled=false;
  zoom.addEventListener('input',()=>zoomAt(2**Number(zoom.value)));
@@ -157,4 +164,18 @@ lock.disabled=!charts.length;lock.checked=!!stored.locked;
 lock.addEventListener('change',()=>{touch();if(lock.checked&&charts.length)sync(leader||charts.find(c=>stored.views?.[c.key])||charts[0]);save();});
 if(lock.checked&&charts.length)sync(charts.find(c=>stored.views?.[c.key])||charts[0]);
 addEventListener('pagehide',save);
+window.vopTrends.update=doc=>{
+ const incoming=new Map(Array.from(doc.querySelectorAll('[data-trend]'),r=>[r.dataset.trend,r.dataset]));
+ const sections=Array.from(document.querySelectorAll('[data-trend-section]'));
+ const nextSections=new Map(Array.from(doc.querySelectorAll('[data-trend-section]'),s=>[s.dataset.trendSection,s]));
+ if(incoming.size!==charts.length||charts.some(c=>!incoming.has(c.key))||nextSections.size!==sections.length||sections.some(s=>!nextSections.has(s.dataset.trendSection)))return false;
+ for(const chart of charts)chart.update(incoming.get(chart.key));
+ for(const section of sections){const next=nextSections.get(section.dataset.trendSection);
+   const values=section.querySelectorAll('[data-trend-value]'),nextValues=next.querySelectorAll('[data-trend-value]');
+   values.forEach((value,i)=>{value.style.minHeight=value.getBoundingClientRect().height+'px';value.textContent=nextValues[i].textContent;});
+   const summary=section.querySelector('[data-trend-summary]'),nextSummary=next.querySelector('[data-trend-summary]');
+   if(summary&&nextSummary&&!summary.contains(document.activeElement))summary.replaceChildren(...nextSummary.childNodes);
+ }
+ if(lock.checked&&charts.length)sync(leader||charts[0]);save();return true;
+};
 })();"""
