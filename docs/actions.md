@@ -51,6 +51,12 @@ replayed on restart, so they cannot restore subsequently deleted images.
 **Email remains text only.** Linking Save image and Email to the same automation
 does not attach the image to the email.
 
+Completed Save image entries in **Activity** have a **View image** button. It opens
+the exact observation's Recorded image section, including after newer captures or
+deletion of the action definition. Operator access is required. If retention or
+deletion removes the image/observation, Activity shows **Image no longer available**
+and does not substitute another camera image. The Activity refresh updates this status.
+
 ## Sound destination
 
 **This browser:** select **Enable sound** in the sidebar. It plays a short confirmation

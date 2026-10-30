@@ -8,7 +8,7 @@ from PIL import Image
 import pytest
 from starlette.testclient import TestClient
 
-from test_phase3_release import app, HEADERS, SID, QID
+from test_phase3_release import app, HEADERS, SID, QID, VIEWER
 from test_actions import summary, event
 from vop.actions import Actions
 from vop.contracts import utcnow
@@ -120,3 +120,44 @@ def test_image_action_forms_require_a_camera_and_take_no_capture(app,monkeypatch
         assert client.post('/actions/save-picture/test',data={'source_id':SID}).status_code==200
         assert app.state.actions.jobs()[0]['status']=='blocked'
         assert 'text only' in client.get('/actions/edit?kind=email').text
+
+
+def test_activity_opens_the_saved_observation_image_even_after_new_captures(app):
+    frame,context=capture(app)
+    image_action(app)
+    app.state.actions.test('save-picture',SID)
+    context=app.state.actions.jobs()[0]['context']  # Manual test may use any answer from that capture.
+    expected=app.state.store.evidence(SID,frame.frame_id)
+    capture(app)  # Activity must not link to the newer camera preview.
+    with TestClient(app,headers=HEADERS) as client:
+        for path in ('/activity','/activity/rows'):
+            doc=BeautifulSoup(client.get(path).text,'html.parser')
+            link=doc.find('a',string='View image')
+            assert link and link['href']=='/ui/observations/'+context['observation_id']+'#recorded-image'
+        detail=BeautifulSoup(client.get(link['href']).text,'html.parser')
+        image=detail.select_one('#recorded-image img')
+        assert client.get(image['src']).content==expected
+        viewer={'Authorization':'Bearer '+VIEWER}
+        fragment=client.get('/activity/rows',headers=viewer)
+        assert 'View image' not in fragment.text and 'Operator access is required' in fragment.text
+        assert client.get(image['src'],headers=viewer).status_code==403
+        app.state.actions.delete('action','save-picture')
+        assert BeautifulSoup(client.get('/activity/rows').text,'html.parser').find('a',string='View image')
+
+
+def test_activity_marks_deleted_images_unavailable_without_newer_image_fallback(app):
+    old,context=capture(app)
+    image_action(app)
+    app.state.actions.test('save-picture',SID)
+    app.state.store.update_source(SID,enabled=True,retain_evidence=True,sample_interval_seconds=0)
+    newer,_=capture(app)
+    app.state.store.delete_evidence(SID,old.frame_id)
+    assert app.state.store.evidence(SID,newer.frame_id)
+    with TestClient(app,headers=HEADERS) as client:
+        fragment=client.get('/activity/rows')
+        assert 'View image' not in fragment.text and 'Image no longer available' in fragment.text
+        detail=client.get('/ui/observations/'+context['observation_id'])
+        assert 'No saved image is available' in detail.text
+        from vop.history_deletion import question_selection,delete_question_data
+        with app.state.store.connection() as db:delete_question_data(db,question_selection(db,SID,QID))
+        assert 'Image no longer available' in client.get('/activity/rows').text
