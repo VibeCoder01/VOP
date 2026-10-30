@@ -33,7 +33,7 @@ def test_processed_pair_keeps_completed_frame_until_new_answers_commit(app, monk
     original = pipeline.engine.infer
     def delayed(request):
         entered.set()
-        assert release.wait(10),'Test must release synthetic inference'
+        assert release.wait(30),'Test must release synthetic inference'
         return original(request)
     monkeypatch.setattr(pipeline.engine,'infer',delayed)
     second = colored_frame(pipeline,'blue')
@@ -43,7 +43,7 @@ def test_processed_pair_keeps_completed_frame_until_new_answers_commit(app, monk
         with ThreadPoolExecutor(max_workers=1) as executor:
             pending = executor.submit(pipeline.run,SID,second)
             try:
-                assert entered.wait(3)
+                assert entered.wait(10)
                 assert pipeline.previews[SID][0] == second.frame_id
                 assert pipeline.processed_previews[SID][0] == first.frame_id
                 response = client.get('/ui/camera-answers/' + SID)
@@ -59,7 +59,9 @@ def test_processed_pair_keeps_completed_frame_until_new_answers_commit(app, monk
                 assert client.head('/ui/live-preview/' + SID).headers['x-vop-frame-id'] == second.frame_id
             finally:
                 release.set()
-            pending.result(timeout=5)
+            # This verifies frame identity across a commit, not disk latency.
+            # Leave room for SQLite/Windows runner contention after releasing it.
+            pending.result(timeout=30)
         updated = client.get('/ui/camera-answers/' + SID)
         assert updated.headers['x-vop-processed-frame'] == second.frame_id
         assert client.get('/ui/processed-image/' + SID + '/' + first.frame_id).status_code == 404

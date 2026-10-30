@@ -1205,3 +1205,11 @@ extension; OS-protected account details remain in the local vault.
 See [Actions setup and limitations](docs/actions.md) and the
 [authorised Phase 5 contract](CODEX_PHASE_5_PLAN.md). Tapo support is an optional pinned
 installation: `.\.venv\Scripts\python.exe -m pip install ".[tapo]"`.
+
+## CI status and concurrency checks
+
+Check both the pull-request run and the separate push run on the merge commit in
+`main`. A passing PR does not establish that the later run passed.
+Offline concurrency tests that use `no_workers` suppress sampling, alerts and Actions
+background loops; controlled test threads still exercise the intended race. Preview
+commit tests use bounded waits for synchronization, not application speed thresholds.

@@ -23,6 +23,7 @@ PAIRS = [[SID, 'red_square'], [SID, 'background']]
 def no_workers(app, monkeypatch):
     monkeypatch.setattr(app.state.sampler, 'start', lambda: None)
     monkeypatch.setattr(app.state.reliable, 'start', lambda: None)
+    monkeypatch.setattr(app.state.actions, 'start', lambda: None)
 
 
 def setup_history(app):
