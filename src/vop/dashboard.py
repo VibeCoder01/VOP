@@ -248,16 +248,24 @@ for (const panel of panels) {
 TRENDS_REFRESH_JS = """const filters = document.querySelector('form.filters');
 if (filters) {
   const saved = new URLSearchParams(new FormData(filters)).toString();
+  const status = document.querySelector('[data-trend-refresh-status]');
+  let pending = false;
+  const available = () => !document.hidden && !window.vopSessionExpired && !filters.contains(document.activeElement)
+    && !window.vopTrends?.busy() && new URLSearchParams(new FormData(filters)).toString() === saved;
   setInterval(async () => {
-    if (document.hidden || filters.contains(document.activeElement) || window.vopTrends?.busy()) return;
-    if (new URLSearchParams(new FormData(filters)).toString() !== saved) return;
+    if (pending || !available() || !window.vopTrends?.update) return;
+    pending = true;
     try {
-      const response = await fetch('/api/v1/health', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-      if (response.ok && !window.vopSessionExpired && !document.hidden && !filters.contains(document.activeElement)
-          && !window.vopTrends?.busy() && new URLSearchParams(new FormData(filters)).toString() === saved) {
-        window.vopTrends?.save(); location.reload();
-      }
-    } catch (_) {}
+      const response = await fetch(location.href, {cache:'no-store', headers:{Accept:'*/*'}, signal:AbortSignal.timeout(15000)});
+      if (!response.ok || response.redirected) throw new Error('Update unavailable');
+      const html = await response.text();
+      if (!available()) return;
+      const doc = new DOMParser().parseFromString(html,'text/html');
+      if (!doc.querySelector('[data-trend-refresh-status]')) throw new Error('Not a Trends page');
+      const updated = window.vopTrends.update(doc);
+      status.textContent = updated ? '' : 'Question setup changed. Use Refresh now to load the new setup.';
+    } catch (_) { if (available()) status.textContent = 'Updates could not load. VOP will try again shortly, or use Refresh now.'; }
+    finally { pending = false; }
   }, 10000);
 }
 """
@@ -864,6 +872,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         elif view == "metrics":
             content += [P('Auto refresh: every 00:00:10.0. ', A('Refresh now', href=str(request.url), cls='text-link')),
                         P('Updates recorded results; it does not start monitoring. Refresh pauses while you edit filters. Apply your changes to resume.', cls='muted'),
+                        P('',data_trend_refresh_status='',role='status',cls='trend-refresh-status'),
                         Noscript(P('Automatic refresh requires JavaScript. Use Refresh now to update the page.', cls='notice'))]
             bounds = trend_domain([d['summary']['trend'] for d in data], range_start, range_end)
             content.append(Label(Input(type='checkbox', data_trend_lock='', disabled=True), 'Lock scroll and zoom', cls='trend-lock'))
@@ -871,16 +880,16 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 summary, q = d["summary"], d["spec"]
                 occupancy = summary["occupancy_fraction"]
                 content.append(Section(H2(q.text), P(f"{source_name(d['source_id'])} · version {q.version} · {answer_kind(q.kind)}"),
-                    Div(*(Div(Small(metric_label(label)), StrongText(value), cls="stat") for label, value in (
+                    Div(*(Div(Small(metric_label(label)), StrongText(value, data_trend_value=''), cls="stat") for label, value in (
                         ("Episodes" if q.kind == "binary" else "Valid samples", ("No data" if summary["episode_count"] is None else str(summary["episode_count"])) if q.kind == "binary" else str(summary["valid_sample_count"])),
                         ("Estimated active time" if q.kind == "binary" else "Covered time", duration(summary["estimated_active_seconds"] if q.kind == "binary" else summary["covered_seconds"]) if summary["covered_seconds"] > 0 else "No interval data"),
                         ("Observation coverage", "No interval data" if summary["coverage_fraction"] is None else f"{summary['coverage_fraction']:.1%}"),
                         ("Condition active", "No eligible data" if occupancy is None else f"{occupancy:.1%}"))), cls="stats"),
-                    trend_graph(summary['trend'], q.text, key=f"{d['source_id']}/{q.question_id}/{q.version}", bounds=bounds, zone=zone, fallback=chart),
+                    trend_graph(summary['trend'], q.text, key=f"{d['source_id']}/{q.question_id}/{q.version}", bounds=bounds, zone=zone, fallback=chart, numeric=q.kind!='choice'),
                     P(metric_label("Episode rate"), ": " + (f"{summary['episodes_per_hour']:.1f} per covered hour" if summary["episodes_per_hour"] is not None else "No eligible interval"),
-                      " · ", metric_label("Unobserved time"), f": {duration(summary['unknown_seconds'])}", cls="muted") if q.kind == "binary" else None,
+                      " · ", metric_label("Unobserved time"), f": {duration(summary['unknown_seconds'])}", cls="muted", data_trend_summary='') if q.kind == "binary" else None,
                     P("Rating levels: " + " · ".join(f"{i} {level}" for i, level in enumerate(q.levels)) + ". The score is an expected position and can fall between levels. It is not a physical unit or a selected category.", cls="muted") if q.kind == "ordinal" else None,
-                    Small(f"All samples in the selected time range. Positions use recorded timestamps. Failed samples or gaps over {duration(d['policy'].max_gap_seconds)} break the line.")))
+                    Small(f"All samples in the selected time range. Positions use recorded timestamps. Failed samples or gaps over {duration(d['policy'].max_gap_seconds)} break the line."),data_trend_section=f"{d['source_id']}/{q.question_id}/{q.version}"))
         else:
             content += [Section(H2("Processing and access"), P("One inference slot; no queued frames. Live capture and model loading require explicit operator setup."),
                                 P("Current browser role: " + ("operator" if operator else "viewer")),
