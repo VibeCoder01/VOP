@@ -344,6 +344,7 @@ def test_message_adapters_acceptance_rejection_and_ambiguous_send(app, monkeypat
     config = actions.definitions()[0]
     status, _ = actions.send(config, {'camera':'Door','question':'Person','trigger':'Episode starts'}, 'key')
     assert status == 'accepted' and recorded[0]['Subject'] == 'Door' and 'Person: Episode starts' in recorded[0].get_content()
+    assert not list(recorded[0].iter_attachments())
     def reject(*args, **kw): raise smtplib.SMTPAuthenticationError(535, b'No')
     monkeypatch.setattr(SMTP, 'login', reject)
     assert actions.send(config, {}, 'key')[0] == 'blocked'

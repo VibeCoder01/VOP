@@ -1,5 +1,14 @@
 # Specification change log
 
+## 0.6.9 — Save image action (30 October 2026)
+
+- Add Save image to Actions and Automations, retaining the triggering observation's
+  normal privacy-masked image without changing the camera's automatic-save setting.
+- Let manual image tests choose a camera and use its latest captured observation.
+  Report unavailable images without substituting other frames or taking a capture.
+- Save the image and Activity receipt atomically in existing storage; preserve normal
+  retention/deletion, suppression and deduplication. Clarify that email is text only.
+
 ## 0.6.8 — Stable Trends updates (30 October 2026)
 
 - Refresh Trends canvases and figures in place instead of reloading the whole page.

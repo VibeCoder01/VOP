@@ -30,7 +30,7 @@ from vop.measurements import utc, timezone_for
 from vop.secrets import SecretStore
 from vop.storage import dumps
 
-KINDS = {'beep': 'Beep', 'audio': 'Play audio', 'tapo': 'Tapo light (L530)', 'hub': 'Tapo hub sound (H100)', 'email': 'Email', 'sms': 'Text message'}
+KINDS = {'image': 'Save image', 'beep': 'Beep', 'audio': 'Play audio', 'tapo': 'Tapo light (L530)', 'hub': 'Tapo hub sound (H100)', 'email': 'Email', 'sms': 'Text message'}
 TRIGGERS = {'start': 'Episode starts', 'duration': 'Episode stays active', 'end': 'Episode ends',
             'value': 'Answer becomes', 'unavailable': 'Observation becomes unavailable', 'recovered': 'Observation recovers'}
 SCHEMA = """
@@ -425,7 +425,8 @@ class Actions:
                     if synthetic:
                         reason = 'Synthetic observations do not run automatic actions. Use an explicit action test.'
                     context = {'camera': self.pipeline.sources[sid].name or sid, 'question': q.text, 'trigger': TRIGGERS[m['trigger']],
-                               'automation': m['name'], 'source_id': sid, 'question_id': qid, 'question_version': q.version, 'event_id': event_id}
+                               'automation': m['name'], 'source_id': sid, 'question_id': qid, 'question_version': q.version, 'event_id': event_id,
+                               'observation_id': summary['last_observation_id']}
                     for aid in m['actions']:
                         action = db.execute('SELECT configuration FROM action_definitions WHERE id=?', (aid,)).fetchone()
                         if action:
@@ -452,22 +453,56 @@ class Actions:
             return {**value, 'state': 'UNKNOWN', 'stale': True, 'latest_value': None}
         return value
 
-    @staticmethod
-    def enqueue(db, jid, mid, config, context, now, reason=''):
+    def enqueue(self, db, jid, mid, config, context, now, reason=''):
+        if db.execute('SELECT 1 FROM action_jobs WHERE id=?', (jid,)).fetchone():
+            return
+        status, detail = ('suppressed', reason) if reason else ('queued', '')
+        if not reason and config['kind'] == 'image':
+            # This local DB action and its Activity receipt commit together. No queued
+            # image copies, external I/O or later retry can restore deleted evidence.
+            status, detail = self.save_image(db, context, now)
         db.execute('INSERT OR IGNORE INTO action_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                    (jid, mid, config['id'], now.isoformat(), (now + timedelta(minutes=2)).isoformat(), now.isoformat(),
-                    'suppressed' if reason else 'queued', 0, dumps(config), dumps(context), reason, None))
+                    status, int(config['kind']=='image' and not reason), dumps(config), dumps(context), detail, None))
+        if config['kind'] == 'image' and not reason:
+            db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)',
+                       (now.isoformat(),'action_result',dumps({'id':jid,'status':status})))
 
-    def test(self, aid):
+    def save_image(self, db, context, now):
+        row = db.execute("SELECT r.source_id,r.frame_id,f.evidence_png IS NOT NULL AS saved FROM observations o JOIN runs r ON r.id=o.run_id JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.id=? AND o.status!='retention_gap' AND r.source_id=?",
+                         (context.get('observation_id'), context.get('source_id'))).fetchone()
+        if not row:
+            return 'blocked', 'No observation image is available. Run an observation before testing Save image.'
+        if row['saved']:
+            return 'completed', 'The observation image is already saved in Individual Observations.'
+        with self.pipeline.preview_lock:
+            candidates = (self.pipeline.processed_previews.get(row['source_id']), self.pipeline.previews.get(row['source_id']))
+            image = next((p[1] for p in candidates if p and p[0] == row['frame_id']), None)
+        if not image:
+            return 'blocked', 'The triggering image is no longer available. No newer image was substituted.'
+        db.execute('UPDATE frames SET evidence_png=? WHERE source_id=? AND frame_id=?', (image, row['source_id'], row['frame_id']))
+        db.execute('INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)', (now.isoformat(),'evidence','retained_by_action'))
+        return 'completed', 'Saved the observation image in Individual Observations.'
+
+    def test(self, aid, source_id=None):
         with self.lock:
             config = next((a for a in self.definitions() if a['id'] == aid), None)
             if not config:
                 raise ValueError('This action no longer exists.')
+            context = {'camera': 'Test camera', 'question': 'Action test', 'trigger': 'Manual test', 'automation': 'Manual test'}
+            if config['kind'] == 'image':
+                if source_id not in self.pipeline.sources:
+                    raise ValueError('Choose a camera for the Save image test.')
+                context.update(source_id=source_id, camera=self.pipeline.sources[source_id].name or source_id)
             with self.store.connection() as db:
+                db.execute('BEGIN IMMEDIATE')
+                if config['kind'] == 'image':
+                    row = db.execute("SELECT o.id FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.source_id=? AND r.frame_id IS NOT NULL AND o.status!='retention_gap' ORDER BY o.sequence DESC LIMIT 1", (source_id,)).fetchone()
+                    context['observation_id'] = row['id'] if row else None
                 if db.execute("SELECT 1 FROM action_jobs WHERE action_id=? AND automation_id IS NULL AND created>?", (aid, (utcnow() - timedelta(seconds=5)).isoformat())).fetchone():
                     raise ValueError('Wait 00:00:05 between action tests.')
                 self.enqueue(db, 'test-' + uuid4().hex, None, config,
-                             {'camera': 'Test camera', 'question': 'Action test', 'trigger': 'Manual test', 'automation': 'Manual test'}, utcnow())
+                             context, utcnow())
         self.store.audit('action_test', aid)
 
     def jobs(self):
@@ -553,6 +588,10 @@ class Actions:
         dependency = self.dependency(config)
         if dependency:
             return 'blocked', dependency
+        if kind == 'image':
+            with self.store.connection() as db:
+                db.execute('BEGIN IMMEDIATE')
+                return self.save_image(db,context,utcnow())
         if kind in ('beep', 'audio'):
             import winsound
             # Windows wave playback respects the WAV's samples. Beep uses system volume.

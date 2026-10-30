@@ -104,12 +104,14 @@ def install_actions(app, actions):
         for action in actions.definitions():
             rows.append(Tr(Td(action['name']), Td(KINDS[action['kind']]), Td(actions.dependency(action) or 'Ready to test'),
                 Td(Div(back('Edit action', '/actions/edit?id=' + action['id']),
-                    Form(hidden(token), Button('Test action'), method='post', action='/actions/' + action['id'] + '/test'),
+                    Form(hidden(token),
+                         Label('Camera for image test',Select(Option('Choose a camera',value=''),*(Option(s.name or sid,value=sid) for sid,s in pipeline.sources.items()),name='source_id',required=True)) if action['kind']=='image' else None,
+                         Button('Test action'), method='post', action='/actions/' + action['id'] + '/test'),
                     back('Delete…', '/actions/' + action['id'] + '/delete'), cls='actions'))))
         return page('Actions', request, [P('Create an action here. Connect it to a camera and question in Automations.'),
             Div(back('Add action', '/actions/edit'), back('Automations', '/automations'), back('Setup help', '/actions/help'), cls='actions'),
             app.state.table(['Name', 'Type', 'Setup', 'Controls'], rows) if rows else P('No actions yet. Add a beep to start.'),
-            P('Test action performs the real action. Saving and simulation do not contact devices or send messages.', cls='muted')], 'actions')
+            P('Test action performs the real action. Save image keeps the chosen camera’s latest observation image; it does not take a new capture. Saving settings and simulation do not contact devices or send messages.', cls='muted')], 'actions')
 
     @app.route('/actions/help', methods=['GET'])
     def help_page(request):
@@ -117,7 +119,9 @@ def install_actions(app, actions):
             H2('Tapo L530 and H100'), P('Use the device’s LAN address and your Tapo account. This is separate from the camera RTSP account. Save, then Check device. Checking only reads device information.'),
             P('If Tapo support is missing, run this from the VOP folder on the computer running the dashboard, then restart VOP:'),
             Pre('.\\.venv\\Scripts\\python.exe -m pip install ".[tapo]"'),
-            H2('Email'), P('Use your provider’s SMTP SSL server, normally port 465, and an app password if required. VOP does not support STARTTLS-only servers in this release.'),
+            H2('Save image'), P('Connect this action to a question in Automations. It saves the privacy-masked source image for the observation that caused the action, in Individual Observations, even when automatic image saving is off. It uses the same image format, retention and deletion rules. It does not save a separate per-question crop or turn on automatic saving.'),
+            P('The matching image must still be in the temporary preview or already saved. Activity reports a missing image; it never substitutes another frame. Manual tests need a camera and an existing observation.'),
+            H2('Email'), P('Email is text only: images are not attached, including when a Save image action is linked to the same automation. Use your provider’s SMTP SSL server, normally port 465, and an app password if required. VOP does not support STARTTLS-only servers in this release.'),
             H2('Text messages'), P('Create a Twilio SMS sender and API key. Enter its Account SID, API key SID and secret, sender and recipient in the protected fields. Trial accounts may require recipient verification. Provider charges apply.'),
             H2('If an action fails'), P('Open Activity, read the result, then Edit action or Check device. A blocked action needs corrected setup. An uncertain action may already have happened: check the destination before using Test action. Old actions are not replayed.'),
             back('Back to Actions', '/actions')], 'actions')
@@ -140,6 +144,10 @@ def install_actions(app, actions):
                 field('Volume (0–100)', 'volume', existing.get('volume', 60), type='number', min=0, max=100, required=True)]
         if kind == 'audio':
             fields += [audio_editor(saved=bool(existing))]
+        if kind == 'image':
+            fields += [P('Save the triggering observation’s privacy-masked source image in Individual Observations. Camera and question are chosen in the automation.'),
+                       P('Works when automatic image saving is off. No new camera capture is taken. The image follows normal retention and deletion rules. If it is no longer available, Activity explains why nothing was saved.',cls='muted'),
+                       P('This action does not attach images to email. Email actions currently send text only.',cls='muted')]
         if kind == 'tapo':
             fields += [field('Light LAN address', 'address', existing.get('address', ''), required=True),
                        choose('Operation', 'operation', [('on', 'Turn on'), ('off', 'Turn off'), ('flash', 'Flash, then turn off')], existing.get('operation', 'on')),
@@ -187,8 +195,9 @@ def install_actions(app, actions):
 
     @app.route('/actions/{aid}/test', methods=['POST'])
     async def test(aid: str, request):
-        await run_in_threadpool(actions.test, aid)
-        return RedirectResponse('/activity?notice=Action+test+queued', status_code=303)
+        form = await request.form()
+        await run_in_threadpool(actions.test, aid, str(form.get('source_id','')) or None)
+        return RedirectResponse('/activity?notice=Action+test+requested', status_code=303)
 
     @app.route('/actions/{aid}/check', methods=['POST'])
     async def check(aid: str, request):

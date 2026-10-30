@@ -9,7 +9,7 @@ No actions, destinations or enabled automations are created automatically.
 1. Configure → Actions → Add action. Choose a type, then enter its relevant settings.
 2. Save. For Tapo, **Check device** reads device information without changing the light
    or playing a sound. For H100 it also loads the available sound choices.
-3. **Test action** deliberately queues the real action. Read its result in Activity.
+3. **Test action** deliberately runs the real action. Read its result in Activity.
 4. Automations → Add automation. Choose a camera/question and trigger, select one or
    more actions, set limits, and **Preview automation**. Preview does not save or execute.
 5. Save as Enabled when ready. New automations default to Paused. Start camera monitoring
@@ -18,6 +18,38 @@ No actions, destinations or enabled automations are created automatically.
 The current editor connects one camera/question per automation. Reuse the same named
 action in other automations to cover additional cameras. Cameras, questions and actions
 are named choices; there is no scripting or graphical wiring language.
+
+## Save image
+
+Choose **Save image** in Add action, name it and save. Connect it to a question in
+Automations, just like other actions. When that automation fires, VOP keeps the
+privacy-masked source image from the observation used to evaluate the trigger.
+It is the same downscaled PNG that normal automatic image saving retains, shared
+by the capture's answers and visible in **Individual Observations**. It is not a
+separate rendering of a question's Include/Exclude mask or ROI crop.
+
+This works while the camera's automatic image-saving setting is off and does not
+change that setting. It does not capture another frame, run inference or contact
+the camera. Existing saved images are reused. The matching frame must still be
+in the temporary capture/processed preview or already saved; if it has expired or
+been replaced, Activity reports **blocked**. A newer unrelated frame is never used.
+For a missing capture, there is no image to save.
+
+For **Test action**, choose a camera in the Actions list. VOP uses its latest
+captured observation. Run an observation first if none exists. The test saves an
+image immediately; it does not start monitoring. Automatic synthetic triggers,
+cooldown, schedule and hourly suppression do not save images.
+
+Saving is a local database operation: the image and completed Activity record
+commit in the same transaction when a trigger/test is accepted. No image payload
+is copied into Activity, a queue, a separate file or a new cache. Saved images
+follow normal history retention, image deletion and question-data deletion rules.
+Deleting an action or automation stops future saves; existing observation images
+remain until those normal history controls delete them. Completed saves are not
+replayed on restart, so they cannot restore subsequently deleted images.
+
+**Email remains text only.** Linking Save image and Email to the same automation
+does not attach the image to the email.
 
 ## Sound destination
 
