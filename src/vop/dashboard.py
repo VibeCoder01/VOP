@@ -454,7 +454,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def image_settings(source_id, operator, configure=True):
         enabled = store.source_control(source_id)['retain_evidence']
         return Div(P('Image saving is ' + ('ON. Future captures will keep a privacy-masked still image.' if enabled else 'OFF. Future captures keep answers without saving an image.'), role='status'),
-                   P('This setting affects future captures only. It does not restore unsaved or deleted images, or delete images already saved.', cls='muted'),
+                   P('This setting affects future captures only. It does not restore unsaved or deleted images, or delete images already saved. Save image actions can keep individual observation images even when automatic saving is off.', cls='muted'),
                    A('Change image-saving setting', href=('/cameras/' + source_id if source_id in pipeline.sources and pipeline.sources[source_id].kind in ('rtsp', 'usb') else '/ui/sources/' + source_id) + '#image-saving', cls='button secondary') if operator and configure and source_id in pipeline.sources else
                    P('Use Configure mode to change image saving.' if operator and not configure else 'Restore this input to change its settings.' if operator else 'An operator can change image saving.', cls='muted'), cls='readiness info')
 
@@ -923,7 +923,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         operator = request.scope.get('auth_role') == 'operator'
         return page('Individual Observations', request, [
             P('Each row is one answer from a captured image. Open a result to see its saved image, if available. Several answers can share the same image.'),
-            P('Image saving is off by default. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
+            P('Image saving is off by default. Save image actions can retain selected observation images even when automatic saving is off. A temporary capture preview is not a saved image. Images can also be deleted manually or by retention rules.', cls='muted'),
             source_buttons(selected_sources, path='/observations'),
             *(Section(H2(names[sid] or sid), image_settings(sid, operator, configuring(request)),
                       A('Delete input history…', href='/ui/sources/' + sid + '/history/delete', cls='button danger') if configuring(request) else None)

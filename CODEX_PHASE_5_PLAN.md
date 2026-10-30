@@ -7,6 +7,9 @@ and Automations; an Activity page in View; confirmed episode start/duration/end,
 value and availability transitions; cooldown, daily schedule, hourly limits, pause,
 simulation preview and explicit real-action tests. The first light target is Tapo L530;
 the owner's subsequent scope addition includes built-in sound playback on the H100 hub.
+On 30 October 2026 the owner also authorised a Save image action using the normal
+observation-evidence storage. Email image attachments were queried, not requested;
+email remains text only in this change.
 
 Traceability: SRS EVT-003–006, EVT-008, EVT-010; section 9.4 notification/action interface;
 NFR-011 accessibility; existing temporal UNKNOWN semantics and deployment neutrality.
