@@ -337,9 +337,30 @@ def install_actions(app, actions):
 
     def activity_rows(request):
         current_actions = {a['id'] for a in actions.definitions()}
+        jobs = actions.jobs()
+        operator = request.scope.get('auth_role') == 'operator'
+        image_jobs = [j for j in jobs if j['configuration']['kind']=='image' and j['status']=='completed']
+        ids = list({j['context'].get('observation_id') for j in image_jobs if j['context'].get('observation_id')})
+        images = {}
+        if operator and ids:
+            # Activity refreshes each second: check existence in one bounded query,
+            # without loading image blobs or replaying observation histories.
+            with store.connection() as db:
+                images = dict(db.execute("SELECT o.id,r.source_id FROM observations o JOIN runs r ON r.id=o.run_id JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.status!='retention_gap' AND f.evidence_png IS NOT NULL AND o.id IN (" + ','.join('?' for _ in ids) + ')',ids))
+
+        def image_control(job):
+            if job['configuration']['kind']!='image' or job['status']!='completed':
+                return None
+            if not operator:
+                return P('Operator access is required to view images.',cls='muted')
+            oid = job['context'].get('observation_id')
+            if oid and images.get(oid)==job['context'].get('source_id'):
+                return P(A('View image',href='/ui/observations/'+oid+'#recorded-image',cls='button secondary'))
+            return P('Image no longer available. It may have been deleted or expired.',cls='muted')
+
         return app.state.table(['Time', 'Automation / action', 'Result', 'Details'], [Tr(Td(local_time(j['created'], actions.zone)),
             Td(j['context'].get('automation', ''), P(j['configuration']['name'])), Td(badge(j['status'])),
-            Td(j['detail'] or 'Waiting to run.', P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if request.scope.get('auth_role') == 'operator' else None)) for j in actions.jobs()])
+            Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in jobs])
 
     @app.route('/activity/rows', methods=['GET'])
     def rows(request):

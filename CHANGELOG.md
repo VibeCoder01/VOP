@@ -1,5 +1,12 @@
 # Specification change log
 
+## 0.6.10 — View saved action images (30 October 2026)
+
+- Add View image to completed Save image entries in Activity, opening the exact
+  observation's recorded image with existing operator permissions.
+- Show unavailable status after image/observation deletion or retention. Keep links
+  independent of action-definition deletion and never substitute newer camera frames.
+
 ## 0.6.9 — Save image action (30 October 2026)
 
 - Add Save image to Actions and Automations, retaining the triggering observation's

@@ -5,6 +5,8 @@ Individual Observations, even when automatic image saving is off. Add the action
 in Configure → Actions, then link it in Automations. Manual tests select a camera
 and use an existing observation; no new capture is taken. See [Save image](docs/actions.md#save-image).
 Email actions currently send **text only**, without image attachments.
+In Activity, completed Save image entries offer **View image** to open that
+observation's saved image. Deleted or expired images are marked unavailable.
 
 Phase 4 adds an authenticated process-isolated inference worker, explicit dashboard backend
 selection, protected Tapo credentials and repeatable camera connection tests. Actual pinned
