@@ -33,6 +33,7 @@ from vop.episodes_ui import TITLE as EPISODES_TITLE, EPISODES_JS, episode_timeli
 from vop.mask_editor import editor as mask_editor, parse_regions, CSS as MASK_CSS
 from vop.automation_markers import markers as automation_markers, marker as automation_marker, CSS as MARKER_CSS, SCRIPT as MARKER_JS
 from vop.trends_ui import graph as trend_graph, domain as trend_domain, CSS as TREND_CSS, SCRIPT as TRENDS_JS
+from vop.observe_grid import card as grid_card, lights as grid_lights, captured_reference, observe_url, switch as observe_switch, image_switch, CSS as GRID_CSS, SCRIPT as GRID_JS
 
 CSS = """
 .diagnostic-signal{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:15px;font-weight:650;line-height:1.4}.signal-lights{display:inline-flex;flex:0 0 auto;gap:8px;padding:9px;background:#172a3a;border-radius:24px;box-shadow:0 2px 5px #0002}.signal-lamp{display:block;width:22px;height:22px;border-radius:50%;background:#66727e;border:2px solid #8b97a1;opacity:.45}.signal-lamp.lit{opacity:1;border-color:white;box-shadow:0 0 0 3px #ffffff25}.signal-lamp.red.lit{background:#ff4757}.signal-lamp.amber.lit{background:#ffbd2e}.signal-lamp.green.lit{background:#20d584}.diagnostic-summary{padding:18px 22px;margin-bottom:22px;border:2px solid #bdcbd6;border-radius:12px;background:#f4f8fb}.diagnostic-summary .diagnostic-signal{font-size:21px;margin:0}.diagnostic-summary .signal-lamp{width:28px;height:28px}.diagnostic-summary .signal-lights{padding:12px}
@@ -62,7 +63,7 @@ details{margin:22px 0;border-top:1px solid var(--line);padding-top:12px}summary{
 @media(max-width:700px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:static;padding:18px;border-right:0;border-bottom:1px solid var(--line)}.navigation{display:flex;overflow:auto;gap:4px;margin:18px 0 0;padding-bottom:4px}.navigation a{white-space:nowrap}.sidebar small,.subtitle{display:none}.sidebar>form{align-self:end;margin-top:12px}.workspace{padding:28px 20px 48px}.top{margin-bottom:26px;flex-direction:column;gap:14px}h1{font-size:30px}.stats{grid-template-columns:1fr 1fr;gap:20px}.pair{grid-template-columns:1fr;gap:0}.surface{padding:22px 20px}.section-heading{align-items:start}.object-row .actions{flex-shrink:1}.filters .field{max-width:none}}
 """
 
-CSS += MASK_CSS + MARKER_CSS + TREND_CSS
+CSS += MASK_CSS + MARKER_CSS + TREND_CSS + GRID_CSS
 
 QUESTION_EDITOR_JS = """const form = document.querySelector('[data-question-editor]');
 if (form) {
@@ -435,8 +436,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/workspace.js', defer=True),
                          Script(src='/ui/actions.js', defer=True) if role == 'operator' or view == 'activity' else None,
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
-                         Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure else None,
-                         Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure else None,
+                         Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')!='grid' else None,
+                         Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')!='grid' else None,
+                         Script(src='/ui/observe-grid.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')=='grid' else None,
                          Script(src='/ui/trends.js', defer=True) if view == 'metrics' else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None,
                          Script(src='/ui/episodes.js', defer=True) if view == 'events' else None,
@@ -587,6 +589,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     def observe_answers_script(request):
         return Response(OBSERVE_ANSWERS_JS, media_type='application/javascript')
 
+    @app.route('/ui/observe-grid.js', methods=['GET'])
+    def observe_grid_script():
+        return Response(GRID_JS, media_type='application/javascript')
+
     @app.route('/ui/camera-answers/{source_id}', methods=['GET'])
     def current_camera_answers(source_id: str, request):
         if source_id not in pipeline.sources:
@@ -596,8 +602,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         records = store.questions(source_id)
         # Cheap change checks avoid replaying the full history on every 0.2-second poll.
         counts_only = request.query_params.get('counts_only') == '1'
+        grid = request.query_params.get('grid') == '1'
         control = store.source_control(source_id)
-        revision = [app.state.instance_id, zone, counts_only, control, records]
+        revision = [app.state.instance_id, zone, counts_only, grid, control, records]
         markers = automation_markers(store, source_id, {r['spec'].question_id:r['spec'].version for r in records})
         revision.append(markers)
         image_ids = []
@@ -611,7 +618,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 revision.append(bool(last and (utcnow() - utc(last[0] or last[1])).total_seconds() > record['policy'].max_gap_seconds))
                 if record['enabled'] and control['enabled']:
                     image_ids.append(last[3] if last and last[4] != 'retention_gap' else None)
-        processed = answer_image_reference(store,pipeline,source_id,image_ids)
+        processed = captured_reference(store,pipeline,source_id) if grid else answer_image_reference(store,pipeline,source_id,image_ids)
         revision.append(processed)
         etag = '"' + sha256(json.dumps(revision, default=lambda obj: asdict(obj), sort_keys=True).encode()).hexdigest() + '"'
         if request.headers.get('if-none-match') == etag:
@@ -620,14 +627,15 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         answer_ids = [d['summary']['last_observation_id'] for d in answers if d['enabled'] and not d['summary'].get('disabled')]
         if answer_ids != image_ids:
             # A capture committed during rendering: bind pixels to the actual answer rows.
-            processed = answer_image_reference(store,pipeline,source_id,answer_ids)
+            processed = captured_reference(store,pipeline,source_id) if grid else answer_image_reference(store,pipeline,source_id,answer_ids)
             etag = ''  # Do not validate this newer representation with the earlier revision.
         headers = {**({'ETag':etag} if etag else {}), **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
         headers.update({'X-VOP-Processed-' + key: value or '' for key,value in processed.items()})
-        content = '' if counts_only else to_xml(camera_answer_content(answers, zone, markers))
+        headers['X-VOP-Monitoring'] = str(bool(control['enabled'] and control['sample_interval_seconds']>0)).lower()
+        content = '' if counts_only else to_xml(grid_lights(answers,answer_label) if grid else camera_answer_content(answers, zone, markers))
         return Response(content, media_type='text/html', headers=headers)
 
-    def capture_controls(source, csrf, operator, configure, answers=(), zone=None):
+    def capture_controls(source, csrf, operator, configure, answers=(), zone=None, grid_url=None):
         sid = source['source_id']
         problems = capture_dependencies(pipeline, sid) if operator else []
         automatic = bool(getattr(pipeline, 'auto_worker', None))
@@ -649,7 +657,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                    disabled=not monitoring and bool(other_problems)),
                             method='post', action=f'/ui/sources/{sid}/monitor') if operator and automatic else None,
                        action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if configure and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
-                       cls="actions"), camera_answers(source, answers, zone or settings.timezone_name), cls="observe-controls"), cls="capture-source")
+                       cls="actions"),
+                       A('Grid View',href=grid_url,cls='button secondary grid-view-link') if grid_url and not configure else None,
+                       camera_answers(source, answers, zone or settings.timezone_name), cls="observe-controls"), cls="capture-source",id='camera-'+sid)
 
     @app.route('/ui/sources/{source_id}/monitor', methods=['POST'])
     async def monitor(source_id: str, request):
@@ -705,7 +715,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     def filters(view, selected="", request=None):
         if view in ('overview', 'events'):
-            return source_buttons(set(request.query_params.getlist('source')) - {''}, view=view, counts=store.event_counts() if view == 'events' else None)
+            extra=[('layout',request.query_params.get('layout','full')),('images',request.query_params.get('images','live'))] if view=='overview' else ()
+            return source_buttons(set(request.query_params.getlist('source')) - {''}, view=view, extra=extra, counts=store.event_counts() if view == 'events' else None)
         if view == 'questions':
             return Nav(*(A(label, href='/?' + urlencode({'view': view, 'source': sid}),
                            cls='button' if sid == selected else 'button secondary',
@@ -801,6 +812,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
     @app.route("/", methods=["GET"])
     def overview(request):
         view = request.query_params.get("view", "overview")
+        layout,images=request.query_params.get('layout','full'),request.query_params.get('images','live')
+        if view=='overview' and (layout not in ('full','grid') or images not in ('live','captured')):
+            raise ValueError('Choose Full view or Grid view, and Live or Last captured images.')
         if view == 'overview' and configuring(request) and not request.headers.get('authorization'):
             return RedirectResponse('/cameras', status_code=303)
         if view not in ("overview", "sources", "questions", "events", "metrics", "settings"):
@@ -825,6 +839,28 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected_sources or s["source_id"] in selected_sources]
         content = [filters(view, selected, request)]
         if view == "overview":
+            if not configure:
+                content.insert(0,observe_switch(layout,images,selected_sources))
+            if layout=='grid' and not configure:
+                content += [image_switch(images,selected_sources),
+                            P('Demo engine selected. Answers are synthetic.',cls='notice') if pipeline.engine.synthetic else None,
+                            P('Green ring: monitoring. Amber ring: paused. Question lights: Yes green, No red, unknown amber. Ratings run from low red through middle amber to high green; colours do not mean good or bad. A green Choice light means a category was returned; read its label.',cls='muted'),
+                            P('Pictures and answers update in place. Live pictures are separate from model observations. Last captured shows the last observation image. Hover over an image to enlarge it.',cls='muted'),
+                            P('Up to four live camera previews can run at once. Use the camera filters, or Last captured for larger grids.',cls='muted') if images=='live' else None]
+                cards=[]
+                for source in sources:
+                    sid=source['source_id']
+                    if images=='captured':
+                        ref=captured_reference(store,pipeline,sid)
+                    else:
+                        image=latest_image(sid)
+                        ref={'frame':image[0] if image else '', 'captured':image[2] if image else '',
+                             'url':'/ui/live-preview/'+sid if image else '', 'message':'No preview available.'}
+                    cards.append(grid_card(source,[d for d in data if d['source_id']==sid],ref,mode=images,
+                        operator=operator,csrf=csrf,zone=zone,lease=pipeline.live_previews.allowed and source['kind'] in ('rtsp','usb'),
+                        label=answer_label,caption=local_time,full_url=observe_url('full',images,selected_sources,sid)))
+                content.append(Div(*cards,cls='observe-camera-grid') if cards else P('No cameras configured. Add a camera in Configure mode.'))
+                return page('Observe',request,content,view='overview',notice=request.query_params.get('notice'))
             if app.state.sampler.last_error:
                 from vop.operator_workflow import recovery_message
                 content.append(Div(P(recovery_message(app.state.sampler.last_error)), A('Open Diagnostics', href='/diagnostics', cls='button secondary'), cls='notice', role='status'))
@@ -833,7 +869,8 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             count = sum(store.event_count(sid) for sid in selected_sources) if selected_sources else store.event_count()
             content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if configure else None, cls="section-heading"),
                                 *(capture_controls(s, csrf, operator, configure,
-                                    [d for d in data if d['source_id'] == s['source_id']], zone) for s in sources)),
+                                    [d for d in data if d['source_id'] == s['source_id']], zone,
+                                    grid_url=observe_url('grid',images,selected_sources,s['source_id'])) for s in sources)),
                         Div(*(Div(Small(metric_label(label)), StrongText(number, data_condition_count="active" if label == "Active conditions" else "unknown" if label == "Unknown conditions" else None), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats")]
             content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),

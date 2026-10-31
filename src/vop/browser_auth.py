@@ -73,7 +73,7 @@ class BrowserAuth:
         read_page = (path in ('/', '/observations', '/configure', '/activity', '/activity/rows', '/diagnostics', '/ui/actions.js', '/ui/audio-editor.js', '/actions/beep.wav') or path.startswith('/actions/audio/') or
                      path.startswith('/integration/cameras/') and path.endswith('/test') or
                      path.startswith(('/ui/observations/', '/ui/evidence/', '/ui/preview/', '/ui/live-preview/', '/ui/camera-answers/', '/ui/processed-image/')) and not path.endswith('/delete') or
-                     path in ('/ui/workspace.js', '/ui/trends.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/episodes.js') or path.startswith('/api/'))
+                     path in ('/ui/workspace.js', '/ui/trends.js', '/ui/trends-refresh.js', '/ui/restart.js', '/ui/question-editor.js', '/ui/observe-images.js', '/ui/observe-answers.js', '/ui/observe-grid.js', '/ui/episodes.js') or path.startswith('/api/'))
         if path == '/' and Request(scope).query_params.get('view', 'overview') in ('sources', 'questions', 'settings'):
             read_page = False
         preview_control = path.startswith('/ui/live-preview/') and path.endswith('/keepalive')

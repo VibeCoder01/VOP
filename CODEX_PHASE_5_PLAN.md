@@ -10,6 +10,8 @@ the owner's subsequent scope addition includes built-in sound playback on the H1
 On 30 October 2026 the owner also authorised a Save image action using the normal
 observation-evidence storage. Email image attachments were queried, not requested;
 email remains text only in this change.
+On 31 October 2026 the owner authorised an Observe camera grid with Full/Grid and
+Live/Last-captured choices, monitoring rings and question answer traffic lights.
 
 Traceability: SRS EVT-003–006, EVT-008, EVT-010; section 9.4 notification/action interface;
 NFR-011 accessibility; existing temporal UNKNOWN semantics and deployment neutrality.
