@@ -39,6 +39,8 @@ def test_grid_switches_filters_and_normal_camera_link_without_capture(app,monkey
             assert response.status_code==200
             doc=BeautifulSoup(response.text,'html.parser')
             assert len(doc.select('[data-grid-camera]'))==1
+            assert not doc.select_one('.grid-camera').find('a',string='Full view')
+            assert doc.select_one('nav[aria-label="Observe display"]').find('a',string='Full view')
             assert doc.select_one('[data-grid-camera]')['data-mode']==mode
             assert doc.select_one('nav[aria-label="Grid image type"]')
             for link in doc.select('nav[aria-label="Grid image type"] a'):

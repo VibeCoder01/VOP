@@ -2,6 +2,9 @@
 
 ## 0.6.11 — Observe camera grid (31 October 2026)
 
+- Tighten grid tile spacing and remove per-camera Full view footers; use the switch
+  at the top. Empty caption and status lines take no space.
+
 - Add Full/Grid view choices, a per-camera Grid View link and Live/Last captured
   choices with preserved camera filters and links back to each full camera view.
 - Show monitoring/paused rings and labelled question traffic lights. Explain rating

@@ -130,8 +130,9 @@ and existing history links, and restoring a camera returns it to the filter.
 
 Observe has **Full view / Grid view** at the top. Each camera in Full view also has
 **Grid View** beside its monitoring and answers controls. The grid keeps the chosen
-camera filters and offers **Live images / Last captured images**. Full view links on
-each tile return to that camera. Images enlarge on hover or keyboard focus.
+camera filters and offers **Live images / Last captured images**. Use the **Full view**
+button at the top to return. Compact tiles hide empty status space; images enlarge
+on hover or keyboard focus.
 Green rings mean monitoring is enabled, including the time between observations;
 amber rings mean paused. Last captured shows the most recent observation image,
 even after Pause records an intentional gap. It never substitutes an older saved

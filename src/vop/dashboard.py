@@ -858,7 +858,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                              'url':'/ui/live-preview/'+sid if image else '', 'message':'No preview available.'}
                     cards.append(grid_card(source,[d for d in data if d['source_id']==sid],ref,mode=images,
                         operator=operator,csrf=csrf,zone=zone,lease=pipeline.live_previews.allowed and source['kind'] in ('rtsp','usb'),
-                        label=answer_label,caption=local_time,full_url=observe_url('full',images,selected_sources,sid)))
+                        label=answer_label,caption=local_time))
                 content.append(Div(*cards,cls='observe-camera-grid') if cards else P('No cameras configured. Add a camera in Configure mode.'))
                 return page('Observe',request,content,view='overview',notice=request.query_params.get('notice'))
             if app.state.sampler.last_error:
