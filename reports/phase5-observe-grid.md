@@ -1,8 +1,8 @@
 # Observe camera grid — 31 October 2026
 
 Observe now has Full view / Grid view choices above the camera filters. Each full
-camera panel has a Grid View link beside monitoring/answers controls; each grid tile
-can return to its full camera panel. Camera filters and Live / Last captured choices
+camera panel has a Grid View link beside monitoring/answers controls; the top Full view
+switch returns to the normal layout. Camera filters and Live / Last captured choices
 are carried in URLs. The grid is responsive, with source names, privacy-masked images,
 green monitoring or amber paused rings, and a three-lamp traffic light per question
 inside the ring beside the image. Images retain hover/focus enlargement.
@@ -33,6 +33,12 @@ sampling intervals, image retention or engine configuration. Viewer image restri
 remain in place; no viewer image source/decoder requests are emitted.
 
 ## Files and validation
+
+Owner refinement: removed each tile's Full view footer, reduced ring bottom padding
+from 12 to 6 pixels, removed its footer margin, collapsed empty caption/status lines
+and reduced caption spacing. Image size and question lights are retained.
+`.venv\Scripts\python.exe -m pytest -q tests/test_observe_grid.py` after this refinement:
+**12 passed in 7.07 seconds**. The existing top Full view control remains available.
 
 New `src/vop/observe_grid.py` and `tests/test_observe_grid.py`; shared dashboard and
 browser script authorization; README, changelog, Phase 5 scope note, this report and
