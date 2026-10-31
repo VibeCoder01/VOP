@@ -128,6 +128,28 @@ Observe omits the duplicate recent-observations table. Retired cameras are omitt
 Individual Observations filter; their stored history remains available through All inputs
 and existing history links, and restoring a camera returns it to the filter.
 
+Observe has **Full view / Grid view** at the top. Each camera in Full view also has
+**Grid View** beside its monitoring and answers controls. The grid keeps the chosen
+camera filters and offers **Live images / Last captured images**. Full view links on
+each tile return to that camera. Images enlarge on hover or keyboard focus.
+Green rings mean monitoring is enabled, including the time between observations;
+amber rings mean paused. Last captured shows the most recent observation image,
+even after Pause records an intentional gap. It never substitutes an older saved
+image when that last image is unavailable. Viewing does not change monitoring,
+capture intervals or image saving. Live mode renews preview leases only for cameras
+that are monitoring; paused cameras can show an existing still. The existing limit
+of four simultaneous live previews remains. Last-captured mode opens no live decoders.
+
+One labelled traffic light per question appears beside the image, inside its ring.
+Yes is green, No red and unknown/stale/paused answers amber. Ratings use low red,
+middle amber and high green positions on their configured scale; colours do not mean
+good/bad or model accuracy. Choice answers show their category with green meaning
+that a category was returned. Hover or focus a question to read its explanation.
+Lights update from observations, independently of live video. During answer-update
+failures they turn amber and report that last received values are being shown.
+Grid updates replace only changed image pixels and question lights, never the page.
+Hidden/closed tabs do not renew live preview leases. Images still require operator access.
+
 **Individual Observations** lists each recorded answer from a capture. **Episodes
 (Contiguous active observations)** groups checks into confirmed episodes; it does not mean continuous
 video recording. URLs and existing records are unchanged.

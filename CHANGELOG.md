@@ -1,5 +1,14 @@
 # Specification change log
 
+## 0.6.11 — Observe camera grid (31 October 2026)
+
+- Add Full/Grid view choices, a per-camera Grid View link and Live/Last captured
+  choices with preserved camera filters and links back to each full camera view.
+- Show monitoring/paused rings and labelled question traffic lights. Explain rating
+  and Choice colours without implying accuracy or desirability.
+- Update images and answer lights in place, retain existing preview/permission limits,
+  and avoid live leases in last-captured mode or for paused cameras.
+
 ## 0.6.10 — View saved action images (30 October 2026)
 
 - Add View image to completed Save image entries in Activity, opening the exact
