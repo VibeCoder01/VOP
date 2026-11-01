@@ -142,6 +142,8 @@ that are monitoring; paused cameras can show an existing still. The existing lim
 of four simultaneous live previews remains. Last-captured mode opens no live decoders.
 
 One labelled traffic light per question appears beside the image, inside its ring.
+Current Yes answers appear first and reorder automatically on answer updates. Other
+answers keep their configured order; ratings and categories are not treated as Yes.
 Yes is green, No red and unknown/stale/paused answers amber. Ratings use low red,
 middle amber and high green positions on their configured scale; colours do not mean
 good/bad or model accuracy. Choice answers show their category with green meaning
