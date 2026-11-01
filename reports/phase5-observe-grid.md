@@ -70,3 +70,17 @@ live previews remain the limit; use Last captured for larger grids. Unsaved imag
 leave memory and become unavailable. Existing temporal replay costs remain unchanged.
 Remain in Phase 5 and validate the display with normal owner use. Phase 6 is not
 started; no auto-merge.
+
+## Affirmative answer ordering (1 November 2026)
+
+Changed `src/vop/observe_grid.py`, `tests/test_observe_grid.py`, README and changelog.
+The shared initial/refresh renderer stably places current, enabled Yes/No answers
+with value true first. Stale/disabled values, ratings and choices do not count as
+affirmative. Other answers retain their order.
+
+Validation: `.venv\Scripts\python.exe -m pytest -q tests/test_observe_grid.py`:
+**13 passed in 14.34 seconds**. `git diff --check` passed. No hardware, live imagery,
+model or benchmark tests were run; model revision is unchanged. CI is not presumed
+passed. Remain in Phase 5; no Phase 6 work or auto-merge.
+
+Managed restart returned HTTP 202; a new instance reported ready.

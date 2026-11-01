@@ -1,5 +1,10 @@
 # Specification change log
 
+## Unreleased
+
+- Sort current affirmative Yes answers first in each Grid View camera, including
+  automatic answer refreshes. Preserve order within Yes and other answers.
+
 ## 0.6.11 — Observe camera grid (31 October 2026)
 
 - Tighten grid tile spacing and remove per-camera Full view footers; use the switch

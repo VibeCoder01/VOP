@@ -41,10 +41,10 @@ def lights(answers, label):
                 color,meaning='green','A category was returned; green does not rate this category'
         shown=label(value,spec.levels) if meaning!='Unknown or stale answer' else 'Unknown'
         description=f'{spec.text}: {shown}. {meaning}.'
-        items.append(Li(Span(*(Span('',cls='grid-answer-lamp '+lamp+(' lit' if color==lamp else '')) for lamp in ('red','amber','green')),cls='grid-traffic-light',aria_hidden='true'),
+        items.append((meaning!='Yes',Li(Span(*(Span('',cls='grid-answer-lamp '+lamp+(' lit' if color==lamp else '')) for lamp in ('red','amber','green')),cls='grid-traffic-light',aria_hidden='true'),
                         Div(Span(spec.text,cls='grid-question'),Small(shown)),title=description,tabindex=0,
-                        aria_label=description,cls='grid-question-answer',data_question=spec.question_id,data_answer_color=color))
-    return Ul(*items,cls='grid-question-lights') if items else P('No questions configured.',cls='muted')
+                        aria_label=description,cls='grid-question-answer',data_question=spec.question_id,data_answer_color=color)))
+    return Ul(*(item for _,item in sorted(items,key=lambda pair:pair[0])),cls='grid-question-lights') if items else P('No questions configured.',cls='muted')
 
 
 def captured_reference(store,pipeline,sid):

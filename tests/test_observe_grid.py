@@ -133,6 +133,21 @@ def test_question_light_is_labelled_and_not_a_confidence_score(kind,value,levels
     if kind=='ordinal':assert 'position on this rating scale' in doc.select_one('[title]')['title']
 
 
+def test_affirmative_answers_float_first_and_reorder_on_refresh():
+    def answer(qid,value,**summary):
+        return {'spec':SimpleNamespace(kind='binary',question_id=qid,text=qid,levels=(),choices=()),
+                'summary':{'latest_value':value,**summary},'enabled':True}
+    answers=[answer('no',False),answer('yes-first',True),answer('stale',True,stale=True),
+             answer('unknown',None),answer('yes-second',True),answer('numeric',1)]
+    def order():
+        doc=BeautifulSoup(to_xml(lights(answers,answer_label)),'html.parser')
+        return [item['data-question'] for item in doc.select('[data-question]')]
+    assert order()==['yes-first','yes-second','no','stale','unknown','numeric']
+    answers[0]['summary']['latest_value']=True
+    answers[1]['summary']['latest_value']=False
+    assert order()==['no','yes-second','yes-first','stale','unknown','numeric']
+
+
 @pytest.mark.skipif(not shutil.which('node'),reason='Node is needed for the grid browser contract')
 def test_grid_browser_modes_reuse_images_and_bound_live_leases():
     harness=r'''
