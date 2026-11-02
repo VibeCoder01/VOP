@@ -29,3 +29,13 @@ adapter contracts and protected setup. Windows and Ubuntu CI must pass. Manual L
 mail/SMS and audio acceptance remain labelled unverified until deliberately tested.
 
 Phase 6 and arbitrary scripts/plugins are outside this authorisation. Do not auto-merge.
+
+## Owner-authorised workspace maintenance (2 November 2026)
+
+The owner requested current-only notification selectors with opt-in historical review,
+separate configuration/captured-data choices for backup and restore, and a Factory
+Reset option. Configuration backups must preserve usable cameras, questions, engines,
+actions/audio, automations and notification rules without old captured history.
+Protected values remain OS-encrypted. Reset requires deliberate UI confirmation;
+implementation/testing does not authorise resetting the live workspace. Remain in
+Phase 5; no automatic merge or Phase 6 work.

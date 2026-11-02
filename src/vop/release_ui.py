@@ -47,7 +47,7 @@ def install_release(app, settings, store, pipeline, reliable):
         csrf = request.scope['session'].setdefault('csrf', secrets.token_urlsafe(24))
         is_operator = operator(request)
         params = request.query_params
-        tabs = [('notifications', 'Notifications'), ('rules', 'Rules'), ('export', 'Export'),
+        tabs = [('notifications', 'Notifications'), ('rules', 'Notification rules'), ('export', 'Export'),
                 ('configuration', 'Configuration and backup'), ('retention', 'Retention'), ('audit', 'Audit')]
         if not is_operator:
             tabs = [tab for tab in tabs if tab[0] in ('notifications', 'rules', 'export')]
@@ -62,39 +62,54 @@ def install_release(app, settings, store, pipeline, reliable):
             text = json.loads(row['specification'])['text']
             questions[row['source_id'], row['question_id']] = text
             versions[row['source_id'], row['question_id'], row['version']] = text
+        current = {(sid, r['spec'].question_id): r['spec'].text
+                   for sid in pipeline.sources for r in store.questions(sid)}
+        filter_cameras = {sid: source.name for sid, source in pipeline.sources.items()}
+        filter_questions = dict(current)
+        if tab == 'notifications' and params.get('include_history') == 'on':
+            with store.connection() as db:
+                for sid, qid in db.execute('SELECT DISTINCT source_id,question_id FROM alerts'):
+                    if sid not in filter_cameras:
+                        filter_cameras[sid] = cameras.get(sid, sid) + ' (Retired)'
+                    if (sid, qid) not in filter_questions:
+                        filter_questions[sid, qid] = questions.get((sid, qid), qid) + ' (Historical)'
         def filters():
             choices = {}
-            for (sid, qid), text in questions.items():
+            for (sid, qid), text in filter_questions.items():
                 if not params.get('source') or sid == params['source']:
                     choices.setdefault(qid, set()).add(text)
             options = [(qid, next(iter(texts)) if len(texts) == 1 else qid + ' (varies by camera)') for qid, texts in choices.items()]
-            return [dropdown('Camera', 'source', list(cameras.items()), params.get('source', ''), empty='All cameras'),
+            return [dropdown('Camera', 'source', list(filter_cameras.items()), params.get('source', ''), empty='All cameras'),
                     dropdown('Question', 'question', options, params.get('question', ''), empty='All questions')]
         navigation = Nav(*(A(label, href='/release?' + urlencode({'tab': key}), aria_current='page' if key == tab else None)
                            for key, label in tabs), cls='settings-tabs', aria_label='Settings sections')
         content = [navigation]
         if tab == 'notifications':
             alerts = reliable.alerts(source_id=params.get('source') or None, question_id=params.get('question') or None,
-                start=utc_value(params.get('start')), end=utc_value(params.get('end')), severity=params.get('severity') or None)
+                start=utc_value(params.get('start')), end=utc_value(params.get('end')), severity=params.get('severity') or None, current_only=params.get('include_history') != 'on')
             content += [Form(Input(type='hidden', name='tab', value=tab), *filters(),
                 dropdown('Severity', 'severity', [(v, v.capitalize()) for v in ('info', 'warning', 'critical')], params.get('severity', ''), empty='All severities'),
+                Label(Input(type='checkbox', name='include_history', checked=params.get('include_history') == 'on'), ' Include historical cameras and questions with notifications'),
                 *dates(params), Button('Filter notifications'), method='get', action='/release', cls='filters'),
                 Section(H2('Notifications'), app.state.table(['Created / rule', 'Condition', 'Severity / status', 'Delivery', 'Action'],
                     [Tr(Td(a['created_at_utc'], P(a['rule_id'])),
                         Td(cameras.get(a['source_id'], a['source_id']), P(versions.get((a['source_id'], a['question_id'], a['question_version']), a['question_id'])),
                            P('Synthetic test result') if a['payload'].get('synthetic') else None),
                         Td(badge(a['severity']), P(badge(a['status'])), P(a['note'])),
-                        Td(*(P(d['channel'] + ': ', badge(d['status'])) for d in a['deliveries'])),
+                        Td(*(P(('VOP notification list' if d['channel']=='dashboard' else d['channel'].capitalize()) + ': ', badge(d['status'])) for d in a['deliveries'])),
                         Td(Form(hidden(csrf), field('Note', 'note', a['note'], maxlength=4096, id='note-' + a['id']),
                             Select(*(Option(v.capitalize(), value=v) for v in ('acknowledged', 'resolved', 'note')), name='action', aria_label='Notification action'),
                             Button('Save'), method='post', action='/release/alerts/' + a['id'], cls='form-grid') if is_operator else 'Read only')) for a in alerts])),
                 P('Latest 1,000 matching notifications. Use dates to find older records.', cls='muted')]
         elif tab == 'rules':
-            content.append(P('Use ', A('Automations', href='/automations'), ' to connect episodes to lights, sound, email or text messages. Rules below create dashboard notifications.'))
+            if reliable.paused():
+                content.append(Section(P('Notification rules are paused after restore. Review the rules before resuming.'),
+                    Form(hidden(csrf),Button('Resume notification rules'),method='post',action='/release/rules/resume') if is_operator else None))
+            content.append(P('Use ', A('Automations', href='/automations'), ' to connect episodes to lights, sound, email or text messages. Notification rules below add messages to the VOP notification list.'))
             rules = reliable.rules()
             chosen = next((r for r in rules if r['id'] == params.get('rule')), {})
             kinds = [('duration', 'Active longer than'), ('count', 'Episode count greater than'), ('source_offline', 'Camera offline'), ('processing_degraded', 'Processing degraded')]
-            content += [Section(H2('Rules'), app.state.table(['Rule', 'Camera / question', 'Condition', 'Threshold', 'Status'],
+            content += [Section(H2('Notification rules'), app.state.table(['Rule', 'Camera / question', 'Condition', 'Threshold', 'Status'],
                 [Tr(Td(r['id']), Td(cameras.get(r['source_id'], r['source_id']), P(questions.get((r['source_id'], r['question_id']), r['question_id']))),
                     Td(dict(kinds).get(r['kind'], r['kind'])), Td(duration(r['threshold']) if r['kind'] == 'duration' else f"{r['threshold']:.1f}"),
                     Td('Enabled' if r['enabled'] else 'Paused')) for r in rules]))]
@@ -113,8 +128,8 @@ def install_release(app, settings, store, pipeline, reliable):
                             field('Count window (H:M:S)', 'window_seconds', duration(chosen.get('window_seconds', 3600)), required=True),
                             dropdown('Severity', 'severity', [(v, v.capitalize()) for v in ('info', 'warning', 'critical')], chosen.get('severity', 'warning')),
                             dropdown('Status', 'enabled', [('on', 'Enabled'), ('', 'Paused')], 'on' if chosen.get('enabled', True) else ''),
-                            dropdown('Delivery', 'webhook', [('', 'Dashboard only'), ('on', 'Dashboard and webhook')], 'on' if chosen.get('webhook') else ''),
-                            P('Webhook delivery requires server configuration. Dashboard notifications work without it.', cls='muted'),
+                            dropdown('Delivery', 'webhook', [('', 'VOP notification list'), ('on', 'VOP notification list and webhook')], 'on' if chosen.get('webhook') else ''),
+                            P('Webhook delivery requires server configuration. The VOP notification list works without it.', cls='muted'),
                             Button('Save rule', disabled=not conditions), method='post', action='/release/rules', cls='form-grid'))]
         elif tab == 'export':
             zones = list(dict.fromkeys([settings.timezone_name, 'UTC', *sorted(available_timezones())]))
@@ -125,12 +140,8 @@ def install_release(app, settings, store, pipeline, reliable):
                 method='get', action='/release/export', cls='form-grid'),
                 P('Includes question versions and engine details. Images and credentials are excluded.', cls='muted'))]
         elif tab == 'configuration':
-            content += [Section(H2('Configuration and backup'),
-                A('Export configuration', href='/release/config', cls='button'),
-                P('The export includes saved setup, without passwords or access keys.'),
-                P('For a full backup or restore, stop VOP and use tools/release.py. A full backup can contain saved images. Keep it private.'),
-                A('Workspace controls', href='/?view=settings', cls='button secondary'),
-                A('Manage recorded data', href='/observations', cls='button secondary'))]
+            from vop.workspace_ui import controls
+            content += controls(csrf, managed=bool(app.state.shutdown_request)) if is_operator else [P('Operator access is required for backup and reset.')]
         elif tab == 'retention':
             options = [(duration(d * 86400), f'{duration(d * 86400)} ({d} days)') for d in (1, 7, 30, 90, 365)]
             content += [Section(H2('Retention'), P('Choose how long to keep images, engine details and audit records. Review the deletion preview before applying it. Answers and episodes remain.'),
@@ -142,6 +153,13 @@ def install_release(app, settings, store, pipeline, reliable):
                 [Tr(Td(r['created_at_utc']), Td(r['action'].replace('_', ' ').capitalize()), Td(r['outcome'])) for r in audit_rows(store)]),
                 P('Latest 100 recorded actions.', cls='muted'))]
         return app.state.page('Settings', request, content, view='settings', notice=params.get('notice'))
+
+    @app.route('/release/rules/resume', methods=['POST'])
+    def resume_notification_rules():
+        with store.connection() as db:
+            db.execute("INSERT OR REPLACE INTO release_settings VALUES('notification_rules_paused','false')")
+        store.audit('notification_rules_resumed','operator')
+        return RedirectResponse('/release?tab=rules&notice=Notification+rules+resumed.',status_code=303)
 
     @app.route("/release/rules", methods=["POST"])
     async def rule_edit(request):

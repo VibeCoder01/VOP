@@ -99,12 +99,12 @@ class Reliable:
             db.execute("INSERT INTO audit(created_at_utc,action,outcome) VALUES(?,?,?)", (utcnow().isoformat(), "rule_edit", dumps({"id": body["id"], "revision": revision})))
         return revision
 
-    def alerts(self, *, source_id=None, severity=None, question_id=None, start=None, end=None):
+    def alerts(self, *, source_id=None, severity=None, question_id=None, start=None, end=None, current_only=False):
         if severity and severity not in ("info", "warning", "critical"):
             raise ValueError("Invalid severity")
         a, b = utc(start).isoformat() if start else None, utc(end).isoformat() if end else None
         with self.store.connection() as db:
-            rows = db.execute("SELECT * FROM alerts WHERE (? IS NULL OR source_id=?) AND (? IS NULL OR severity=?) AND (? IS NULL OR question_id=?) AND (? IS NULL OR created_at_utc>=?) AND (? IS NULL OR created_at_utc<?) ORDER BY created_at_utc DESC LIMIT 1000", (source_id, source_id, severity, severity, question_id, question_id, a, a, b, b)).fetchall()
+            rows = db.execute("SELECT * FROM alerts WHERE (? IS NULL OR source_id=?) AND (? IS NULL OR severity=?) AND (? IS NULL OR question_id=?) AND (? IS NULL OR created_at_utc>=?) AND (? IS NULL OR created_at_utc<?) AND (?=0 OR (EXISTS(SELECT 1 FROM query_controls q WHERE q.source_id=alerts.source_id AND q.question_id=alerts.question_id) AND NOT EXISTS(SELECT 1 FROM release_settings x WHERE x.id IN ('removed_source:'||alerts.source_id,'removed_question:'||alerts.source_id||':'||alerts.question_id,'deleted_question:'||alerts.source_id||':'||alerts.question_id)))) ORDER BY created_at_utc DESC LIMIT 1000", (source_id, source_id, severity, severity, question_id, question_id, a, a, b, b, int(current_only))).fetchall()
             deliveries = {row['id']: [] for row in rows}
             # Bound SQL parameters for SQLite builds with a 999-variable limit.
             for offset in range(0, len(rows), 900):
@@ -250,10 +250,17 @@ class Reliable:
             from vop.contracts import ProviderError
             return "permanent_failure" if isinstance(exc, ProviderError) else "temporary_failure"
 
+    def paused(self):
+        with self.store.connection() as db:
+            row = db.execute("SELECT value_json FROM release_settings WHERE id='notification_rules_paused'").fetchone()
+        return bool(json.loads(row[0])) if row else False
+
     def tick(self, now=None):
         if not self.lock.acquire(False):
             return
         try:
+            if self.paused():
+                return
             self.evaluate(now)
             self.retry(now)
             self.last_error = None

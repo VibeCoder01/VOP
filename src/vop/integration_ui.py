@@ -105,7 +105,7 @@ def install_integration(app, settings, store, pipeline):
         with store.connection() as db:
             db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('saved_engine:' + eid, dumps({'name': name, 'profile': value})))
 
-    if not saved_engines():
+    if not saved_engines() and not getattr(pipeline, 'authoritative_workspace', False):
         save_engine_record('current', 'Antec AI' if antec_profile(pipeline.engine) else 'Demo' if pipeline.engine.synthetic else pipeline.engine.engine_id, pipeline.engine_profile)
 
     with store.connection() as db:
@@ -369,6 +369,7 @@ def install_integration(app, settings, store, pipeline):
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES('engine_profile',?)", (dumps(value),))
                 db.execute("INSERT OR REPLACE INTO release_settings VALUES('active_engine_profile_id',?)", (dumps(eid),))
             pipeline.engine, pipeline.engine_profile = engine, value
+            pipeline.engine_unconfigured = False
             if pipeline.auto_worker:
                 pipeline.auto_worker.retry_after, pipeline.auto_worker.last_failure = 0, None
             store.audit('engine_selection', 'saved_profile')

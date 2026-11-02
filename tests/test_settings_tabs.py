@@ -6,7 +6,7 @@ from test_phase3_release import app, HEADERS, VIEWER
 
 def test_settings_tabs_are_distinct_and_forms_use_named_choices(app):
     with TestClient(app) as client:
-        labels = ['Notifications', 'Rules', 'Export', 'Configuration and backup', 'Retention', 'Audit']
+        labels = ['Notifications', 'Notification rules', 'Export', 'Configuration and backup', 'Retention', 'Audit']
         for key, heading in zip(('notifications', 'rules', 'export', 'configuration', 'retention', 'audit'), labels):
             response = client.get('/release?tab=' + key, headers=HEADERS)
             assert response.status_code == 200
@@ -23,9 +23,13 @@ def test_settings_tabs_are_distinct_and_forms_use_named_choices(app):
                 assert soup.select_one('select[name=condition] option').text.startswith('Synthetic shapes')
                 assert soup.select_one('select[name=severity]')
                 assert soup.select_one('select[name=rule]')
+            if key == 'configuration':
+                assert len(soup.select('input[name=configs]')) == 2
+                assert len(soup.select('input[name=data]')) == 2
+                assert soup.select_one('a[href="/release/factory-reset"]')
             headings = [h.text for h in soup.select('main h2')]
             if key == 'notifications':
-                assert 'Rules' not in headings and 'Export' not in headings
+                assert 'Notification rules' not in headings and 'Export' not in headings
         assert client.get('/release?tab=missing', headers=HEADERS).status_code == 400
         assert client.get('/release?tab=retention', headers={'Authorization': 'Bearer ' + VIEWER}).status_code == 400
         style = client.get('/ui/style.css', headers=HEADERS).text

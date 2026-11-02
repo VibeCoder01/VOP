@@ -230,6 +230,12 @@ def main():
             except (OSError, RuntimeError, ValueError, KeyError):
                 parser.exit(1, 'VOP is already running but could not open your workspace. Close VOP and reopen Start VOP. No key entry is needed.\n')
             return
+    from vop.workspace_backup import apply_pending
+    from vop.secrets import SecretStore
+    try:
+        apply_pending(settings, SecretStore())
+    except Exception as exc:
+        parser.exit(1, 'VOP maintenance did not complete (' + type(exc).__name__ + '). Open Start VOP again to retry. If this repeats, report this message. Recovery files have been kept.\n')
     print(f"VOP dashboard: http://127.0.0.1:{args.port}")
     if args.show_access_key:
         print('Advanced operator/API key:')

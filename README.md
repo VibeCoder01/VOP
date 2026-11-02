@@ -1293,3 +1293,64 @@ sessions and observation schedules are unchanged.
 Browser sound contract tests use fake playback deadlines and require an explicit
 completion marker. Their subprocess timeout allows CI process startup; it does not
 change the production playback watchdog.
+
+### Selective backup, restore and Factory Reset
+
+Open **Configure → Settings → Configuration and backup**. Backup and Restore each
+have independent **Configuration** and **Captured data** checkboxes:
+
+| Group | Includes |
+|---|---|
+| Configuration | Camera names/connections and image masks, questions/policies, engines and selection, actions and recorded/uploaded clips, automations, notification rules, retention and other workspace settings. Historical definitions and reserved IDs needed for configuration consistency remain metadata. |
+| Captured data | Recorded answers, retained camera images, episodes, engine provenance/raw fields, notification history, action Activity and audit. Historical camera/question descriptors needed to read the data are included without usable credentials. Unsaved preview frames are not archived. |
+
+To clear history but retain your setup:
+
+1. Download a backup with **Configuration checked** and **Captured data unchecked**.
+2. Keep that `.vop` file. It includes protected credentials, still encrypted with
+   Windows DPAPI; restore them using the **same Windows user profile on this computer**.
+3. Open **Review factory reset…**. Read the scope, then type `RESET` to confirm.
+4. After the automatic restart, upload the backup, choose **Configuration**, review
+   the preview, and restore. Missing groups are kept rather than treated as empty.
+5. Review and resume Automations and **Settings → Notification rules → Resume
+   notification rules**. Saved monitoring intervals resume normal new observations;
+   unchecked old captured data is not restored.
+
+Restore replaces selected groups; unchecked groups are preserved. A partial restore
+requires matching immutable camera/question/rule descriptors. If they conflict,
+restore both groups from the same backup, or reset first for configuration-only
+restore. New work is blocked, in-flight writes and workers finish, and the launcher
+applies the validated stage only while VOP is stopped. Pending actions/messages are
+cancelled instead of replayed. Automations and notification dispatch are paused
+until reviewed. Restore previews expire after 15 minutes; Cancel and shutdown clean
+uploaded files. Opening backup/restore/reset pages never captures or infers anything.
+
+Factory Reset removes current/retired configuration, recorded data, clips, protected
+camera/device/worker values (including obsolete VOP vault entries), and adjacent old
+migration database snapshots. It keeps the application, model files, external input
+files/downloaded backups, already-sent messages and the local sign-in key. VOP browser
+preferences are cleared in the browser completing the reset; authentication is kept.
+The empty workspace is authoritative: original sample/launcher configuration cannot
+repopulate cameras/questions/engines after restart. A newly added engine must be
+selected before observations can run. Later edits remain authoritative on restart.
+
+The `.vop` archive uses checksums, SQLite schema/integrity/reference checks, bounded
+streaming and encrypted credential blobs. It is **not encrypted as a whole**: saved
+images, answers and ordinary configuration are readable inside it. Keep it private.
+Maximum archive upload and unpacked size is **2 GB**; restore with the matching VOP
+version. Protected settings backup requires Windows DPAPI; data-only archives do not
+need the original OS vault. File inputs and environmental/server configuration outside
+VOP's database/vault must be maintained separately. Backup and upload require operator
+access; applying restore/reset also requires the **Start VOP** managed launcher and
+browser JavaScript for upload/progress. No restore/reset is applied merely by uploading.
+Recovery snapshots are temporary, retained on interrupted application and removed
+only once database/key replacement succeeds; a subsequent launch recovers/retries.
+Legacy `tools/release.py` directory backups and plain configuration exports remain
+available for compatibility but exclude protected credentials; use the new GUI `.vop`
+backup for the reset-and-restore workflow.
+
+Notifications now show only current cameras/questions by default. **Include historical
+cameras and questions with notifications** exposes retired/deleted entries only when
+there is notification history to review. Old labels remain attached to actual old
+notifications. “Dashboard” delivery is labelled **VOP notification list**, and the
+Rules tab is **Notification rules**, separate from Actions/Automations.
