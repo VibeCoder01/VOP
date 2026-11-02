@@ -19,6 +19,21 @@ def body(csrf, **changes):
             'observation_settings':'1','enabled':'on','sample_interval_seconds':'00:00:12.0','retain_evidence':'on', **changes}
 
 
+def test_persistent_capture_defaults_on_and_opt_out_survives_restart(app):
+    with TestClient(app) as client:
+        csrf = login(client)
+        new = BeautifulSoup(client.get('/cameras/new').text, 'html.parser')
+        assert new.select_one('[name=persistent_capture]').has_attr('checked')
+        assert client.post('/cameras/save', data=body(csrf, persistent_capture='on')).status_code == 200
+        assert app.state.pipeline.sources['tapo-c200'].settings['persistent_capture'] is True
+        assert client.post('/cameras/save', data=body(csrf, password='')).status_code == 200
+        assert app.state.pipeline.sources['tapo-c200'].settings['persistent_capture'] is False
+        page = BeautifulSoup(client.get('/cameras/tapo-c200').text, 'html.parser')
+        assert not page.select_one('[name=persistent_capture]').has_attr('checked')
+    restarted = create_app(app.state.pipeline.settings, token=OWNER)
+    assert restarted.state.pipeline.sources['tapo-c200'].settings['persistent_capture'] is False
+
+
 def test_one_form_all_settings_persist_and_old_editor_redirects(app, monkeypatch):
     monkeypatch.setattr(SourceAdapters,'capture',lambda *_:pytest.fail('Saving must not open a camera'))
     with TestClient(app) as client:

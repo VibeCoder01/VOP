@@ -1,5 +1,13 @@
 # Specification change log
 
+## 0.6.13 — Optional persistent camera acquisition (2 November 2026)
+
+- Keep up to four RTSP observation streams open while monitoring, on by default.
+  Add a per-camera switch, reuse connections while discarding intermediate frames,
+  and request a newly read full-resolution image for each observation.
+- Release connections on pause, disable, configuration change, failure and shutdown.
+  Keep USB, connection tests, permissions, privacy and inference contracts unchanged.
+
 ## 0.6.12 — Observation stage timings (2 November 2026)
 
 - Measure local observation stages with a monotonic clock and expose per-camera latest,

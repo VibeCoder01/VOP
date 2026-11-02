@@ -94,11 +94,13 @@ def _load_config(path: str | Path) -> Settings:
             raise ValueError("enabled must be boolean")
         kind, options = raw["kind"], raw.get("settings", {})
         allowed = {"synthetic": set(), "file": {"path"}, "usb": {"device"},
-                   "rtsp": {"endpoint_env", "endpoint_secret_ref", "allowed_hosts", "secret_ref"}, "snapshot": {"endpoint_env", "allowed_hosts"}}
+                   "rtsp": {"endpoint_env", "endpoint_secret_ref", "allowed_hosts", "secret_ref", "persistent_capture"}, "snapshot": {"endpoint_env", "allowed_hosts"}}
         if kind not in allowed:
             raise ValueError("Unsupported source kind")
         keys(options, allowed[kind] | {"privacy_masks"})
         options = dict(options)
+        if "persistent_capture" in options and type(options["persistent_capture"]) is not bool:
+            raise ValueError("Persistent capture must be boolean")
         masks = options.get("privacy_masks", [])
         if not isinstance(masks, list):
             raise ValueError("Privacy masks must be a list of normalised rectangles")
