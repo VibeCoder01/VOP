@@ -1240,3 +1240,23 @@ Check both the pull-request run and the separate push run on the merge commit in
 Offline concurrency tests that use `no_workers` suppress sampling, alerts and Actions
 background loops; controlled test threads still exercise the intended race. Preview
 commit tests use bounded waits for synchronization, not application speed thresholds.
+
+### Observation stage timings
+
+Open **Configure → Diagnostics → Observation timings**. VOP records engine readiness
+(including cold starts), camera acquisition (including stream opening), image/mask
+preparation, engine request round trip, saving/episode processing, and total time.
+Provider-reported inference is shown separately inside the engine request, not added
+to it. Durations use H:M:S with one decimal; the diagnostics JSON API keeps milliseconds.
+
+Latest includes unsuccessful attempts; median and **95% within** use successful attempts
+only, per camera. Missing stages show a dash, not a measured zero. The window contains
+at most 100 attempts across all cameras and resets at restart. Total begins when the
+observation takes its turn and ends after saving; scheduling wait, browser rendering,
+and later automation execution are not included. Uninstrumented bookkeeping is included
+in total, so individual rows need not sum to total. Viewing Diagnostics is passive.
+
+New observation results retain `stage_timings` measured up to the explicit `before_save`
+boundary. That historical partial total excludes saving and differs from the complete
+in-process Diagnostics measurement. Existing history has no retroactive measurements.
+No camera connection, engine session duration, observation interval or model is changed.
