@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from vop.contracts import ProviderError, utcnow
 from vop.dashboard import hidden, local_time
 from vop.display import duration
+from vop.stage_timings import summarise
 from vop.inference.remote import RemoteInferenceEngine
 from vop.measurements import utc
 from vop.operator_workflow import recovery_message
@@ -36,6 +37,10 @@ def snapshot(app):
         activity = {**activity, 'elapsed_seconds': max(0, (now - utc(activity['started_at_utc'])).total_seconds())}
     session = app.state.worker_session.status()
     cameras = []
+    with pipeline.preview_lock:
+        timing_samples = [s for s in pipeline.timing_samples if
+            (s['engine_id'], s['engine_version'], s['synthetic']) ==
+            (pipeline.engine.engine_id, pipeline.engine.engine_version, pipeline.engine.synthetic)]
     with store.connection() as db:
         for sid, source in list(pipeline.sources.items()):
             control = store.source_control(sid)
@@ -79,7 +84,7 @@ def snapshot(app):
                     age=(now-utc(acquisition[0])).total_seconds()
                     light='green' if age <= max(60,control['sample_interval_seconds']*3) else 'amber'
                     if light=='amber': status='No recent observation image'
-            cameras.append({'id': sid, 'name': source.name or sid, 'status': status,
+            cameras.append({'timings': summarise([s for s in timing_samples if s['source_id'] == sid]), 'id': sid, 'name': source.name or sid, 'status': status,
                 'light': light,
                 'enabled': control['enabled'], 'interval': control['sample_interval_seconds'], 'questions': enabled_questions,
                 'last_frame': acquisition[0] if acquisition else None, 'last_attempt': result.get('processed_at_utc'),
@@ -161,6 +166,14 @@ def install_diagnostics(app):
                    Div(A('Camera settings', href='/cameras/'+c['id'], cls='button secondary'),
                        Form(hidden(csrf), Button('Test camera connection'), method='post', action='/integration/cameras/'+c['id']+'/test') if c['camera'] else None,
                        cls='actions') if operator else None)) for c in data['cameras']])),
+            Section(H2('Observation timings'),
+                P('Durations use hours:minutes:seconds. Latest includes failed attempts; median and 95% within use successful observations only. Unmeasured stages show a dash.'),
+                P('Recent samples cover at most 100 attempts across all cameras in this VOP process and reset on restart. Only the currently selected engine and revision are included. Total starts when an observation takes its turn; scheduling wait and browser display are not measured. Provider inference is part of the engine request: do not add these two rows. Camera acquisition includes opening the stream and obtaining a frame. Engine readiness includes session startup when needed. Saving includes database updates and episode processing.'),
+                *(Div(H2(c['name']),
+                    P(str(c['timings']['attempts'])+' recent attempts; '+str(c['timings']['successes'])+' successful. Latest: '+(c['timings']['latest_status'] or 'not measured')+
+                      (' · '+local_time(c['timings']['latest_started'],pipeline.settings.timezone_name) if c['timings']['latest_started'] else '')),
+                    app.state.table(['Stage','Latest','Median','95% within','Successful samples'],
+                        [Tr(Td(r['stage']),*(Td(duration(r[k]/1000) if r[k] is not None else '—') for k in ('latest_ms','median_ms','p95_ms')),Td(str(r['count']))) for r in c['timings']['rows']])) for c in data['cameras'])),
             Section(H2('Other services'), signal('red' if data['rules_error'] else 'green' if data['rules_running'] else 'amber','Notification rules need attention' if data['rules_error'] else 'Notification service running' if data['rules_running'] else 'Notification service is stopped'),
                     A('Notification settings',href='/release?tab=rules',cls='button secondary') if operator and data['rules_error'] else None,
                     signal('red' if data['actions_error'] else 'green' if data['actions_running'] and not data['actions_paused'] else 'amber','Actions need attention' if data['actions_error'] else 'Automations paused' if data['actions_paused'] else 'Action service running' if data['actions_running'] else 'Action service is stopped'),

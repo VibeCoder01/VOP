@@ -4,6 +4,8 @@ from datetime import timedelta
 import json
 import math
 from threading import Lock
+from collections import deque
+from vop.stage_timings import StageTimings
 
 from vop.config import Settings, SourceSpec
 from vop.contracts import AnswerKind, QuestionSpec, FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow, result as make_result
@@ -34,6 +36,7 @@ class Pipeline:
         self.busy = Lock()
         self.preview_lock = Lock()
         self.skipped = 0
+        self.timing_samples = deque(maxlen=100)
         self.previews = {}  # One masked/downscaled image per configured input (maximum 32).
         self.processed_previews = {}  # Completed answer frames; capture/test previews must not replace these.
         self.mask_grabs = {}  # One temporary, privacy-masked editor image per source.
@@ -95,6 +98,8 @@ class Pipeline:
             self.skipped += 1
             self.store.audit("capture_skipped", "overload")
             raise ProviderError("overloaded", "An inference is in flight; this request was not queued")
+        trace = StageTimings(source_id, self.engine.engine_id, self.engine.engine_version, self.engine.synthetic)
+        completed = False
         try:
             self.activity = {'source_id': source_id, 'stage': 'Preparing observation', 'started_at_utc': utcnow().isoformat()}
             if self.stopping:
@@ -105,21 +110,27 @@ class Pipeline:
             if getattr(self, 'auto_worker', None):
                 self.activity = {**self.activity, 'stage': 'Connecting engine'}
                 try:
-                    self.auto_worker.ensure_ready()
+                    with trace.stage('engine_ready'):
+                        self.auto_worker.ensure_ready()
                 except ProviderError as exc:
-                    self.save_capture_error(source, exc, stage='engine')
+                    with trace.stage('save'):
+                        self.save_capture_error(source, exc, stage='engine')
                     raise
             if frame is None:
                 self.activity = {**self.activity, 'stage': 'Capturing image'}
                 try:
-                    frame = (self.live_previews.capture(source, self.capture_adapter.capture)
-                             if hasattr(self, 'live_previews') else self.capture_adapter.capture(source))
+                    with trace.stage('capture'):
+                        frame = (self.live_previews.capture(source, self.capture_adapter.capture)
+                                 if hasattr(self, 'live_previews') else self.capture_adapter.capture(source))
                 except ProviderError as exc:
-                    return self.save_capture_error(source, exc)
+                    with trace.stage('save'):
+                        return self.save_capture_error(source, exc)
                 except Exception:
-                    return self.save_capture_error(source, ProviderError("capture_failed", "Capture failed"))
+                    with trace.stage('save'):
+                        return self.save_capture_error(source, ProviderError("capture_failed", "Capture failed"))
             if not isinstance(frame, FrameEnvelope):
-                return self.save_capture_error(source, ProviderError("capture_contract", "Adapter did not return a FrameEnvelope"))
+                with trace.stage("save"):
+                    return self.save_capture_error(source, ProviderError("capture_contract", "Adapter did not return a FrameEnvelope"))
             if frame.source_id != source_id:
                 raise ProviderError("source_mismatch", "Frame source does not match configured source")
             previous = self.store.previous(source_id, frame.frame_id)
@@ -127,7 +138,8 @@ class Pipeline:
                 if previous.pop("sha256") != frame.sha256:
                     raise ProviderError("frame_conflict", "Frame ID was reused for different content")
                 return {**previous, "duplicate": True}
-            preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
+            with trace.stage("prepare_image"):
+                preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
             preview_token = self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
             request = InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=self.settings.inference_timeout_seconds))
             records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
@@ -143,9 +155,11 @@ class Pipeline:
                 masks = source.settings.get("privacy_masks", [])
                 for (roi, include, exclude), group in groups.items():
                     # Strip original metadata for every backend before optional remote transmission.
-                    input_frame = preprocess(frame, masks, roi, include_regions=include, exclude_regions=exclude)
+                    with trace.stage('prepare_image'):
+                        input_frame = preprocess(frame, masks, roi, include_regions=include, exclude_regions=exclude)
                     group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
-                    group_result = infer(self.engine, group_request)
+                    with trace.stage('engine_request'):
+                        group_result = infer(self.engine, group_request)
                     if (group_result.frame_id != frame.frame_id or group_result.source_id != source_id
                         or group_result.engine_id != self.engine.engine_id or group_result.engine_version != self.engine.engine_version
                         or [(a.question_id, a.question_version) for a in group_result.answers] != [(q.question_id, q.version) for q in group]):
@@ -179,13 +193,22 @@ class Pipeline:
                                        "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi],
                                        'question_masks': {r['spec'].question_id: {'include': r['policy'].include_regions, 'exclude': r['policy'].exclude_regions}
                                                           for r in records if r['policy'].include_regions or r['policy'].exclude_regions}}
+            trace.provider_ms = outcome.elapsed_ms if outcome.status == Status.SUCCESS and 'engine_request' in trace.values else None
+            trace.status = str(outcome.status)
+            result['stage_timings'] = {**trace.snapshot(), 'boundary': 'before_save'}
             self.activity = {**self.activity, 'stage': 'Saving result'}
-            saved = self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
+            with trace.stage('save'):
+                saved = self.store.save(source_id, frame, result, preview.payload if source.retain_evidence else None)
             with self.preview_lock:
                 if self.previews.get(source_id) is preview_token:
                     self.processed_previews[source_id] = preview_token
+            completed = True
             return saved
         finally:
+            if not completed:
+                trace.status = "incomplete_or_failed"
+            with self.preview_lock:
+                self.timing_samples.append(trace.snapshot())
             self.activity = None
             self.busy.release()
 

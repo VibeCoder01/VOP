@@ -1,5 +1,12 @@
 # Specification change log
 
+## 0.6.12 — Observation stage timings (2 November 2026)
+
+- Measure local observation stages with a monotonic clock and expose per-camera latest,
+  median and 95th-percentile durations in passive Diagnostics. Distinguish provider
+  inference from request round trip, missing stages from zero, and failed attempts
+  from successful timing statistics. Retain pre-save timings with new results.
+
 ## Unreleased
 
 - Sort current affirmative Yes answers first in each Grid View camera, including
