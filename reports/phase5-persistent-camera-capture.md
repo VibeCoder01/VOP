@@ -107,3 +107,22 @@ scheduled monitoring supplies the live comparison; no additional manual camera o
 inference request is needed. CI results must be checked on the PR and later main
 push separately; none is presumed. Stop after this optimisation if representative
 monitoring confirms the improvement. Phase 6 is not started; no auto-merge.
+
+## CI follow-up
+
+PR run **41521805106** on head `543718b9c1519479935b681a834b2cff48c57d32`:
+Ubuntu job **125539438017** passed all checks. Windows job **125539438409** failed
+pytest: **1 failed, 531 passed, 6 skipped in 441.57 seconds**. The sole failure was
+`test_action_browser.py::test_sound_enable_claim_play_ack_and_no_duplicate_poll`:
+its Node subprocess exceeded the 10-second host timeout. The log alone does not
+establish whether startup or a retained real timer caused the delay.
+
+That existing harness mixed fake audio with real 65-second playback timers, which
+can also mask assertion errors behind a process timeout. It now uses controlled
+fake timeout callbacks, asserts watchdog cleanup, explicitly exercises timeout-to-
+negative-ack, and requires PASS after all asynchronous assertions complete. The
+host startup allowance is 30 seconds; production audio deadlines are unchanged.
+No app restart or capture/model changes for this test-only correction. README
+updated. Replacement CI is pending, not presumed green.
+
+Final `.venv\Scripts\python.exe -m pytest -q tests/test_action_browser.py tests/test_actions.py tests/test_persistent_capture.py`: **22 passed in 24.76 seconds**. `git diff --check` passed.

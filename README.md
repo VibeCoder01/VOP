@@ -1289,3 +1289,7 @@ off if CPU, bandwidth or camera connection limits cause problems. Network/camera
 buffers can still delay a decoded frame; this is not a guarantee of sensor-to-answer
 latency. Use Diagnostics stage timings to compare the actual improvement. Engine
 sessions and observation schedules are unchanged.
+
+Browser sound contract tests use fake playback deadlines and require an explicit
+completion marker. Their subprocess timeout allows CI process startup; it does not
+change the production playback watchdog.
