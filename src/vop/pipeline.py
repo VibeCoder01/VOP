@@ -3,7 +3,7 @@ from dataclasses import asdict, replace
 from datetime import timedelta
 import json
 import math
-from threading import Lock
+from threading import Lock, Condition
 from collections import deque
 from vop.stage_timings import StageTimings
 
@@ -34,6 +34,9 @@ class Pipeline:
                 target = self.removed_sources if store.is_removed(source.source_id) else self.sources
                 target.setdefault(source.source_id, source)
         self.busy = Lock()
+        self.workspace_condition = Condition()
+        self.workspace_writes = 0
+        self.workspace_maintenance = False
         self.preview_lock = Lock()
         self.skipped = 0
         self.timing_samples = deque(maxlen=100)
@@ -108,6 +111,8 @@ class Pipeline:
             self.activity = {'source_id': source_id, 'stage': 'Preparing observation', 'started_at_utc': utcnow().isoformat()}
             if self.stopping:
                 raise ProviderError('application_stopping', 'VOP is restarting. Wait for the workspace to reconnect.')
+            if getattr(self, 'engine_unconfigured', False):
+                raise ProviderError('engine_unconfigured', 'Add and select an engine in Engines before observing.')
             source = self.source(source_id)
             if not source.questions:
                 raise ProviderError("no_active_questions", "Enable at least one question before capturing")

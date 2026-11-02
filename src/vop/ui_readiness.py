@@ -43,6 +43,8 @@ def worker_dependencies(engine):
 def capture_dependencies(pipeline, source_id):
     source = pipeline.sources[source_id]
     problems = []
+    if getattr(pipeline, 'engine_unconfigured', False):
+        problems.append(('Add and select an engine before observing.', '/engines'))
     if not pipeline.store.source_control(source_id)["enabled"]:
         problems.append(("Source is disabled. Enable it in Source controls.", f"/ui/sources/{source_id}"))
     questions = pipeline.store.questions(source_id, active_only=True)

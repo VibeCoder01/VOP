@@ -66,7 +66,9 @@ class BrowserAuth:
             response = RedirectResponse("/login", status_code=303) if wants_html and not path.startswith("/api/") else JSONResponse({"error": "authentication_required"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
             return await response(scope, receive, send)
         scope["auth_role"] = role
-        if role == 'viewer' and (path == '/actions' or path.startswith('/actions/') or path == '/automations' or path.startswith('/automations/')):
+        if getattr(self.pipeline, 'workspace_maintenance', False) and path not in ('/api/v1/health','/ui/style.css'):
+            return await JSONResponse({'error':'maintenance','message':'Workspace maintenance is in progress. VOP will restart.'},status_code=503)(scope,receive,send)
+        if role == 'viewer' and (path.startswith(('/release/restore','/release/factory-reset','/release/backup','/ui/maintenance.js')) or path == '/actions' or path.startswith('/actions/') or path == '/automations' or path.startswith('/automations/')):
             return await JSONResponse({'error': 'operator_required'}, status_code=403)(scope, receive, send)
         # Keep observation and evidence reads available in View mode. Configuration,
         # deletion and lifecycle operations require an explicit browser mode switch.
@@ -98,31 +100,40 @@ class BrowserAuth:
                 await self.audit_denial("permission")
                 return await JSONResponse({"error": "operator_required"}, status_code=403)(scope, receive, send)
             if not bearer:
-                # Native URL-encoded forms only: bounded bodies, no arbitrary multipart parsing.
-                body = bytearray()
-                request = Request(scope, receive)
-                async for chunk in request.stream():
-                    if len(body) + len(chunk) > (4 * 1024 * 1024 if path == '/actions/save' else 65536):
-                        return await JSONResponse({"error": "form_too_large"}, status_code=413)(scope, receive, send)
-                    body.extend(chunk)
-                try:
-                    form = parse_qs(bytes(body).decode("utf-8"), keep_blank_values=True)
-                    csrf = form.get("csrf", [""])[0]
-                    expected_csrf = session.get("csrf", "")
-                    valid_csrf = bool(expected_csrf) and hmac.compare_digest(csrf.encode(), expected_csrf.encode())
-                except (UnicodeError, ValueError):
-                    valid_csrf = False
-                if not valid_csrf:
-                    await self.audit_denial("csrf")
-                    return await JSONResponse({"error": "csrf_failed"}, status_code=403)(scope, receive, send)
-                delivered = False
-                async def replay_receive():
-                    nonlocal delivered
-                    if not delivered:
-                        delivered = True
-                        return {"type": "http.request", "body": bytes(body), "more_body": False}
-                    return {"type": "http.disconnect"}
-                receive = replay_receive
+                if path == '/release/restore/preview':
+                    csrf = headers.get(b'x-vop-csrf', b'')
+                    expected_csrf = session.get('csrf', '').encode()
+                    if not expected_csrf or not hmac.compare_digest(csrf, expected_csrf):
+                        return await JSONResponse({'error':'csrf_failed'},status_code=403)(scope,receive,send)
+                    # This one upload route streams a bounded binary archive to disk.
+                    # No generic CSRF bypass or unbounded multipart parsing.
+                else:
+                    # Native URL-encoded forms only: bounded bodies, no arbitrary multipart parsing.
+                    body = bytearray()
+                    request = Request(scope, receive)
+                    async for chunk in request.stream():
+                        if len(body) + len(chunk) > (4 * 1024 * 1024 if path == '/actions/save' else 65536):
+                            return await JSONResponse({"error": "form_too_large"}, status_code=413)(scope, receive, send)
+                        body.extend(chunk)
+                    try:
+                        form = parse_qs(bytes(body).decode("utf-8"), keep_blank_values=True)
+                        csrf = form.get("csrf", [""])[0]
+                        expected_csrf = session.get("csrf", "")
+                        valid_csrf = bool(expected_csrf) and hmac.compare_digest(csrf.encode(), expected_csrf.encode())
+                    except (UnicodeError, ValueError):
+                        valid_csrf = False
+                    if not valid_csrf:
+                        await self.audit_denial("csrf")
+                        return await JSONResponse({"error": "csrf_failed"}, status_code=403)(scope, receive, send)
+                    delivered = False
+                    original_receive = receive
+                    async def replay_receive():
+                        nonlocal delivered
+                        if not delivered:
+                            delivered = True
+                            return {"type": "http.request", "body": bytes(body), "more_body": False}
+                        return await original_receive()
+                    receive = replay_receive
         async def secured_send(message):
             if message["type"] == "http.response.start":
                 message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store"),
@@ -139,7 +150,7 @@ class BrowserAuth:
         mask_grab = path.startswith('/ui/question-mask/') and path.endswith('/grab')
         admitted = method == "POST" and not monitoring_control and not camera_test and not mask_grab and not preview_control and not path.startswith(('/actions/', '/automations/')) and path not in ('/api/v1/browser-ticket', '/api/v1/shutdown', '/ui/restart', '/ui/mode', '/diagnostics/reconnect')
         removal = path == '/ui/removed-questions/delete' or (path.startswith(('/ui/sources/', '/ui/questions/')) and path.endswith(('/remove', '/restore', '/delete')))
-        wait_for_admission = path in ('/cameras/save', '/integration/camera') or removal
+        wait_for_admission = path in ('/cameras/save', '/integration/camera') or path.startswith('/release/') and method == 'POST' or removal
         acquired = admitted and (await run_in_threadpool(self.admission.acquire) if wait_for_admission
                                  else self.admission.acquire(blocking=False))
         if admitted and not acquired and scheduled_capture:
@@ -148,8 +159,22 @@ class BrowserAuth:
             self.pipeline.skipped += 1
             await run_in_threadpool(self.store.audit, "capture_skipped", "overload")
             return await JSONResponse({"error": "overloaded"}, status_code=429)(scope, receive, secured_send)
+        writing = method not in ('GET','HEAD','OPTIONS')
+        if writing:
+            with self.pipeline.workspace_condition:
+                denied = self.pipeline.workspace_maintenance
+                if not denied:
+                    self.pipeline.workspace_writes += 1
+            if denied:
+                if acquired:
+                    self.admission.release()
+                return await JSONResponse({'error':'maintenance','message':'Workspace maintenance is in progress. VOP will restart.'},status_code=503)(scope,receive,secured_send)
         try:
             await self.app(scope, receive, secured_send)
         finally:
+            if writing:
+                with self.pipeline.workspace_condition:
+                    self.pipeline.workspace_writes -= 1
+                    self.pipeline.workspace_condition.notify_all()
             if acquired:
                 self.admission.release()

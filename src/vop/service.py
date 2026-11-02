@@ -35,7 +35,9 @@ def create_app(settings: Settings, *, token: str | None = None,
     if viewer_token and (len(viewer_token) < 32 or len(viewer_token) > 256 or not viewer_token.isascii() or any(c.isspace() for c in viewer_token) or viewer_token == token):
         raise ValueError("Viewer key must be a distinct 32–256 character ASCII secret")
     store = Store(settings.database)
-    if live_workspace:
+    from vop.workspace_backup import authoritative_settings
+    settings, authoritative = authoritative_settings(settings, store)
+    if live_workspace and not authoritative:
         from vop.live_workspace import prepare
         settings, cleanup = prepare(store, settings)
     store.configure(settings)
@@ -43,6 +45,9 @@ def create_app(settings: Settings, *, token: str | None = None,
     with store.connection() as db:
         row = db.execute("SELECT value_json FROM release_settings WHERE id='engine_profile'").fetchone()
         saved_profile = json.loads(row[0]) if row else None
+        selected = db.execute("SELECT value_json FROM release_settings WHERE id='active_engine_profile_id'").fetchone()
+        selected_id = json.loads(selected[0]) if selected else None
+        has_selection = bool(selected_id and db.execute('SELECT 1 FROM release_settings WHERE id=?',('saved_engine:'+selected_id,)).fetchone())
     active_profile = saved_profile or settings.engine or {"kind": "mock", "id": settings.engine_id, "answers": settings.mock_answers}
     if engine is None:
         if active_profile["kind"] == "worker":
@@ -57,7 +62,9 @@ def create_app(settings: Settings, *, token: str | None = None,
     pipeline = Pipeline(settings, engine, store, capture)
     pipeline.engine_profile = active_profile
     pipeline.live_workspace = live_workspace
-    pipeline.workspace_cleanup = cleanup if live_workspace else {}
+    pipeline.workspace_cleanup = cleanup if live_workspace and not authoritative else {}
+    pipeline.authoritative_workspace = authoritative
+    pipeline.engine_unconfigured = authoritative and not has_selection
     from vop.worker_session import WorkerSession
     app_session = WorkerSession()
     from vop.integration_ui import restore_cameras
@@ -90,9 +97,14 @@ def create_app(settings: Settings, *, token: str | None = None,
             for worker in (sampler, reliable, actions):
                 if worker.thread:
                     await run_in_threadpool(worker.thread.join)
+            cleanup_uploads = getattr(app.state, 'workspace_cleanup_uploads', None)
+            if cleanup_uploads:
+                await run_in_threadpool(cleanup_uploads)
             await run_in_threadpool(app_session.stop)
 
     async def provider_error(req, exc):
+        if req.url.path.startswith(('/release/backup','/release/restore')):
+            return JSONResponse({'error':exc.code,'message':'VOP could not unlock protected settings. Use the same computer and Windows account that saved them, and check camera, engine or action setup.'},status_code=422)
         code = {"source_not_found": 404, "source_disabled": 409, "overloaded": 429, "frame_conflict": 409}.get(exc.code, 422)
         if "text/html" in req.headers.get("accept", "") and hasattr(app.state, "render_error"):
             from fasthtml.core import to_xml
@@ -102,6 +114,8 @@ def create_app(settings: Settings, *, token: str | None = None,
         return JSONResponse({"error": exc.code}, status_code=code)
 
     async def bad_request(req, exc):
+        if req.url.path.startswith(('/release/backup','/release/restore','/release/factory-reset')):
+            return JSONResponse({'error':'invalid_request','message':str(exc)},status_code=400)
         if "text/html" in req.headers.get("accept", "") and hasattr(app.state, "render_error"):
             from fasthtml.core import to_xml
             from starlette.responses import HTMLResponse
@@ -131,6 +145,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_mask_editor(app)
     from vop.release_ui import install_release
     install_release(app, settings, store, pipeline, reliable)
+    from vop.workspace_ui import install as install_workspace
+    install_workspace(app)
     from vop.actions_ui import install_actions
     install_actions(app, actions)
     from vop.diagnostics import install_diagnostics

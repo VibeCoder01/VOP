@@ -99,10 +99,11 @@ def snapshot(app):
     if code in ('worker_starting','overloaded','recovery_busy'): engine_light='amber'
     if engine_light=='green' and (health or {}).get('utc') and (now-utc(health['utc'])).total_seconds()>60: engine_light='amber'
     colours=[engine_light, 'amber' if pipeline.stopping else 'green' if scheduler_running else 'red', *(c['light'] for c in cameras)]
+    rules_paused=app.state.reliable.paused()
     rules_running=bool(app.state.reliable.thread and app.state.reliable.thread.is_alive())
     actions_running=bool(app.state.actions.thread and app.state.actions.thread.is_alive())
     actions_paused=app.state.actions.paused()
-    colours += ['red' if app.state.reliable.last_error else 'green' if rules_running else 'amber',
+    colours += ['red' if app.state.reliable.last_error else 'green' if rules_running and not rules_paused else 'amber',
                 'red' if app.state.actions.last_error else 'green' if actions_running and not actions_paused else 'amber']
     if not cameras: colours.append('amber')
     overall='red' if 'red' in colours else 'amber' if 'amber' in colours else 'green'
@@ -114,7 +115,7 @@ def snapshot(app):
             'session_expires': session['expires_at'].isoformat() if session.get('expires_at') else None,
             'connection_name': getattr(app.state.worker_session, 'connection_host', None)},
         'rules_error': app.state.reliable.last_error, 'actions_error': app.state.actions.last_error,
-        'rules_running':rules_running,'actions_running':actions_running,'actions_paused':actions_paused,'cameras': cameras}
+        'rules_running':rules_running,'rules_paused':rules_paused,'actions_running':actions_running,'actions_paused':actions_paused,'cameras': cameras}
 
 
 def install_diagnostics(app):
@@ -174,8 +175,8 @@ def install_diagnostics(app):
                       (' · '+local_time(c['timings']['latest_started'],pipeline.settings.timezone_name) if c['timings']['latest_started'] else '')),
                     app.state.table(['Stage','Latest','Median','95% within','Successful samples'],
                         [Tr(Td(r['stage']),*(Td(duration(r[k]/1000) if r[k] is not None else '—') for k in ('latest_ms','median_ms','p95_ms')),Td(str(r['count']))) for r in c['timings']['rows']])) for c in data['cameras'])),
-            Section(H2('Other services'), signal('red' if data['rules_error'] else 'green' if data['rules_running'] else 'amber','Notification rules need attention' if data['rules_error'] else 'Notification service running' if data['rules_running'] else 'Notification service is stopped'),
-                    A('Notification settings',href='/release?tab=rules',cls='button secondary') if operator and data['rules_error'] else None,
+            Section(H2('Other services'), signal('red' if data['rules_error'] else 'green' if data['rules_running'] and not data['rules_paused'] else 'amber','Notification rules need attention' if data['rules_error'] else 'Notification rules paused' if data['rules_paused'] else 'Notification service running' if data['rules_running'] else 'Notification service is stopped'),
+                    A('Notification settings',href='/release?tab=rules',cls='button secondary') if operator and (data['rules_error'] or data['rules_paused']) else None,
                     signal('red' if data['actions_error'] else 'green' if data['actions_running'] and not data['actions_paused'] else 'amber','Actions need attention' if data['actions_error'] else 'Automations paused' if data['actions_paused'] else 'Action service running' if data['actions_running'] else 'Action service is stopped'),
                     A('Action settings',href='/actions',cls='button secondary') if operator and data['actions_error'] else None)]
         return app.state.page('Diagnostics', request, content, view='diagnostics', notice=request.query_params.get('notice'))

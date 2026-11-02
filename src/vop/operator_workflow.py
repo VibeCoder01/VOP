@@ -73,6 +73,8 @@ class AutoWorker:
         self.store.audit('worker_key', 'recovered_from_trusted_antec')
 
     def ensure_ready(self):
+        if getattr(self.pipeline, 'engine_unconfigured', False):
+            raise ProviderError('engine_unconfigured', 'Add and select an engine in Engines before observing.')
         engine = self.pipeline.engine
         if not is_antec(engine):
             if isinstance(engine, RemoteInferenceEngine):
@@ -159,6 +161,7 @@ def recovery_message(code):
         'host_capacity': 'Antec does not have enough free system memory. Close unneeded work on Antec, then reconnect.',
         'model_load_failed': 'The engine could not load its model. Check the engine setup and reconnect.',
         'device_mismatch': 'The engine is using a different device than configured. Check the engine setup.',
+        'engine_unconfigured': 'Add and select an engine in Configure / Engines before observing.',
         'sampling_failed': 'An observation could not finish. Open Diagnostics for recent results; restart VOP if this persists.',
         'capture_open_failed': 'The camera could not connect. Check its power and saved address, then retry.',
         'capture_timeout': 'The camera did not respond. Check its power and network connection, then retry.',

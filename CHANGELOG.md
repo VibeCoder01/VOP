@@ -1,5 +1,18 @@
 # Specification change log
 
+## 0.6.14 — Selective backup, restore and factory reset (2 November 2026)
+
+- Hide retired cameras/deleted questions from default Notifications filters and
+  results. Offer explicit historical review only for entries with notifications.
+  Clarify Notification rules and VOP notification list terminology.
+- Add separate configuration/captured-data backup and restore choices, encrypted
+  Windows credential preservation, restore previews, and explicit Factory Reset.
+- Drain in-flight writes and workers, apply staged changes at restart, validate
+  references/schema/checksums, and recover/retry interrupted DB/vault replacement.
+  Preserve local sign-in; prevent sample configuration from resurrecting reset items.
+- Pause restored automations/notification rules and cancel old queued deliveries.
+  Retain legacy offline backup support; document same-profile and 2 GB limits.
+
 ## 0.6.13 — Optional persistent camera acquisition (2 November 2026)
 
 - Keep up to four RTSP observation streams open while monitoring, on by default.
