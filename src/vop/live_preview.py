@@ -171,6 +171,8 @@ class LivePreviews:
     def capture(self, source, capture_once):
         """Release exclusive USB devices during an observation's one-shot acquisition."""
         if source.kind != 'usb':
+            if hasattr(self.pipeline, 'persistent_cameras'):
+                self.pipeline.persistent_cameras.clear(source.source_id)
             return capture_once(source)
         with self.lock:
             self.suspended.add(source.source_id)

@@ -1260,3 +1260,36 @@ New observation results retain `stage_timings` measured up to the explicit `befo
 boundary. That historical partial total excludes saving and differs from the complete
 in-process Diagnostics measurement. Existing history has no retroactive measurements.
 No camera connection, engine session duration, observation interval or model is changed.
+
+### Faster camera acquisition (optional)
+
+In **Configure → Cameras → [camera] → Observations**, **Keep camera connection open
+while monitoring** is on by default for RTSP cameras, including existing cameras.
+Turn it off and save to use the previous per-observation connection method. The
+choice survives restart. USB and camera-only connection tests keep their previous
+acquisition behaviour.
+
+A monitoring camera's first observation opens its connection. Later observations
+request a newly read, full-resolution frame; the decoder continuously discards
+intermediate frames rather than queueing images. Pixel conversion and PNG encoding
+run only for requested observations, not for discarded frames. Privacy and question masks still
+apply before inference, and image-saving settings are unchanged. No image is
+published directly from the persistent observation connection.
+
+Connections close on Pause/disable/no enabled questions (within the housekeeping
+interval), camera edit/removal, capture failure or VOP shutdown. A failed connection
+is discarded; the next scheduled attempt reconnects under the normal retry policy.
+There is no silent reuse of an old frame. At most four observation connections stay
+open; additional cameras use per-observation acquisition. Live browser previews
+have their own connections and existing four-preview limit.
+
+Keeping streams open uses camera bandwidth and laptop decoding resources even
+between observations. Cameras may limit simultaneous clients. Turn this option
+off if CPU, bandwidth or camera connection limits cause problems. Network/camera
+buffers can still delay a decoded frame; this is not a guarantee of sensor-to-answer
+latency. Use Diagnostics stage timings to compare the actual improvement. Engine
+sessions and observation schedules are unchanged.
+
+Browser sound contract tests use fake playback deadlines and require an explicit
+completion marker. Their subprocess timeout allows CI process startup; it does not
+change the production playback watchdog.

@@ -69,6 +69,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     actions = Actions(store, pipeline, settings.timezone_name)
     from vop.live_preview import LivePreviews
     pipeline.live_previews = LivePreviews(pipeline, allowed=allow_live_sources)
+    from vop.inputs.persistent import PersistentCameras
+    pipeline.persistent_cameras = PersistentCameras(pipeline, allowed=allow_live_sources)
     async def lifespan(app):
         sampler.start()
         reliable.start()
@@ -79,6 +81,7 @@ def create_app(settings: Settings, *, token: str | None = None,
             sampler.stop_event.set()
             reliable.stop_event.set()
             actions.stop_event.set()
+            await run_in_threadpool(pipeline.persistent_cameras.stop)
             await run_in_threadpool(pipeline.live_previews.stop)
             await run_in_threadpool(sampler.stop)
             await run_in_threadpool(reliable.stop)

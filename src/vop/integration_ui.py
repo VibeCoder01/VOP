@@ -50,6 +50,9 @@ def camera_source(record):
         raise ValueError("Unsupported pilot camera model")
     sid = identifier(record["source_id"])
     options = {"endpoint_secret_ref": reference(record["endpoint_ref"]), "secret_ref": reference(record["credentials_ref"]), "allowed_hosts": record["allowed_hosts"]}
+    options["persistent_capture"] = record.get("persistent_capture", True)
+    if type(options["persistent_capture"]) is not bool:
+        raise ValueError("Persistent capture must be on or off")
     if record.get("privacy_masks"):
         options["privacy_masks"] = record["privacy_masks"]
     return SourceSpec(sid, "Tapo " + model, "rtsp", options,
@@ -208,7 +211,9 @@ def install_integration(app, settings, store, pipeline):
                      field('Sample interval (H:M:S)', 'sample_interval_seconds', duration(control['sample_interval_seconds']), required=True,
                            aria_describedby='camera-interval-help'),
                      P('Applies to all enabled questions on this camera. Use 00:00:00.0 to pause monitoring, or 00:00:01.0 to 01:00:00.0 for repeated observations. Cameras take turns, so processing and connection delays can make the actual interval longer.', id='camera-interval-help', cls='muted'),
-                     P('Saving a nonzero interval starts monitoring when Camera enabled is on.', cls='muted'), id='observations'),
+                     P('Saving a nonzero interval starts monitoring when Camera enabled is on.', cls='muted'),
+                     Div(Label(Input(type='checkbox', name='persistent_capture', checked=selected.settings.get('persistent_capture', True) if selected else True), ' Keep camera connection open while monitoring'),
+                         P('On by default. Reduces image acquisition delay by keeping the stream open and discarding old frames. Uses extra laptop and camera resources. Closes when monitoring pauses. Turn off to connect separately for each observation. Up to four observation connections stay open; additional cameras connect per observation. Live previews use separate connections.', cls='muted')) if not usb else None, id='observations'),
                  Section(H2('Recorded images'),
                      Label(Input(type='checkbox', name='retain_evidence', checked=control['retain_evidence']), ' Save images with observations'),
                      P('Off by default. When on, future observations keep a privacy-masked still image for Individual Observations. Questions from the same capture share one image.', cls='muted'),
@@ -573,8 +578,10 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError("Source ID already belongs to another input")
         if sid not in pipeline.sources and len(pipeline.sources) >= 32:
             raise ValueError("At most 32 sources")
+        persistent = (form.get('persistent_capture') == 'on') if form.get('observation_settings') == '1' else (pipeline.sources[sid].settings.get('persistent_capture', True) if not is_new else True)
+        record['persistent_capture'] = persistent
         record['privacy_masks'] = privacy_masks
-        source = replace(source, settings={**source.settings, 'privacy_masks':privacy_masks})
+        source = replace(source, settings={**source.settings, 'privacy_masks':privacy_masks, 'persistent_capture':persistent})
         username, password = str(form.get("username", "")), str(form.get("password", ""))
         if username and (len(username) > 128 or any(ord(c) < 32 for c in username)):
             raise ValueError('Invalid camera account username')
@@ -619,6 +626,7 @@ def install_integration(app, settings, store, pipeline):
 
     def run_camera_test(source_id):
         source = pipeline.sources[source_id]
+        pipeline.persistent_cameras.clear(source_id)
         try:
             frame = SourceAdapters(allow_live_sources=True, timeout_seconds=settings.capture_timeout_seconds).capture(source)
             masked = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)

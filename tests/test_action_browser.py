@@ -18,6 +18,9 @@ global.document = {hidden:false,querySelector:s => s === '[data-enable-sound]' ?
 Object.defineProperty(globalThis,'crypto',{value:{randomUUID:()=> 'browser-one'},configurable:true});
 global.sessionStorage = {getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)};
 global.setInterval = fn => timers.push(fn);
+const deadlines = new Map(); let nextDeadline=0;
+global.setTimeout = (fn,ms) => { const id=++nextDeadline; deadlines.set(id,{fn,ms}); return id; };
+global.clearTimeout = id => deadlines.delete(id);
 let finish, audioCount=0;
 global.Audio = class {constructor(url){this.url=url; audioCount++;} play(){finish=this; return Promise.resolve();} pause(){} };
 let available = true;
@@ -36,6 +39,7 @@ eval(SCRIPT);
  assert.equal(finish.volume,0.5); finish.onended(); await playing;
  assert.equal(posts[1].url,'/actions/sound/ack');
  assert.equal(posts[1].fields.played,'yes');
+ assert.equal(deadlines.size,0); // Successful playback clears its watchdog.
  assert.equal(posts[1].fields.client,posts[0].fields.client);
  assert(posts[1].fields.client.length > 0);
  document.hidden=true; await timers[0](); assert.equal(posts.length,2);
@@ -47,7 +51,17 @@ eval(SCRIPT);
  const cancelled=timers[0](); await callbacks[0](); await cancelled;
  assert.equal(audioCount,before); // Disabling during a claim must not start playback.
  assert.equal(posts.at(-1).fields.played,'no');
+ // Exercise the playback watchdog without waiting 65 real seconds.
+ await callbacks[0](); available=true;
+ const timedOut=timers[0]();
+ for(let i=0;i<10;i++) await Promise.resolve();
+ assert.equal(deadlines.size,1);
+ const [id,deadline]=[...deadlines][0]; assert.equal(deadline.ms,65000);
+ deadlines.delete(id); deadline.fn(); await timedOut;
+ assert.equal(posts.at(-1).fields.played,'no');
+ console.log('PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-    result = subprocess.run(['node', '-e', 'const SCRIPT=' + json.dumps(SCRIPT) + ';\n' + harness], capture_output=True, text=True, timeout=10)
+    result = subprocess.run(['node', '-e', 'const SCRIPT=' + json.dumps(SCRIPT) + ';\n' + harness], capture_output=True, text=True, timeout=30)  # Host process-start allowance, not a browser deadline.
     assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'PASS', 'Browser harness did not complete all assertions'

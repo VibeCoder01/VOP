@@ -58,6 +58,8 @@ class Pipeline:
                 self._latest_preview = None
             if hasattr(self, 'live_previews'):
                 self.live_previews.clear(None)
+            if hasattr(self, 'persistent_cameras'):
+                self.persistent_cameras.clear(None)
         else:
             self.remember_preview(*value)
 
@@ -69,6 +71,8 @@ class Pipeline:
         return preview
 
     def clear_preview(self, source_id, frame_id=None):
+        if frame_id is None and hasattr(self, "persistent_cameras"):
+            self.persistent_cameras.clear(source_id)
         if frame_id is None and hasattr(self, 'live_previews'):
             self.live_previews.clear(source_id)
         with self.preview_lock:
@@ -120,8 +124,12 @@ class Pipeline:
                 self.activity = {**self.activity, 'stage': 'Capturing image'}
                 try:
                     with trace.stage('capture'):
-                        frame = (self.live_previews.capture(source, self.capture_adapter.capture)
-                                 if hasattr(self, 'live_previews') else self.capture_adapter.capture(source))
+                        capture = self.capture_adapter.capture
+                        if source.kind == 'rtsp' and hasattr(self, 'persistent_cameras'):
+                            frame = self.persistent_cameras.capture(source, capture)
+                        else:
+                            frame = (self.live_previews.capture(source, capture)
+                                     if hasattr(self, 'live_previews') else capture(source))
                 except ProviderError as exc:
                     with trace.stage('save'):
                         return self.save_capture_error(source, exc)
