@@ -20,7 +20,7 @@ def removed_controls(store, pipeline, csrf, view, *, source_kinds=None, heading=
     if view == 'sources':
         rows = [(s.name, f"/ui/sources/{sid}/restore") for sid, s in list(pipeline.removed_sources.items()) if source_kinds is None or s.kind in source_kinds]
         return Section(H2(heading or 'Removed sources'), P('Restore keeps monitoring disabled. History and protected camera details are retained.'),
-                       *(Section(P(label), action('Restore', url, csrf, secondary=True)) for label, url in rows)) if rows else None
+                       *(Section(P(label), Div(action('Restore', url, csrf, secondary=True), A('Delete permanently…',href=url.removesuffix('/restore')+'/delete',cls='button danger') if source_kinds else None,cls='actions')) for label, url in rows)) if rows else None
     rows = []
     for sid, source in list(pipeline.sources.items()):
         if source_filter and sid != source_filter:

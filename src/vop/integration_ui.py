@@ -7,7 +7,7 @@ import re
 import secrets as random_secrets
 from urllib.parse import urlsplit
 
-from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary, Script
+from fasthtml.components import A, Button, Details, Div, Form, H2, Input, Label, Option, P, Pre, Section, Select, Small, Span, Summary, Script, Td, Tr
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fasthtml.common import to_xml
@@ -15,7 +15,7 @@ from vop.display import duration, duration_input
 
 from vop.config import SourceSpec, identifier
 from vop.contracts import AnswerKind, ProviderError, QuestionSpec, utcnow
-from vop.dashboard import field, hidden, evidence_image, dependency_panel, action
+from vop.dashboard import field, hidden, evidence_image, dependency_panel, action, local_time
 from vop.inference.liquid_d1 import CHECKPOINT_REVISION
 from vop.inference.mock import MockInferenceEngine
 from vop.inference.remote import RemoteInferenceEngine, profile
@@ -62,12 +62,16 @@ def camera_source(record):
 def restore_cameras(store, settings, pipeline):
     with store.connection() as db:
         rows = db.execute("SELECT value_json FROM release_settings WHERE id LIKE 'camera_profile:%'").fetchall()
+        deleted = {r[0].split(':',1)[1] for r in db.execute("SELECT id FROM release_settings WHERE id LIKE 'deleted_source:%'")}
         names = {row[0].removeprefix('camera_name:'): json.loads(row[1]) for row in
                  db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_name:%'")}
         privacy = {row[0].removeprefix('camera_privacy:'): json.loads(row[1]) for row in
                    db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_privacy:%'")}
     for row in rows:
-        source = camera_source(json.loads(row[0]))
+        record = json.loads(row[0])
+        if record["source_id"] in deleted:
+            continue
+        source = camera_source(record)
         source = replace(source, name=names.get(source.source_id, source.name))
         store.configure(replace(settings, sources=(source,)))
         target = pipeline.removed_sources if store.is_removed(source.source_id) else pipeline.sources
@@ -146,12 +150,29 @@ def install_integration(app, settings, store, pipeline):
         rows = [source for source in pipeline.sources.values() if source.kind in ('rtsp', 'usb')]
         content = [Div(P(str(len(rows)) + (' camera' if len(rows) == 1 else ' cameras')),
                        A('Add camera', href='/cameras/new', cls='button'), cls='section-heading')]
-        content.append(Div(*(Div(Div(H2(A(source.name, href='/cameras/' + source.source_id)),
-                                    P(source.source_id, cls='object-meta'),
-                                    P('Monitoring' if store.source_control(source.source_id)['sample_interval_seconds'] and store.source_control(source.source_id)['enabled'] else 'Monitoring paused', cls='object-meta'), cls='object-copy'),
-                                 Div(A('Manage camera', href='/cameras/' + source.source_id, cls='button secondary'), cls='actions'), cls='object-row') for source in rows), cls='object-list camera-list')
-                       if rows else Div(H2('Add your first camera'), P('Enter its network address and camera account. The engine is set up on the Engines page.'),
-                                        A('Add camera', href='/cameras/new', cls='button'), cls='empty'))
+        with store.connection() as db:
+            controls = {r['source_id']:dict(r) for r in db.execute('SELECT * FROM source_controls')}
+            last = {r['id']:r['last_frame_utc'] for r in db.execute('SELECT id,last_frame_utc FROM sources')}
+            questions = {r[0]:(r[1],r[2]) for r in db.execute("SELECT c.source_id,count(*),sum(c.enabled) FROM query_controls c WHERE NOT EXISTS(SELECT 1 FROM release_settings x WHERE x.id IN ('deleted_question:'||c.source_id||':'||c.question_id,'removed_question:'||c.source_id||':'||c.question_id)) GROUP BY c.source_id")}
+            models = {r[0].split(':',1)[1]:json.loads(r[1])['model'] for r in db.execute("SELECT id,value_json FROM release_settings WHERE id LIKE 'camera_profile:%'")}
+        table_rows = []
+        for source in rows:
+            sid = source.source_id; control = controls[sid]
+            interval = control['sample_interval_seconds']; total, enabled = questions.get(sid,(0,0))
+            monitoring = bool(control['enabled'] and interval and enabled)
+            persistent = source.kind == 'rtsp' and source.settings.get('persistent_capture',True)
+            table_rows.append(Tr(
+                Td(A(source.name,href='/cameras/'+sid)), Td(models.get(sid,'USB' if source.kind=='usb' else 'Network camera')),
+                Td('Disabled' if not control['enabled'] else 'Paused' if not interval else 'No enabled questions' if not enabled else 'Monitoring'),
+                Td(duration(interval)), Td(f'{3600/interval if monitoring else 0:.1f}'), Td(f'{enabled} / {total}'),
+                Td('Not applicable' if source.kind=='usb' else 'On' if persistent else 'Off',title='Saved connection policy while monitoring. Use Diagnostics for connection health.'),
+                Td('Yes' if control['evidence_enabled'] else 'No',title='Automatic image recording. Save-image actions can also retain individual images.'),
+                Td('Yes ('+str(len(source.settings['privacy_masks']))+')' if source.settings.get('privacy_masks') else 'No',title='Camera privacy masks. Question-specific include/exclude areas are separate.'),
+                Td(local_time(last[sid],settings.timezone_name) if last.get(sid) else 'Not yet'),
+                Td(Div(A('Manage camera',href='/cameras/'+sid,cls='button secondary'),cls='actions'))))
+        content.append(P('Target samples/hour is the planned rate while monitoring with enabled questions, not measured throughput. Cameras share observation time, so actual rates can be lower. Keep connection open shows the saved setting, not a network test. Use Diagnostics for connection health. Opening this page does not connect to cameras.',cls='muted'))
+        content.append(Div(app.state.table(['Camera','Model / type','Status','Target interval (H:M:S)','Target samples/hour','Enabled / total questions','Keep connection open','Save images','Privacy mask','Last observation image',''],table_rows),cls='camera-list')
+                       if rows else Div(H2('Add your first camera'),P('Enter its network address and camera account. The engine is set up on the Engines page.'),A('Add camera',href='/cameras/new',cls='button'),cls='empty'))
         from vop.removal import removed_controls
         content.append(removed_controls(store, pipeline, csrf(request), 'sources', source_kinds=('rtsp', 'usb'), heading='Retired Cameras'))
         return app.state.page('Cameras', request, content, view='cameras', notice=request.query_params.get('notice'))
@@ -523,7 +544,7 @@ def install_integration(app, settings, store, pipeline):
         if not requested_id:
             base = 'tapo-' + str(form['model']).lower()
             requested_id, number = base, 1
-            while requested_id in pipeline.sources or requested_id in pipeline.removed_sources:
+            while requested_id in pipeline.sources or requested_id in pipeline.removed_sources or store.is_removed(requested_id):
                 number += 1
                 requested_id = base + '-' + str(number)
         sid = identifier(requested_id)
@@ -574,7 +595,9 @@ def install_integration(app, settings, store, pipeline):
             raise ValueError('Enter a camera name with 1 to 128 characters.')
         source = replace(source, name=name)
         if store.is_removed(sid):
-            raise ValueError("Restore this source on Sources before editing its camera setup")
+            with store.connection() as db:
+                deleted = db.execute("SELECT 1 FROM release_settings WHERE id=?",("deleted_source:"+sid,)).fetchone()
+            raise ValueError("This camera ID was permanently deleted. Add a new camera and leave the ID blank." if deleted else "Restore this source on Sources before editing its camera setup")
         if sid in pipeline.sources and pipeline.sources[sid].kind != "rtsp":
             raise ValueError("Source ID already belongs to another input")
         if sid not in pipeline.sources and len(pipeline.sources) >= 32:

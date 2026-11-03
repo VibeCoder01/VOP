@@ -30,6 +30,9 @@ def queue(db, name):
 
 def used_references(db, pipeline):
     used = {'dashboard-access-key'} | references(pipeline.settings.engine) | references(getattr(pipeline.engine, 'config', {}))
+    for group in ('sources','removed_sources'):
+        for source in getattr(pipeline,group,{}).values():
+            used.update(references(source.settings))
     for row in db.execute('SELECT configuration FROM sources'):
         used.update(references(json.loads(row[0])))
     for row in db.execute("SELECT value_json FROM release_settings WHERE id NOT LIKE 'pending_secret_delete:%'"):

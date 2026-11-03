@@ -1354,3 +1354,33 @@ cameras and questions with notifications** exposes retired/deleted entries only 
 there is notification history to review. Old labels remain attached to actual old
 notifications. “Dashboard” delivery is labelled **VOP notification list**, and the
 Rules tab is **Notification rules**, separate from Actions/Automations.
+
+### Camera overview and permanent deletion
+
+**Configure → Cameras** shows a compact, horizontally scrollable overview: camera
+name, model/type, monitoring status, target interval (H:M:S), target samples/hour,
+enabled/total questions, keep-connection-open setting, automatic image recording,
+privacy-mask count and last observation-image time. Rates use one decimal place.
+Target samples/hour is `3600 / interval` only while enabled monitoring has enabled
+questions; disabled/paused/no-question cameras show 0.0. It is not measured throughput.
+The connection column shows the saved policy, not a successful network test; use
+Diagnostics for health. USB shows Not applicable. Save-image actions may retain
+individual images even if automatic recording is off. Opening the overview does not
+capture images, decrypt camera credentials or start a stream.
+
+Under **Retired Cameras**, choose **Delete permanently…** to review data counts and
+type `DELETE`. Active cameras must be retired first. The operation waits for current
+work and shows an indeterminate progress dialog. It removes all question versions,
+answers, images, raw runs, episodes, notifications/deliveries, camera action Activity,
+associated automations and notification rules, camera settings and transient caches.
+Other cameras and reusable actions/audio are kept. Shared credentials remain if
+another current/retired camera, engine or action uses them; unused camera secrets are
+queued for durable OS-vault cleanup. If cleanup is pending the result says so, and
+VOP retries automatically. Deletion does not connect to the camera.
+
+Only a minimal reserved camera ID and audit history remain. The ID prevents old
+launcher configuration from resurrecting the camera and is skipped by automatic
+replacement-ID generation. Deleted cameras cannot be restored from VOP. External
+backups, exports and messages already sent are unchanged; an explicit older backup
+restore can of course restore its older configuration/data. No existing camera is
+permanently deleted merely by updating the application.

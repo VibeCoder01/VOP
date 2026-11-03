@@ -136,7 +136,7 @@ class Store:
     def configure(self, settings: Settings) -> None:
         with self.connection() as connection:
             for source in settings.sources:
-                if connection.execute("SELECT 1 FROM release_settings WHERE id=?", (self.removal_key(source.source_id),)).fetchone():
+                if connection.execute("SELECT 1 FROM release_settings WHERE id IN (?,?)", (self.removal_key(source.source_id), "deleted_source:"+source.source_id)).fetchone():
                     continue
                 configuration = dumps(source.public())
                 existing = connection.execute("SELECT configuration FROM sources WHERE id=?", (source.source_id,)).fetchone()

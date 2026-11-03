@@ -56,8 +56,9 @@ def test_camera_setup_actions_have_consistent_buttons_and_compact_rows(app):
              'username':'offline-fixture', 'password':'offline-fixture'})
         assert response.status_code == 200
         soup = BeautifulSoup(client.get('/cameras').text, 'html.parser')
-        row = soup.select_one('.camera-list .object-row')
+        row = soup.select_one('.camera-list tbody tr')
         actions = row.select('.actions a')
         assert [a.text for a in actions] == ['Manage camera']
         assert all('button' in a['class'] for a in actions)
-        assert 'camera-list .object-row{padding:12px 0' in client.get('/ui/style.css').text
+        assert len(row.select('td')) >= 10
+        assert soup.select_one('.camera-list .table-wrap')
