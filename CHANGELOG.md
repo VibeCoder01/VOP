@@ -1,5 +1,15 @@
 # Specification change log
 
+## 0.6.15 — Camera overview and retired-camera purge (3 November 2026)
+
+- Add compact metadata columns for planned sampling, question counts, connection
+  policy, image recording, privacy masks, camera type and last observation image.
+- Add confirmed permanent deletion for retired cameras, including all their data,
+  definitions, automations, rules, caches and unused protected connection settings.
+  Keep reusable actions, shared secrets, audit and minimal reserved IDs.
+- Prevent configuration/bootstrap resurrection and skip deleted IDs for replacements.
+  Protect shared credentials referenced by runtime adapter settings as well as DB profiles.
+
 ## 0.6.14 — Selective backup, restore and factory reset (2 November 2026)
 
 - Hide retired cameras/deleted questions from default Notifications filters and

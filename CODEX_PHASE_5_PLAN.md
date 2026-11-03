@@ -39,3 +39,10 @@ actions/audio, automations and notification rules without old captured history.
 Protected values remain OS-encrypted. Reset requires deliberate UI confirmation;
 implementation/testing does not authorise resetting the live workspace. Remain in
 Phase 5; no automatic merge or Phase 6 work.
+
+## Owner-authorised camera overview and purge (3 November 2026)
+
+Add overview metadata columns and an explicit permanent-delete option for retired
+cameras and their data. Active cameras must first be retired. Implementation tests
+use disposable synthetic workspaces; the request does not authorise deletion of any
+existing live or retired camera. Remain in Phase 5; no auto-merge.

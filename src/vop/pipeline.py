@@ -18,11 +18,15 @@ class Pipeline:
     def __init__(self, settings: Settings, engine: InferenceEngine, store: Store, capture: FrameSource | None = None):
         self.settings, self.engine, self.store = settings, engine, store
         self.capture_adapter = capture or SourceAdapters(timeout_seconds=settings.capture_timeout_seconds)
-        self.sources = {s.source_id: s for s in settings.sources if not store.is_removed(s.source_id)}
-        self.removed_sources = {s.source_id: s for s in settings.sources if store.is_removed(s.source_id)}
+        with store.connection() as db:
+            deleted = {r[0].split(':',1)[1] for r in db.execute("SELECT id FROM release_settings WHERE id LIKE 'deleted_source:%'")}
+        self.sources = {s.source_id: s for s in settings.sources if s.source_id not in deleted and not store.is_removed(s.source_id)}
+        self.removed_sources = {s.source_id: s for s in settings.sources if s.source_id not in deleted and store.is_removed(s.source_id)}
         with store.connection() as db:
             for row in db.execute("SELECT value_json FROM release_settings WHERE id LIKE 'retained_source:%'"):
                 body = json.loads(row[0])
+                if body['source_id'] in deleted:
+                    continue
                 questions = []
                 for q in body['questions']:
                     q['kind'] = AnswerKind(q['kind'])

@@ -155,6 +155,8 @@ def create_app(settings: Settings, *, token: str | None = None,
     install_integration(app, settings, store, pipeline)
     from vop.removal import install_removal
     install_removal(app, store, pipeline, reliable)
+    from vop.camera_deletion import install as install_camera_deletion
+    install_camera_deletion(app)
     from vop.history_deletion import install_history_deletion
     install_history_deletion(app, store, pipeline, reliable)
 
