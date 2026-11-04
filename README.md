@@ -4,7 +4,7 @@
 Individual Observations, even when automatic image saving is off. Add the action
 in Configure → Actions, then link it in Automations. Manual tests select a camera
 and use an existing observation; no new capture is taken. See [Save image](docs/actions.md#save-image).
-Email actions currently send **text only**, without image attachments.
+Add **{image}** to an Email message to include the exact privacy-masked triggering image inline. Without that marker, email is text only. See [Email images](docs/actions.md#email-images).
 In Activity, completed Save image entries offer **View image** to open that
 observation's saved image. Deleted or expired images are marked unavailable.
 

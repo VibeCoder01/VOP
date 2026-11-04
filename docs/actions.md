@@ -48,8 +48,7 @@ Deleting an action or automation stops future saves; existing observation images
 remain until those normal history controls delete them. Completed saves are not
 replayed on restart, so they cannot restore subsequently deleted images.
 
-**Email remains text only.** Linking Save image and Email to the same automation
-does not attach the image to the email.
+Linking Save image and Email alone does not attach an image. Add `{image}` to the Email message.
 
 Completed Save image entries in **Activity** have a **View image** button. It opens
 the exact observation's Recorded image section, including after newer captures or
@@ -205,3 +204,26 @@ machine/account. Old VOP versions do not run these actions; use VOP 0.6.0 or lat
 Offline tests intercept delivery and use synthetic inputs. They never turn on lights, sound
 a hub, play audio, send email/SMS or load a real model. Hardware/provider acceptance is a
 separate explicit test using the buttons above.
+
+
+## Email images
+
+Put `{image}` at the desired position in an Email message. VOP sends a plain-text
+fallback plus an HTML message with an inline PNG (some mail clients show it as an
+attachment). Repeated markers share one embedded image. Other template values and
+message text are escaped as text, not executable HTML. No external image URL or
+VOP login is needed by the recipient.
+
+This is the exact triggering observation's privacy-masked source frame, using the
+same observation → run → frame ID lookup as Save image. Per-question include/exclude
+areas and ROI affect inference, not the shared source image sent by email. The
+frame is retained atomically when the email is queued, even if automatic image
+saving is off; normal retention, image and question-data deletion still apply.
+No extra copy is kept in the queue, and no new camera capture is made. If that
+frame cannot be found, or is deleted before sending, Activity reports **blocked**;
+VOP does not send a different frame or a silently image-free email. Emails already
+sent cannot be recalled by local deletion. Merely filtering Activity never sends.
+
+Manual image-email tests require choosing a camera and use its latest existing
+observation, not a new capture. Templates without `{image}` stay text-only. SMS
+remains text-only. Existing queued action snapshots keep their original template.
