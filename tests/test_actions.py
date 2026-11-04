@@ -345,6 +345,11 @@ def test_message_adapters_acceptance_rejection_and_ambiguous_send(app, monkeypat
     status, _ = actions.send(config, {'camera':'Door','question':'Person','trigger':'Episode starts'}, 'key')
     assert status == 'accepted' and recorded[0]['Subject'] == 'Door' and 'Person: Episode starts' in recorded[0].get_content()
     assert not list(recorded[0].iter_attachments())
+    context = {'camera':'Door','question':'Person','trigger':'Answer becomes Yes'}
+    legacy = {**config, 'subject':'VOP: {camera} — {question}'}
+    assert actions.send(legacy, context, 'legacy-key')[0] == 'accepted'
+    assert str(recorded[-1]['Subject']) == 'VOP: Door — Person — Answer becomes Yes'
+    assert 'Person: Answer becomes Yes' in recorded[-1].get_content()
     def reject(*args, **kw): raise smtplib.SMTPAuthenticationError(535, b'No')
     monkeypatch.setattr(SMTP, 'login', reject)
     assert actions.send(config, {}, 'key')[0] == 'blocked'
@@ -509,3 +514,28 @@ def test_full_backup_preserves_actions_audio_and_json_import_explains_limit(app,
     with pytest.raises(ValueError, match='Use full backup'):
         module.import_configuration(folder / 'configuration.json', tmp_path / 'imported')
     assert not (tmp_path / 'imported').exists()
+
+
+def test_complete_trigger_descriptions_and_list(app, monkeypatch):
+    from vop.actions import trigger_description
+    assert trigger_description({'trigger':'value','value':True}) == 'Answer becomes Yes'
+    assert trigger_description({'trigger':'value','value':False}) == 'Answer becomes No'
+    assert trigger_description({'trigger':'value','value':'Cat'}) == 'Answer becomes Cat'
+    q = SimpleNamespace(kind='ordinal', levels=('Low','Medium','High'))
+    assert trigger_description({'trigger':'value','value':2,'comparison':'at_least'}, q) == 'Answer becomes at or above High (2.0)'
+    assert trigger_description({'trigger':'value','value':1,'comparison':'at_most'}, q) == 'Answer becomes at or below Medium (1.0)'
+    assert trigger_description({'trigger':'duration','seconds':90}) == 'Episode stays active for 00:01:30.0'
+    actions = app.state.actions
+    sound(actions)
+    automation(actions, trigger='value', value=True)
+    now = utcnow() + timedelta(seconds=1)
+    current = summary(now)
+    monkeypatch.setattr(actions, 'summary', lambda *a, **kw: current)
+    actions.evaluate(now)
+    current.update(latest_value=True)
+    actions.evaluate(now + timedelta(seconds=1))
+    assert actions.jobs()[0]['context']['trigger'] == 'Answer becomes Yes'
+    client = TestClient(app, headers=HEADERS)
+    response = client.get('/automations')
+    assert response.status_code == 200 and 'Answer becomes Yes' in response.text
+    assert app.state.store.questions(SID)[0]['spec'].text in response.text

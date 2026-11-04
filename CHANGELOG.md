@@ -663,3 +663,7 @@
 ## v0.1 — 13 October 2026 — Initial requirements baseline
 
 - Product vision, architectural boundaries, detailed requirements, data model, plugin contracts, acceptance scenarios and roadmap.
+
+- Activity: clarify Queued at timestamps; add action, automation, result and GMT / UTC date filters, preserved during automatic refresh.
+
+Automation trigger descriptions now include the configured Yes/No, choice or ordinal threshold (label and number), or active duration. The list also names the question. New email subjects include {trigger}; the original default subject gains it when sending. Custom subjects are preserved. Existing queued messages are unchanged.

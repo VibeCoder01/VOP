@@ -1384,3 +1384,12 @@ replacement-ID generation. Deleted cameras cannot be restored from VOP. External
 backups, exports and messages already sent are unchanged; an explicit older backup
 restore can of course restore its older configuration/data. No existing camera is
 permanently deleted merely by updating the application.
+
+Activity supports Action, Automation, Result and inclusive GMT / UTC date filters.
+Filters search all retained action records before selecting the latest 100 matches;
+automatic refresh preserves them. Options include actions and automations that have
+historical records even if their configuration was deleted. **Queued at** is the
+scheduling timestamp, not the device request or completion time. Clear filters resets
+the selection. No additional device request is made when filtering.
+
+Automation trigger descriptions now include the configured Yes/No, choice or ordinal threshold (label and number), or active duration. The list also names the question. New email subjects include {trigger}; the original default subject gains it when sending. Custom subjects are preserved. Existing queued messages are unchanged.
