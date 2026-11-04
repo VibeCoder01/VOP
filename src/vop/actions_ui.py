@@ -7,7 +7,7 @@ from fasthtml.core import to_xml
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from vop.actions import KINDS, TRIGGERS, beep_wav
+from vop.actions import KINDS, TRIGGERS, beep_wav, trigger_description
 from vop.audio_recording import audio_editor, SCRIPT as AUDIO_SCRIPT
 from vop.dashboard import badge, field, hidden, local_time
 from vop.display import duration, duration_input
@@ -207,8 +207,10 @@ def install_actions(app, actions):
     @app.route('/automations', methods=['GET'])
     def automation_list(request):
         names = {a['id']: a['name'] for a in actions.definitions()}
+        questions = {(sid, r['spec'].question_id): r['spec'] for sid in pipeline.sources for r in store.questions(sid)}
         rows = [Tr(Td(m['name']), Td(pipeline.sources[m['source_id']].name if m['source_id'] in pipeline.sources else m['source_id'],
-                    P(TRIGGERS[m['trigger']])), Td(', '.join(names.get(a, 'Deleted action') for a in m['actions'])),
+                    P(questions[(m['source_id'], m['question_id'])].text) if (m['source_id'], m['question_id']) in questions else None,
+                    P(trigger_description(m, questions.get((m['source_id'], m['question_id']))))), Td(', '.join(names.get(a, 'Deleted action') for a in m['actions'])),
                     Td('Enabled' if m['enabled'] else 'Paused', *(P(issue, cls='muted') for issue in actions.automation_dependencies(m))), Td(Div(back('Edit', '/automations/edit?id=' + m['id']),
                     back('Delete…', '/automations/' + m['id'] + '/delete'), cls='actions'))) for m in actions.automations()]
         return page('Automations', request, [P('Connect confirmed episodes and answer changes to named actions.'),
@@ -285,7 +287,7 @@ def install_actions(app, actions):
         question = next((r['spec'] for r in store.questions(body['source_id']) if r['spec'].question_id == body['question_id']), None)
         if not source or not question or body['trigger'] not in TRIGGERS or not body['actions'] or set(body['actions']) - set(names):
             raise ValueError('Choose an available camera, question, trigger and actions.')
-        summary = f"When {source.name} — {question.text}: {TRIGGERS[body['trigger']]}, run " + ', '.join(names[a] for a in body['actions']) + '.'
+        summary = f"When {source.name} — {question.text}: {trigger_description(body, question)}, run " + ', '.join(names[a] for a in body['actions']) + '.'
         if body['trigger'] == 'value':
             value = body['value']
             label = question.levels[value] + f' ({value})' if question.kind == 'ordinal' and type(value) is int and 0 <= value < len(question.levels) else 'Yes' if value is True else 'No' if value is False else str(value)

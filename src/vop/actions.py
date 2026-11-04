@@ -424,7 +424,7 @@ class Actions:
                     synthetic = any(observations[oid]['run'].get('synthetic') for oid in observation_ids if oid and observations.get(oid))
                     if synthetic:
                         reason = 'Synthetic observations do not run automatic actions. Use an explicit action test.'
-                    context = {'camera': self.pipeline.sources[sid].name or sid, 'question': q.text, 'trigger': TRIGGERS[m['trigger']],
+                    context = {'camera': self.pipeline.sources[sid].name or sid, 'question': q.text, 'trigger': trigger_description(m, q),
                                'automation': m['name'], 'source_id': sid, 'question_id': qid, 'question_version': q.version, 'event_id': event_id,
                                'observation_id': summary['last_observation_id']}
                     for aid in m['actions']:
@@ -443,7 +443,7 @@ class Actions:
             if value.get('disabled'):
                 self.summary_cache.pop(key, None)
                 return value
-            # Bounded by the supported 32 cameras × 32 questions; evict obsolete versions.
+            # Bounded by the supported 32 cameras �— 32 questions; evict obsolete versions.
             if len(self.summary_cache) >= 1024:
                 self.summary_cache.clear()
             self.summary_cache[key] = (signature, value)
@@ -623,7 +623,10 @@ class Actions:
         if kind == 'email':
             mail = EmailMessage()
             mail['From'], mail['To'] = protected['from'], protected['to']
-            mail['Subject'] = render(config['subject'], context).replace('\n', ' ').replace('\r', ' ')
+            subject = config['subject']
+            if subject == 'VOP: {camera} — {question}':
+                subject += ' — {trigger}'
+            mail['Subject'] = render(subject, context).replace('\n', ' ').replace('\r', ' ')
             mail['Message-ID'] = '<' + sha256(key.encode()).hexdigest() + '@vop.local>'
             mail.set_content(message)
             try:
@@ -683,6 +686,24 @@ class Actions:
         self.stop_event.set()
         if self.thread:
             self.thread.join(timeout=40)
+
+
+def trigger_description(config, question=None):
+    label = TRIGGERS[config['trigger']]
+    if config['trigger'] == 'duration':
+        from vop.display import duration
+        return label + ' for ' + duration(config['seconds'])
+    if config['trigger'] != 'value':
+        return label
+    value = config.get('value')
+    if type(value) is bool:
+        answer = 'Yes' if value else 'No'
+    elif question and question.kind == 'ordinal' and type(value) is int and 0 <= value < len(question.levels):
+        answer = question.levels[value] + f' ({value:.1f})'
+    else:
+        answer = str(value)
+    comparison = {'at_least':'at or above ', 'at_most':'at or below '}.get(config.get('comparison'), '')
+    return label + ' ' + comparison + answer
 
 
 def render(template, context):

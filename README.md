@@ -1391,3 +1391,5 @@ automatic refresh preserves them. Options include actions and automations that h
 historical records even if their configuration was deleted. **Queued at** is the
 scheduling timestamp, not the device request or completion time. Clear filters resets
 the selection. No additional device request is made when filtering.
+
+Automation trigger descriptions now include the configured Yes/No, choice or ordinal threshold (label and number), or active duration. The list also names the question. New email subjects include {trigger}; the original default subject gains it when sending. Custom subjects are preserved. Existing queued messages are unchanged.
