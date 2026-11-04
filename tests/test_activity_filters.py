@@ -36,6 +36,8 @@ def test_filters_apply_before_limit_and_refresh_keeps_query(app):
     response = client.get('/activity', params=filters)
     assert response.status_code == 200
     soup = BeautifulSoup(response.text, 'html.parser')
+    pause = soup.select_one('form.activity-pause')
+    assert pause and not pause.has_attr('style')
     assert len(soup.select('thead tr.activity-column-filters td')) == 4
     assert soup.select_one('thead input[name=details]')
     assert not soup.select_one('[data-action-activity] input')

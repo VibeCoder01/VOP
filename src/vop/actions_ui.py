@@ -394,7 +394,7 @@ def install_actions(app, actions):
         return page('Activity', request, [P('Automations paused.' if actions.paused() else 'Automations running.', cls='notice'),
             P(actions.last_error, cls='notice') if actions.last_error else None,
             Form(hidden(csrf(request)), Input(type='hidden', name='paused', value='no' if actions.paused() else 'yes'),
-                 Button('Resume automations' if actions.paused() else 'Pause automations'), method='post', action='/automations/pause', style='margin-bottom:12px') if request.scope.get('auth_role') == 'operator' else None,
+                 Button('Resume automations' if actions.paused() else 'Pause automations'), method='post', action='/automations/pause', cls='activity-pause') if request.scope.get('auth_role') == 'operator' else None,
             Form(Div(Button('Apply filters'), back('Clear filters', '/activity'), back('Refresh activity', str(request.url)), cls='actions'),
                 Div(Table(Thead(Tr(*(Th(label, scope='col') for label in ('Queued at', 'Automation / action', 'Result', 'Details'))), activity_filters(request)),
                     Tbody(*activity_rows(request), data_action_activity='', aria_live='polite')), cls='table-wrap'),
