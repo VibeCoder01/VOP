@@ -2,7 +2,7 @@
 import json
 import secrets
 
-from fasthtml.components import A, Button, Details, Div, Form, H2, H3, Input, Label, Option, P, Pre, Select, Summary, Td, Tr
+from fasthtml.components import A, Button, Details, Div, Form, H2, H3, Input, Label, Option, P, Pre, Select, Summary, Table, Tbody, Thead, Th, Td, Tr
 from fasthtml.core import to_xml
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -342,7 +342,7 @@ def install_actions(app, actions):
         try:
             jobs = actions.jobs(request.query_params)
         except (ValueError, OverflowError):
-            return P('Choose valid dates. Dates use GMT / UTC.', cls='notice')
+            return [Tr(Td('Choose valid dates. Dates use GMT / UTC.', colspan=4, cls='notice'))]
         operator = request.scope.get('auth_role') == 'operator'
         image_jobs = [j for j in jobs if j['configuration']['kind']=='image' and j['status']=='completed']
         ids = list({j['context'].get('observation_id') for j in image_jobs if j['context'].get('observation_id')})
@@ -363,13 +363,13 @@ def install_actions(app, actions):
                 return P(A('View image',href='/ui/observations/'+oid+'#recorded-image',cls='button secondary'))
             return P('Image no longer available. It may have been deleted or expired.',cls='muted')
 
-        return app.state.table(['Queued at', 'Automation / action', 'Result', 'Details'], [Tr(Td(local_time(j['created'], actions.zone)),
+        return [Tr(Td(local_time(j['created'], actions.zone)),
             Td(j['context'].get('automation', ''), P(j['configuration']['name'])), Td(badge(j['status'])),
-            Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in jobs])
+            Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in jobs] or [Tr(Td('No matching actions.', colspan=4))]
 
     @app.route('/activity/rows', methods=['GET'])
     def rows(request):
-        return Response(to_xml(activity_rows(request)), media_type='text/html')
+        return Response(''.join(to_xml(row) for row in activity_rows(request)), media_type='text/html')
 
     def activity_filters(request):
         selected = request.query_params
@@ -381,11 +381,13 @@ def install_actions(app, actions):
         def selector(label, key, names):
             return Div(Label(label, Select(Option('All', value=''), *(Option(name, value=value, selected=selected.get(key)==value)
                 for value, name in sorted(names.items(), key=lambda item: item[1].casefold())), name=key)), cls='field')
-        return Form(selector('Action', 'action', action_names), selector('Automation', 'automation', automation_names),
-            selector('Result', 'result', {r:r.replace('_',' ').capitalize() for r in results}),
-            field('From date (GMT / UTC)', 'from', selected.get('from',''), type='date'),
-            field('Through date (GMT / UTC)', 'to', selected.get('to',''), type='date'),
-            Div(Button('Apply filters'), back('Clear filters','/activity'), cls='actions'), method='get', action='/activity', cls='filters')
+        return Tr(
+            Td(field('From date (GMT / UTC)', 'from', selected.get('from',''), type='date'),
+               field('Through date (GMT / UTC)', 'to', selected.get('to',''), type='date')),
+            Td(selector('Automation', 'automation', automation_names), selector('Action', 'action', action_names)),
+            Td(selector('Result', 'result', {r:r.replace('_',' ').capitalize() for r in results})),
+            Td(field('Details contain', 'details', selected.get('details',''), type='search')),
+            cls='activity-column-filters')
 
     @app.route('/activity', methods=['GET'])
     def activity(request):
@@ -393,9 +395,10 @@ def install_actions(app, actions):
             P(actions.last_error, cls='notice') if actions.last_error else None,
             Form(hidden(csrf(request)), Input(type='hidden', name='paused', value='no' if actions.paused() else 'yes'),
                  Button('Resume automations' if actions.paused() else 'Pause automations'), method='post', action='/automations/pause') if request.scope.get('auth_role') == 'operator' else None,
-            activity_filters(request),
-            Div(back('Refresh activity', str(request.url)), cls='actions'),
-            Div(activity_rows(request), data_action_activity='', aria_live='polite'),
+            Form(Div(Button('Apply filters'), back('Clear filters', '/activity'), back('Refresh activity', str(request.url)), cls='actions'),
+                Div(Table(Thead(Tr(*(Th(label, scope='col') for label in ('Queued at', 'Automation / action', 'Result', 'Details'))), activity_filters(request)),
+                    Tbody(*activity_rows(request), data_action_activity='', aria_live='polite')), cls='table-wrap'),
+                method='get', action='/activity'),
             P('Latest 100 matching actions. Queued at is when VOP scheduled the action, not when the device received or completed it. Dates use GMT / UTC. Accepted means the provider accepted the message; final delivery is not confirmed. Uncertain actions are not resent automatically.', cls='muted')], 'activity')
 
     @app.route('/actions/beep.wav', methods=['GET'])

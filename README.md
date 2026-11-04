@@ -1393,3 +1393,9 @@ scheduling timestamp, not the device request or completion time. Clear filters r
 the selection. No additional device request is made when filtering.
 
 Automation trigger descriptions now include the configured Yes/No, choice or ordinal threshold (label and number), or active duration. The list also names the question. New email subjects include {trigger}; the original default subject gains it when sending. Custom subjects are preserved. Existing queued messages are unchanged.
+
+Activity column filters sit directly beneath their headings: queued date range,
+automation/action selectors, result selector and a case-insensitive Details search.
+Select Apply filters or press Enter; Clear filters resets them. Refresh updates only
+the table body, preserving filter controls and edits. Matching happens before the
+100-row limit. Details search treats `%` and `_` as literal characters.
