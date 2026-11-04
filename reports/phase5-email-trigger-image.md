@@ -6,7 +6,7 @@
 - src/vop/actions_ui.py: image-email camera test selector, marker instructions and retention/missing-image explanation; removed outdated text-only email help.
 - tests/test_email_image.py: distinct red/green/blue synthetic frames; exact byte and privacy-mask pixel checks; newer-frame non-substitution, deletion, blocked missing frame, manual test without capture, suppression and atomic rollback.
 - tests/test_save_image_action.py: email editor help expectation updated; existing Save image exact-frame and atomic deletion tests retained.
-- README.md, docs/actions.md, CHANGELOG.md: usage and limitations.
+- README.md, docs/actions.md, CHANGELOG.md: usage and limitations; pyproject.toml: version 0.6.17.
 
 ## Validation
 
@@ -18,6 +18,6 @@ Save image resolves context.observation_id → observations.run_id → runs.fram
 
 ## Limits / deployment
 
-No real camera, GPU/model, email/SMTP server, Tapo, sound or SMS was contacted. SMTP is intercepted; only synthetic images used. No new model measurements or revision. Service not restarted and live browser appearance not checked. Version remains 0.6.16 within the existing unmerged Phase 5 PR. CI unverified.
+No real camera, GPU/model, email/SMTP server, Tapo, sound or SMS was contacted. SMTP is intercepted; only synthetic images used. No new model measurements or revision. Service not restarted and live browser appearance not checked. Version 0.6.17; separate PR after the owner merged PR #78 during implementation. CI unverified.
 
 Images are privacy-masked source frames, as for normal image saving; question-specific include/exclude/ROI is not reflected in shared saved images. `{image}` explicitly retains the frame even if automatic image saving is off, following existing retention/deletion. Mail clients can display inline PNGs as attachments. Local deletion cannot recall a sent email. Existing queued snapshots are unchanged. Next: finish Phase 5 review/CI and restart via Start VOP; no Phase 6 work.
