@@ -667,3 +667,5 @@
 - Activity: clarify Queued at timestamps; add action, automation, result and GMT / UTC date filters, preserved during automatic refresh.
 
 Automation trigger descriptions now include the configured Yes/No, choice or ordinal threshold (label and number), or active duration. The list also names the question. New email subjects include {trigger}; the original default subject gains it when sending. Custom subjects are preserved. Existing queued messages are unchanged.
+
+- Email message `{image}` embeds the exact privacy-masked triggering frame. Queuing retains it under normal evidence rules; missing/deleted frames block delivery without substitution. Camera selectors support image-email tests.

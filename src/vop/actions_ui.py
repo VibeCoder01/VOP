@@ -105,7 +105,7 @@ def install_actions(app, actions):
             rows.append(Tr(Td(action['name']), Td(KINDS[action['kind']]), Td(actions.dependency(action) or 'Ready to test'),
                 Td(Div(back('Edit action', '/actions/edit?id=' + action['id']),
                     Form(hidden(token),
-                         Label('Camera for image test',Select(Option('Choose a camera',value=''),*(Option(s.name or sid,value=sid) for sid,s in pipeline.sources.items()),name='source_id',required=True)) if action['kind']=='image' else None,
+                         Label('Camera for image test',Select(Option('Choose a camera',value=''),*(Option(s.name or sid,value=sid) for sid,s in pipeline.sources.items()),name='source_id',required=True)) if action['kind']=='image' or action['kind']=='email' and '{image}' in action.get('message','') else None,
                          Button('Test action'), method='post', action='/actions/' + action['id'] + '/test'),
                     back('Delete…', '/actions/' + action['id'] + '/delete'), cls='actions'))))
         return page('Actions', request, [P('Create an action here. Connect it to a camera and question in Automations.'),
@@ -121,7 +121,7 @@ def install_actions(app, actions):
             Pre('.\\.venv\\Scripts\\python.exe -m pip install ".[tapo]"'),
             H2('Save image'), P('Connect this action to a question in Automations. It saves the privacy-masked source image for the observation that caused the action, in Individual Observations, even when automatic image saving is off. It uses the same image format, retention and deletion rules. It does not save a separate per-question crop or turn on automatic saving.'),
             P('The matching image must still be in the temporary preview or already saved. Activity reports a missing image; it never substitutes another frame. Manual tests need a camera and an existing observation.'),
-            H2('Email'), P('Email is text only: images are not attached, including when a Save image action is linked to the same automation. Use your provider’s SMTP SSL server, normally port 465, and an app password if required. VOP does not support STARTTLS-only servers in this release.'),
+            H2('Email'), P('Put {image} in the message to include the exact privacy-masked triggering image inline. Without it, email remains text only. Use your provider’s SMTP SSL server, normally port 465, and an app password if required. VOP does not support STARTTLS-only servers in this release.'),
             H2('Text messages'), P('Create a Twilio SMS sender and API key. Enter its Account SID, API key SID and secret, sender and recipient in the protected fields. Trial accounts may require recipient verification. Provider charges apply.'),
             H2('If an action fails'), P('Open Activity, read the result, then Edit action or Check device. A blocked action needs corrected setup. An uncertain action may already have happened: check the destination before using Test action. Old actions are not replayed.'),
             back('Back to Actions', '/actions')], 'actions')
@@ -147,7 +147,7 @@ def install_actions(app, actions):
         if kind == 'image':
             fields += [P('Save the triggering observation’s privacy-masked source image in Individual Observations. Camera and question are chosen in the automation.'),
                        P('Works when automatic image saving is off. No new camera capture is taken. The image follows normal retention and deletion rules. If it is no longer available, Activity explains why nothing was saved.',cls='muted'),
-                       P('This action does not attach images to email. Email actions currently send text only.',cls='muted')]
+                       P('To include a triggering image in email, add {image} to the Email action message. Linking Save image alone does not attach it.',cls='muted')]
         if kind == 'tapo':
             fields += [field('Light LAN address', 'address', existing.get('address', ''), required=True),
                        choose('Operation', 'operation', [('on', 'Turn on'), ('off', 'Turn off'), ('flash', 'Flash, then turn off')], existing.get('operation', 'on')),
@@ -164,10 +164,10 @@ def install_actions(app, actions):
         if kind == 'email':
             fields += [field('SMTP server (encrypted connection)', 'host', existing.get('host', ''), required=True),
                        field('SMTP SSL port', 'port', existing.get('port', 465), type='number', min=1, max=65535, required=True),
-                       field('Subject', 'subject', existing.get('subject', 'VOP: {camera} — {question}'), required=True)]
+                       field('Subject', 'subject', existing.get('subject', 'VOP: {camera} — {question} — {trigger}'), required=True)]
         if kind in ('email', 'sms'):
             fields += [field('Message', 'message', existing.get('message', '{camera}: {question} — {trigger}'), required=True, maxlength=1000),
-                       P('Use {camera}, {question}, {trigger} and {automation}. Messages contain text only, with no image attachments.', cls='muted')]
+                       P('Use {camera}, {question}, {trigger} and {automation}. ' + ('Add {image} to insert the exact privacy-masked triggering image. The image is retained in Individual Observations under normal retention rules, even when automatic saving is off. If unavailable, the email is blocked. Image tests require a camera and an existing observation.' if kind == 'email' else 'SMS messages contain text only.'), cls='muted')]
         protected = {'tapo': [('username', 'Tapo account email'), ('password', 'Tapo account password')],
                      'email': [('username', 'SMTP username'), ('password', 'SMTP password or app password'), ('from', 'Sender email'), ('to', 'Recipient email')],
                      'sms': [('account', 'Twilio Account SID (AC…)'), ('username', 'Twilio API key SID (SK…)'), ('password', 'Twilio API key secret'), ('from', 'Sender number (+country code)'), ('to', 'Recipient number (+country code)')]}

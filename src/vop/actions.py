@@ -7,6 +7,7 @@ import base64
 from datetime import date, timedelta
 from email.message import EmailMessage
 from hashlib import sha256
+from html import escape
 from io import BytesIO
 import ipaddress
 import json
@@ -150,7 +151,7 @@ class Actions:
                 text(config['sound'], 'a hub sound', 100)
         if kind == 'email':
             config.update(host=text(body.get('host'), 'the SMTP server', 253), port=int(number(body.get('port', 465), 1, 65535, 'SMTP port')),
-                          subject=text(body.get('subject', 'VOP: {camera} — {question}'), 'a subject', 200))
+                          subject=text(body.get('subject', 'VOP: {camera} — {question} — {trigger}'), 'a subject', 200))
             if any(c in config['host'] for c in '/:@\r\n') or '\n' in config['subject'] or '\r' in config['subject']:
                 raise ValueError('Enter a server hostname and a single-line subject.')
         if kind in ('email', 'sms'):
@@ -443,7 +444,7 @@ class Actions:
             if value.get('disabled'):
                 self.summary_cache.pop(key, None)
                 return value
-            # Bounded by the supported 32 cameras �— 32 questions; evict obsolete versions.
+            # Bounded by the supported 32 cameras × 32 questions; evict obsolete versions.
             if len(self.summary_cache) >= 1024:
                 self.summary_cache.clear()
             self.summary_cache[key] = (signature, value)
@@ -457,10 +458,13 @@ class Actions:
         if db.execute('SELECT 1 FROM action_jobs WHERE id=?', (jid,)).fetchone():
             return
         status, detail = ('suppressed', reason) if reason else ('queued', '')
-        if not reason and config['kind'] == 'image':
+        email_image = config['kind'] == 'email' and '{image}' in config.get('message', '')
+        if not reason and (config['kind'] == 'image' or email_image):
             # This local DB action and its Activity receipt commit together. No queued
             # image copies, external I/O or later retry can restore deleted evidence.
             status, detail = self.save_image(db, context, now)
+            if email_image and status == 'completed':
+                status, detail = 'queued', ''
         db.execute('INSERT OR IGNORE INTO action_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                    (jid, mid, config['id'], now.isoformat(), (now + timedelta(minutes=2)).isoformat(), now.isoformat(),
                     status, int(config['kind']=='image' and not reason), dumps(config), dumps(context), detail, None))
@@ -490,13 +494,13 @@ class Actions:
             if not config:
                 raise ValueError('This action no longer exists.')
             context = {'camera': 'Test camera', 'question': 'Action test', 'trigger': 'Manual test', 'automation': 'Manual test'}
-            if config['kind'] == 'image':
+            if config['kind'] == 'image' or config['kind'] == 'email' and '{image}' in config.get('message', ''):
                 if source_id not in self.pipeline.sources:
-                    raise ValueError('Choose a camera for the Save image test.')
+                    raise ValueError('Choose a camera for the image action test.')
                 context.update(source_id=source_id, camera=self.pipeline.sources[source_id].name or source_id)
             with self.store.connection() as db:
                 db.execute('BEGIN IMMEDIATE')
-                if config['kind'] == 'image':
+                if config['kind'] == 'image' or config['kind'] == 'email' and '{image}' in config.get('message', ''):
                     row = db.execute("SELECT o.id FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.source_id=? AND r.frame_id IS NOT NULL AND o.status!='retention_gap' ORDER BY o.sequence DESC LIMIT 1", (source_id,)).fetchone()
                     context['observation_id'] = row['id'] if row else None
                 if db.execute("SELECT 1 FROM action_jobs WHERE action_id=? AND automation_id IS NULL AND created>?", (aid, (utcnow() - timedelta(seconds=5)).isoformat())).fetchone():
@@ -628,7 +632,19 @@ class Actions:
                 subject += ' — {trigger}'
             mail['Subject'] = render(subject, context).replace('\n', ' ').replace('\r', ' ')
             mail['Message-ID'] = '<' + sha256(key.encode()).hexdigest() + '@vop.local>'
-            mail.set_content(message)
+            if '{image}' in config.get('message', ''):
+                with self.store.connection() as db:
+                    row = db.execute("SELECT f.evidence_png FROM observations o JOIN runs r ON r.id=o.run_id JOIN frames f ON f.source_id=r.source_id AND f.frame_id=r.frame_id WHERE o.id=? AND r.source_id=? AND o.status!='retention_gap'",
+                        (context.get('observation_id'), context.get('source_id'))).fetchone()
+                if not row or not row[0]:
+                    return 'blocked', 'The triggering image is unavailable or was deleted. No email was sent; no other frame was substituted.'
+                cid = 'vop-trigger-' + sha256(key.encode()).hexdigest()
+                mail.set_content(message.replace('{image}', '[Triggering image included]'))
+                html = escape(message).replace('{image}', '<img src="cid:' + cid + '" alt="Privacy-masked triggering image">').replace('\n', '<br>')
+                mail.add_alternative('<html><body>' + html + '</body></html>', subtype='html')
+                mail.get_payload()[-1].add_related(bytes(row[0]), maintype='image', subtype='png', cid='<' + cid + '>', disposition='inline', filename='triggering-image.png')
+            else:
+                mail.set_content(message)
             try:
                 with smtplib.SMTP_SSL(config['host'], config['port'], timeout=8, context=ssl.create_default_context()) as smtp:
                     smtp.login(protected['username'], protected['password'])

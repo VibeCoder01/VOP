@@ -119,7 +119,7 @@ def test_image_action_forms_require_a_camera_and_take_no_capture(app,monkeypatch
         assert client.post('/actions/save-picture/test').status_code==400
         assert client.post('/actions/save-picture/test',data={'source_id':SID}).status_code==200
         assert app.state.actions.jobs()[0]['status']=='blocked'
-        assert 'text only' in client.get('/actions/edit?kind=email').text
+        assert '{image}' in client.get('/actions/edit?kind=email').text
 
 
 def test_activity_opens_the_saved_observation_image_even_after_new_captures(app):
