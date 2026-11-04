@@ -20,7 +20,7 @@ SCRIPT = r"""(() => {
     if (activityBusy || document.hidden) return;
     activityBusy = true;
     try {
-      const response = await fetch('/activity/rows', {signal:AbortSignal.timeout(5000)});
+      const response = await fetch('/activity/rows' + location.search, {signal:AbortSignal.timeout(5000)});
       if (!response.ok || response.redirected) return;
       const html = await response.text();
       if (html !== lastActivity) { activity.innerHTML = html; lastActivity = html; }
@@ -337,7 +337,10 @@ def install_actions(app, actions):
 
     def activity_rows(request):
         current_actions = {a['id'] for a in actions.definitions()}
-        jobs = actions.jobs()
+        try:
+            jobs = actions.jobs(request.query_params)
+        except (ValueError, OverflowError):
+            return P('Choose valid dates. Dates use GMT / UTC.', cls='notice')
         operator = request.scope.get('auth_role') == 'operator'
         image_jobs = [j for j in jobs if j['configuration']['kind']=='image' and j['status']=='completed']
         ids = list({j['context'].get('observation_id') for j in image_jobs if j['context'].get('observation_id')})
@@ -358,7 +361,7 @@ def install_actions(app, actions):
                 return P(A('View image',href='/ui/observations/'+oid+'#recorded-image',cls='button secondary'))
             return P('Image no longer available. It may have been deleted or expired.',cls='muted')
 
-        return app.state.table(['Time', 'Automation / action', 'Result', 'Details'], [Tr(Td(local_time(j['created'], actions.zone)),
+        return app.state.table(['Queued at', 'Automation / action', 'Result', 'Details'], [Tr(Td(local_time(j['created'], actions.zone)),
             Td(j['context'].get('automation', ''), P(j['configuration']['name'])), Td(badge(j['status'])),
             Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in jobs])
 
@@ -366,15 +369,32 @@ def install_actions(app, actions):
     def rows(request):
         return Response(to_xml(activity_rows(request)), media_type='text/html')
 
+    def activity_filters(request):
+        selected = request.query_params
+        with store.connection() as db:
+            records = db.execute("SELECT DISTINCT action_id,automation_id,json_extract(configuration,'$.name'),json_extract(context,'$.automation') FROM action_jobs").fetchall()
+            results = [r[0] for r in db.execute('SELECT DISTINCT status FROM action_jobs ORDER BY status')]
+        action_names = {r[0]: r[2] for r in records}
+        automation_names = {r[1]: r[3] or r[1] for r in records if r[1]}
+        def selector(label, key, names):
+            return Div(Label(label, Select(Option('All', value=''), *(Option(name, value=value, selected=selected.get(key)==value)
+                for value, name in sorted(names.items(), key=lambda item: item[1].casefold())), name=key)), cls='field')
+        return Form(selector('Action', 'action', action_names), selector('Automation', 'automation', automation_names),
+            selector('Result', 'result', {r:r.replace('_',' ').capitalize() for r in results}),
+            field('From date (GMT / UTC)', 'from', selected.get('from',''), type='date'),
+            field('Through date (GMT / UTC)', 'to', selected.get('to',''), type='date'),
+            Div(Button('Apply filters'), back('Clear filters','/activity'), cls='actions'), method='get', action='/activity', cls='filters')
+
     @app.route('/activity', methods=['GET'])
     def activity(request):
         return page('Activity', request, [P('Automations paused.' if actions.paused() else 'Automations running.', cls='notice'),
             P(actions.last_error, cls='notice') if actions.last_error else None,
             Form(hidden(csrf(request)), Input(type='hidden', name='paused', value='no' if actions.paused() else 'yes'),
                  Button('Resume automations' if actions.paused() else 'Pause automations'), method='post', action='/automations/pause') if request.scope.get('auth_role') == 'operator' else None,
-            Div(back('Refresh activity', '/activity'), cls='actions'),
+            activity_filters(request),
+            Div(back('Refresh activity', str(request.url)), cls='actions'),
             Div(activity_rows(request), data_action_activity='', aria_live='polite'),
-            P('Latest 100 actions. Accepted means the provider accepted the message; final delivery is not confirmed. Uncertain actions are not resent automatically.', cls='muted')], 'activity')
+            P('Latest 100 matching actions. Queued at is when VOP scheduled the action, not when the device received or completed it. Dates use GMT / UTC. Accepted means the provider accepted the message; final delivery is not confirmed. Uncertain actions are not resent automatically.', cls='muted')], 'activity')
 
     @app.route('/actions/beep.wav', methods=['GET'])
     def beep():

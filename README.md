@@ -1384,3 +1384,10 @@ replacement-ID generation. Deleted cameras cannot be restored from VOP. External
 backups, exports and messages already sent are unchanged; an explicit older backup
 restore can of course restore its older configuration/data. No existing camera is
 permanently deleted merely by updating the application.
+
+Activity supports Action, Automation, Result and inclusive GMT / UTC date filters.
+Filters search all retained action records before selecting the latest 100 matches;
+automatic refresh preserves them. Options include actions and automations that have
+historical records even if their configuration was deleted. **Queued at** is the
+scheduling timestamp, not the device request or completion time. Clear filters resets
+the selection. No additional device request is made when filtering.

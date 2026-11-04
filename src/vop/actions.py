@@ -4,7 +4,7 @@ The queue owns deduplication, expiry and audit. Adapters never retry ambiguous s
 """
 import asyncio
 import base64
-from datetime import timedelta
+from datetime import date, timedelta
 from email.message import EmailMessage
 from hashlib import sha256
 from io import BytesIO
@@ -505,10 +505,26 @@ class Actions:
                              context, utcnow())
         self.store.audit('action_test', aid)
 
-    def jobs(self):
+    def jobs(self, filters=None):
+        filters = filters or {}
+        if filters.get('from') and filters.get('to') and date.fromisoformat(filters['from']) > date.fromisoformat(filters['to']):
+            raise ValueError('The end date must not precede the start date.')
+        where, values = [], []
+        for key, column in (('action', 'action_id'), ('automation', 'automation_id'), ('result', 'status')):
+            if filters.get(key):
+                where.append(column + '=?')
+                values.append(filters[key])
+        for key, operator in (('from', '>='), ('to', '<')):
+            if filters.get(key):
+                day = date.fromisoformat(filters[key])
+                if key == 'to':
+                    day += timedelta(days=1)
+                where.append('created' + operator + '?')
+                values.append(day.isoformat())
+        clause = ' WHERE ' + ' AND '.join(where) if where else ''
         with self.store.connection() as db:
             return [{**dict(r), 'configuration': json.loads(r['configuration']), 'context': json.loads(r['context'])}
-                    for r in db.execute('SELECT * FROM action_jobs ORDER BY created DESC,rowid DESC LIMIT 100')]
+                    for r in db.execute('SELECT * FROM action_jobs' + clause + ' ORDER BY created DESC,rowid DESC LIMIT 100', values)]
 
     def deliver(self, now=None):
         now = utc(now) if now else utcnow()

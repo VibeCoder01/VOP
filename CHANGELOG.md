@@ -663,3 +663,5 @@
 ## v0.1 — 13 October 2026 — Initial requirements baseline
 
 - Product vision, architectural boundaries, detailed requirements, data model, plugin contracts, acceptance scenarios and roadmap.
+
+- Activity: clarify Queued at timestamps; add action, automation, result and GMT / UTC date filters, preserved during automatic refresh.
