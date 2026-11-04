@@ -525,6 +525,9 @@ class Actions:
                     day += timedelta(days=1)
                 where.append('created' + operator + '?')
                 values.append(day.isoformat())
+        if filters.get('details'):
+            where.append('instr(lower(detail), lower(?)) > 0')
+            values.append(filters['details'])
         clause = ' WHERE ' + ' AND '.join(where) if where else ''
         with self.store.connection() as db:
             return [{**dict(r), 'configuration': json.loads(r['configuration']), 'context': json.loads(r['context'])}

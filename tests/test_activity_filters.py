@@ -21,6 +21,9 @@ def test_filters_apply_before_limit_and_refresh_keeps_query(app):
     assert len(actions.jobs()) == 100
     filters = {'action':'old-action','automation':'old-rule','result':'uncertain','from':'2026-11-04','to':'2026-11-04'}
     assert [j['id'] for j in actions.jobs(filters)] == ['0']
+    assert len(actions.jobs({'details':'recorded RESULT'})) == 100
+    assert not actions.jobs({'details':'unmatched'})
+    assert not actions.jobs({'details':'%'})
     assert not actions.jobs({'from':'2026-11-05'})
     assert not actions.jobs({'to':'2026-11-03'})
     assert not actions.jobs({'action':"' OR 1=1 --"})
@@ -33,9 +36,14 @@ def test_filters_apply_before_limit_and_refresh_keeps_query(app):
     response = client.get('/activity', params=filters)
     assert response.status_code == 200
     soup = BeautifulSoup(response.text, 'html.parser')
+    pause = soup.select_one('form.activity-pause')
+    assert pause and not pause.has_attr('style')
+    assert len(soup.select('thead tr.activity-column-filters td')) == 4
+    assert soup.select_one('thead input[name=details]')
+    assert not soup.select_one('[data-action-activity] input')
     assert soup.select_one('select[name=action] option[selected]')['value'] == 'old-action'
     table = soup.select_one('[data-action-activity]')
-    assert 'Queued at' in table.text and 'Old bell' in table.text and 'New bell' not in table.text
+    assert 'Queued at' in soup.select_one('thead').text and 'Old bell' in table.text and 'New bell' not in table.text
     rows = client.get('/activity/rows', params=filters)
     assert 'Old bell' in rows.text and 'New bell' not in rows.text
     assert 'Choose valid dates' in client.get('/activity/rows?from=invalid').text
