@@ -671,3 +671,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Email message `{image}` embeds the exact privacy-masked triggering frame. Queuing retains it under normal evidence rules; missing/deleted frames block delivery without substitution. Camera selectors support image-email tests.
 
 - Activity: move filters into their column headings and add literal, case-insensitive Details search. Keep filter controls outside the refreshed table body.
+
+- Activity: add a 12px gap between Pause automations and filter controls.
