@@ -673,3 +673,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Activity: move filters into their column headings and add literal, case-insensitive Details search. Keep filter controls outside the refreshed table body.
 
 - Activity: add a 12px gap between Pause automations and filter controls.
+
+- Observe full view: hover/focus questions to show configured include/exclude areas on the matching camera’s last-processed image, with a labelled legend and letterbox-aware scaling.

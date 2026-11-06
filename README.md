@@ -1399,3 +1399,10 @@ automation/action selectors, result selector and a case-insensitive Details sear
 Select Apply filters or press Enter; Clear filters resets them. Refresh updates only
 the table body, preserving filter controls and edits. Matching happens before the
 100-row limit. Details search treats `%` and `_` as literal characters.
+
+In Observe → Full view, show answers and images, then hover over a question (or
+focus its row with Tab) to show its configured include/exclude areas on the Last
+processed image. Green outlines mark included areas; red dashed outlines mark
+excluded areas, which take priority. The legend identifies the question. These
+are current configuration guides, not saved image edits; they clear on leaving
+the question. No extra capture or inference is requested.
