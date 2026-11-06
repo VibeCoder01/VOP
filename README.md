@@ -1406,3 +1406,10 @@ processed image. Green outlines mark included areas; red dashed outlines mark
 excluded areas, which take priority. The legend identifies the question. These
 are current configuration guides, not saved image edits; they clear on leaving
 the question. No extra capture or inference is requested.
+
+Activity groups matching action records by camera and question (across versions).
+Groups start collapsed; expand any group to see its action results. Each summary
+shows camera, question, matching action count and latest queued time. Newest groups
+and records come first. Automatic refresh preserves expanded groups; new groups
+start collapsed. Filters still apply before the 100-action limit. Manual tests
+without a question are grouped separately by action and camera.

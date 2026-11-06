@@ -23,7 +23,12 @@ SCRIPT = r"""(() => {
       const response = await fetch('/activity/rows' + location.search, {signal:AbortSignal.timeout(5000)});
       if (!response.ok || response.redirected) return;
       const html = await response.text();
-      if (html !== lastActivity) { activity.innerHTML = html; lastActivity = html; }
+      if (html !== lastActivity) {
+        const expanded = new Set(Array.from(activity.querySelectorAll('[data-activity-group][open]'), group => group.dataset.activityGroup));
+        activity.innerHTML = html;
+        for (const group of activity.querySelectorAll('[data-activity-group]')) group.open = expanded.has(group.dataset.activityGroup);
+        lastActivity = html;
+      }
     } catch (_) {} finally { activityBusy = false; }
   }, 1000);
   const enable = document.querySelector('[data-enable-sound]');
@@ -363,9 +368,26 @@ def install_actions(app, actions):
                 return P(A('View image',href='/ui/observations/'+oid+'#recorded-image',cls='button secondary'))
             return P('Image no longer available. It may have been deleted or expired.',cls='muted')
 
-        return [Tr(Td(local_time(j['created'], actions.zone)),
-            Td(j['context'].get('automation', ''), P(j['configuration']['name'])), Td(badge(j['status'])),
-            Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in jobs] or [Tr(Td('No matching actions.', colspan=4))]
+        grouped = {}
+        for job in jobs:
+            context = job['context']
+            sid, qid = context.get('source_id'), context.get('question_id')
+            key = json.dumps(['question', sid, qid] if sid and qid else ['manual', sid, job['action_id']])
+            grouped.setdefault(key, []).append(job)
+        result = []
+        for key, group in grouped.items():
+            latest = group[0]
+            context = latest['context']
+            source = pipeline.sources.get(context.get('source_id'))
+            camera = source.name or source.source_id if source else context.get('camera', 'Unknown camera')
+            question = context.get('question') or 'Manual action tests'
+            rows = [Tr(Td(local_time(j['created'], actions.zone)),
+                Td(j['context'].get('automation', ''), P(j['configuration']['name'])), Td(badge(j['status'])),
+                Td(j['detail'] or 'Waiting to run.', image_control(j), P(A('Edit action', href='/actions/edit?id=' + j['action_id']) if j['action_id'] in current_actions else 'Action deleted') if operator else None)) for j in group]
+            label = f"{camera} — {question} · {len(group)} action{'s' if len(group)!=1 else ''} · Latest: " + local_time(latest['created'], actions.zone)
+            result.append(Tr(Td(Details(Summary(label), app.state.table(['Queued at', 'Automation / action', 'Result', 'Details'], rows),
+                data_activity_group=key, cls='activity-group'), colspan=4)))
+        return result or [Tr(Td('No matching actions.', colspan=4))]
 
     @app.route('/activity/rows', methods=['GET'])
     def rows(request):
@@ -399,7 +421,7 @@ def install_actions(app, actions):
                 Div(Table(Thead(Tr(*(Th(label, scope='col') for label in ('Queued at', 'Automation / action', 'Result', 'Details'))), activity_filters(request)),
                     Tbody(*activity_rows(request), data_action_activity='', aria_live='polite')), cls='table-wrap'),
                 method='get', action='/activity'),
-            P('Latest 100 matching actions. Queued at is when VOP scheduled the action, not when the device received or completed it. Dates use GMT / UTC. Accepted means the provider accepted the message; final delivery is not confirmed. Uncertain actions are not resent automatically.', cls='muted')], 'activity')
+            P('Latest 100 matching actions, grouped by camera and question. Expand a group to see its actions. Groups start collapsed; automatic refresh keeps your expanded groups open. Queued at is when VOP scheduled the action, not when the device received or completed it. Dates use GMT / UTC. Accepted means the provider accepted the message; final delivery is not confirmed. Uncertain actions are not resent automatically.', cls='muted')], 'activity')
 
     @app.route('/actions/beep.wav', methods=['GET'])
     def beep():
