@@ -20,6 +20,7 @@ from fasthtml.svg import Svg, Polyline, Line, Rect, Circle, Text, ft_svg
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
+from vop.question_area_preview import SCRIPT as QUESTION_AREA_JS
 from vop.browser_auth import BrowserAuth, configuring
 from vop.display import duration, duration_input, answer_kind
 from vop.config import identifier
@@ -39,7 +40,7 @@ CSS = """
 .diagnostic-signal{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:15px;font-weight:650;line-height:1.4}.signal-lights{display:inline-flex;flex:0 0 auto;gap:8px;padding:9px;background:#172a3a;border-radius:24px;box-shadow:0 2px 5px #0002}.signal-lamp{display:block;width:22px;height:22px;border-radius:50%;background:#66727e;border:2px solid #8b97a1;opacity:.45}.signal-lamp.lit{opacity:1;border-color:white;box-shadow:0 0 0 3px #ffffff25}.signal-lamp.red.lit{background:#ff4757}.signal-lamp.amber.lit{background:#ffbd2e}.signal-lamp.green.lit{background:#20d584}.diagnostic-summary{padding:18px 22px;margin-bottom:22px;border:2px solid #bdcbd6;border-radius:12px;background:#f4f8fb}.diagnostic-summary .diagnostic-signal{font-size:21px;margin:0}.diagnostic-summary .signal-lamp{width:28px;height:28px}.diagnostic-summary .signal-lights{padding:12px}
 .status.WAITING_FOR_ENGINE{background:#fff0d7;color:#7e520c}
 .editor [data-audio-editor]>.actions{margin-top:0}.editor [data-audio-editor] audio{width:100%;max-width:100%}
-.image-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:12px 0}.image-tile{min-width:0}.image-tile>strong{display:block;margin-bottom:8px;font-size:13px}.image-stage{height:200px;border-radius:8px;background:#e8e8ed}.observe-image .image-stage img{width:100%;height:100%;max-height:200px;object-fit:contain}.image-stage:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.observe-image .image-stage:hover img:not([hidden]),.observe-image .image-stage:focus-visible img:not([hidden]){position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(800px,calc(100vw - 48px));height:min(440px,calc(100vh - 48px));max-width:calc(100vw - 48px);max-height:440px;object-fit:contain;z-index:2000;background:#fff;box-shadow:0 10px 50px #0005;pointer-events:none}@media(max-width:600px){.image-pair{grid-template-columns:1fr}}
+.image-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:12px 0}.image-tile{min-width:0}.image-tile>strong{display:block;margin-bottom:8px;font-size:13px}.question-area-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.question-area-overlay rect{stroke-width:2;vector-effect:non-scaling-stroke}.question-area-overlay .include{stroke:#168153;fill:#16815322}.question-area-overlay .exclude{stroke:#d52b35;fill:#d52b3522;stroke-dasharray:6 4}.question-area-legend{font-size:12px;color:var(--muted)}.image-stage{position:relative;height:200px;border-radius:8px;background:#e8e8ed}.observe-image .image-stage img{width:100%;height:100%;max-height:200px;object-fit:contain}.image-stage:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.observe-image .image-stage:hover img:not([hidden]),.observe-image .image-stage:focus-visible img:not([hidden]){position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(800px,calc(100vw - 48px));height:min(440px,calc(100vh - 48px));max-width:calc(100vw - 48px);max-height:440px;object-fit:contain;z-index:2000;background:#fff;box-shadow:0 10px 50px #0005;pointer-events:none}@media(max-width:600px){.image-pair{grid-template-columns:1fr}}
 .source-selectors .button{gap:8px}.source-count{padding:2px 7px;border-radius:5px;background:#0001;font-size:11px;font-variant-numeric:tabular-nums}.episode-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.episode-toolbar input[type=range]{width:180px;padding:0;min-height:32px;accent-color:var(--accent)}.episode-toolbar [data-zoom-value]{min-width:48px;font-size:13px;font-variant-numeric:tabular-nums}.episode-scroll{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:10px;background:#fff;overscroll-behavior:contain}.episode-scroll:focus-visible{outline:3px solid #72aaff;outline-offset:3px}.episode-scroll svg{display:block;max-width:none}.episode-span{fill:#1768c4}.episode-point{fill:#135aab}.episode-gap{stroke:#b77908;stroke-width:3;stroke-dasharray:5 4}.episode-row-line{stroke:#e4e8ee;stroke-width:1}.episode-axis-bg,.episode-label-bg{fill:#fff}.episode-label-bg{stroke:#e4e8ee;stroke-width:1}.episode-tick{fill:#626268;font-size:11px}.episode-camera,.episode-label-heading{fill:#273445;font-size:12px;font-weight:600}.episode-question{fill:#626268;font-size:11px}.episode-scroll a:hover .episode-span,.episode-scroll a:focus .episode-span{fill:#084d9b}.episode-legend-active{color:#1768c4}.episode-legend-gap{color:#956100}
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d1d1f;background:#f5f5f7;font-size:15px;--accent:#0066cc;--line:#dcdce0;--muted:#626268}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
@@ -438,6 +439,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          Script(src='/ui/restart.js', defer=True) if configure and app.state.shutdown_request else None,
                          Script(src='/ui/observe-images.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')!='grid' else None,
                          Script(src='/ui/observe-answers.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')!='grid' else None,
+                         Script(src='/ui/question-area-preview.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')!='grid' else None,
                          Script(src='/ui/observe-grid.js', defer=True) if view == 'overview' and not configure and request.query_params.get('layout')=='grid' else None,
                          Script(src='/ui/trends.js', defer=True) if view == 'metrics' else None,
                          Script(src='/ui/trends-refresh.js', defer=True) if view == 'metrics' else None,
@@ -566,10 +568,14 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         for d in answers:
             summary, spec = d['summary'], d['spec']
             native = native_answers.get(summary['last_observation_id'], {})
+            areas = {'include': d['policy'].include_regions, 'exclude': d['policy'].exclude_regions}
+            has_areas = bool(areas['include'] or areas['exclude'])
             rows.append(Tr(Td(StrongText(spec.text), automation_marker(markers.get(spec.question_id)), Small('Version ' + spec.version)),
                 Td(badge(summary['state'])), Td(answer_label(summary['latest_value'], spec.levels)),
                 Td(answer_graph(spec, summary['latest_value'], native)),
-                Td(local_time(summary['last_observed_at_utc'], zone))))
+                Td(local_time(summary['last_observed_at_utc'], zone)),
+                data_question_areas=json.dumps(areas) if has_areas else None, data_question_label=spec.text if has_areas else None,
+                tabindex=0 if has_areas else None, title='Hover or focus to show configured areas on the last processed image.' if has_areas else None))
         return table(['Question', 'Episode State', 'Last answer', 'Value', 'Observed'], rows) if answers else P('No questions are configured for this camera.', cls='muted')
 
     def condition_counts(answers):
@@ -584,6 +590,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             data_processed_target='processed-image-' + source['source_id'],data_zone=zone,
             data_active=condition_counts(answers)['active'], data_unknown=condition_counts(answers)['unknown'],
             data_answer_url='/ui/camera-answers/' + source['source_id'] + '?' + urlencode({'zone': zone}))
+
+    @app.route('/ui/question-area-preview.js', methods=['GET'])
+    def question_area_script():
+        return Response(QUESTION_AREA_JS, media_type='application/javascript')
 
     @app.route('/ui/observe-answers.js', methods=['GET'])
     def observe_answers_script(request):
