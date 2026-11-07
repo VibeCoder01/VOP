@@ -874,7 +874,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                                     grid_url=observe_url('grid',images,selected_sources,s['source_id'])) for s in sources)),
                         Div(*(Div(Small(metric_label(label)), StrongText(number, data_condition_count="active" if label == "Active conditions" else "unknown" if label == "Unknown conditions" else None), cls="stat")
                               for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats")]
-            content.append(P("Sampling: " + "; ".join(f"{s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s['source_id']} stopped" for s in sources),
+            content.append(P("Sampling: " + "; ".join(f"{s.get('name') or s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s.get('name') or s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode([("view", view), *(("source", s) for s in pipeline.sources if s in selected_sources)]), cls="button secondary"), cls="muted"))
         elif view == "sources":
             content += [Section(H2("Source health"), table(["Source", "Input", "Health", "Last frame", "Capture prerequisites", "Controls"],

@@ -1423,3 +1423,6 @@ Browser requests receive a readable explanation; API requests retain
 `storage_unavailable` with a remediation message. The terminal logs only the
 SQLite error class/code, not SQL, saved credentials or images. Report that code
 if errors recur; do not assume this error means the database is damaged.
+
+The Observe sampling summary uses each camera’s configured name, falling back to
+its source ID only when no name is set. Monitoring intervals are unchanged.
