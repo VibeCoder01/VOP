@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import RedirectResponse, Response
 
 from vop.question_area_preview import SCRIPT as QUESTION_AREA_JS
+from vop.monitoring import change_monitoring
 from vop.browser_auth import BrowserAuth, configuring
 from vop.display import duration, duration_input, answer_kind
 from vop.config import identifier
@@ -676,22 +677,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         if source_id not in pipeline.sources:
             raise ValueError('Unknown source')
         form = await request.form()
-        control = store.source_control(source_id)
         if form.get('mode') not in ('start', 'pause'):
             raise ValueError('Choose start or pause')
-        with store.connection() as db:
-            row = db.execute('SELECT value_json FROM release_settings WHERE id=?', ('monitor_interval:' + source_id,)).fetchone()
-            interval = control['sample_interval_seconds'] or (json.loads(row[0]) if row else 10)
-            db.execute('INSERT OR REPLACE INTO release_settings VALUES(?,?)', ('monitor_interval:' + source_id, json.dumps(interval)))
         starting = form['mode'] == 'start'
-        if starting and not store.questions(source_id, active_only=True):
-            raise ValueError('Add or enable a question before starting monitoring')
-        store.update_source(source_id, enabled=True if starting else control['enabled'], retain_evidence=control['retain_evidence'],
-                            sample_interval_seconds=interval if starting else 0)
-        if not starting:
-            pipeline.record_gap(source_id)
-            if not pipeline.busy.locked() and not any(c['enabled'] and c['sample_interval_seconds'] for c in store.sources(tuple(pipeline.sources))):
-                await run_in_threadpool(app.state.worker_session.stop)
+        stop_worker = await run_in_threadpool(change_monitoring, app, source_id, starting)
+        if stop_worker:
+            await run_in_threadpool(app.state.worker_session.stop)
         return RedirectResponse('/?notice=Monitoring+' + ('started' if starting else 'paused'), status_code=303)
 
     @app.route('/ui/sources/{source_id}/enable-observe', methods=['POST'])

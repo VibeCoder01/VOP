@@ -1,5 +1,6 @@
 """Authenticated local FastHTML service; all source destinations are operator configured."""
 import json
+import logging
 import os
 import sqlite3
 from dataclasses import replace
@@ -123,7 +124,15 @@ def create_app(settings: Settings, *, token: str | None = None,
         return JSONResponse({"error": "invalid_request"}, status_code=400)
 
     async def database_error(req, exc):
-        return JSONResponse({"error": "storage_unavailable"}, status_code=503)
+        from vop.monitoring import storage_busy
+        busy = isinstance(exc, sqlite3.OperationalError) and storage_busy(exc)
+        logging.getLogger(__name__).warning('Database request failed: %s (%s)', type(exc).__name__, getattr(exc, 'sqlite_errorname', 'unknown SQLite code'))
+        message = ('VOP is busy saving other work. ' if busy else 'VOP could not finish saving this change. ') + 'The change may already have been saved. Return to the workspace and check its current status before retrying.'
+        if 'text/html' in req.headers.get('accept', '') and hasattr(app.state, 'render_error'):
+            from fasthtml.core import to_xml
+            from starlette.responses import HTMLResponse
+            return HTMLResponse(to_xml(app.state.render_error(req, message)), status_code=503)
+        return JSONResponse({"error": "storage_unavailable", "message": message}, status_code=503)
 
     app = FastHTML(default_hdrs=False, sess_cls=None, secret_key=token,
                    middleware=[Middleware(SessionMiddleware, secret_key=token, session_cookie="vop_session", max_age=14 * 24 * 3600, same_site="strict"),

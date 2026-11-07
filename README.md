@@ -1413,3 +1413,13 @@ shows camera, question, matching action count and latest queued time. Newest gro
 and records come first. Automatic refresh preserves expanded groups; new groups
 start collapsed. Filters still apply before the 100-action limit. Manual tests
 without a question are grouped separately by action and camera.
+
+Monitoring start/pause writes and pause-gap processing run outside the HTTP event
+loop. Database-busy/locked operations retry up to three attempts, retaining the
+normal five-second SQLite wait on each attempt; other database errors are not
+retried. A pause can be saved even if its subsequent gap write fails. If a storage
+error appears, return to Observe and check the current state before retrying.
+Browser requests receive a readable explanation; API requests retain
+`storage_unavailable` with a remediation message. The terminal logs only the
+SQLite error class/code, not SQL, saved credentials or images. Report that code
+if errors recur; do not assume this error means the database is damaged.
