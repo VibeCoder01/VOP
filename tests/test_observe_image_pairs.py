@@ -114,7 +114,7 @@ def test_capture_committing_during_answer_render_cannot_mismatch_frame(app, monk
         login(client)
         pipeline.run(SID,colored_frame(pipeline,'red'))
         second = colored_frame(pipeline,'blue')
-        original = store.summary
+        original = store.current_summary
         captured = False
         def racing(*args,**kwargs):
             nonlocal captured
@@ -123,7 +123,7 @@ def test_capture_committing_during_answer_render_cannot_mismatch_frame(app, monk
                 pipeline.engine.configure_source_answer(SID,'red_square','1',False)
                 pipeline.run(SID,second)
             return original(*args,**kwargs)
-        monkeypatch.setattr(store,'summary',racing)
+        monkeypatch.setattr(store,'current_summary',racing)
         response = client.get('/ui/camera-answers/' + SID)
         assert response.headers['x-vop-processed-frame'] == second.frame_id
         assert response.headers.get('etag') is None

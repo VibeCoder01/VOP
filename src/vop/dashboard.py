@@ -474,7 +474,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
 
     app.state.image_settings = image_settings
 
-    def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None):
+    def summaries(source_filter=None, *, zone=None, range_start=None, range_end=None, current=False):
         result = []
         chosen = {source_filter} if isinstance(source_filter, str) else source_filter
         for source_id in list(pipeline.sources):
@@ -482,26 +482,26 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 continue
             for record in store.questions(source_id):
                 q = record["spec"]
-                summary = store.summary(source_id, q.question_id, q.version, kind=q.kind, as_of=utcnow(), timezone_name=zone or settings.timezone_name,
+                summary = (store.current_summary if current else store.summary)(source_id, q.question_id, q.version, kind=q.kind, as_of=utcnow(), timezone_name=zone or settings.timezone_name,
                                         range_start=range_start, range_end=range_end)
                 if not record["enabled"] or not store.source_control(source_id)["enabled"]:
                     summary.update(state="UNKNOWN", latest_value=None, disabled=True)
                 result.append({"source_id": source_id, **record, "summary": summary})
         return result
 
-    def latest_image(source_id):
+    def latest_image(source_id, *, pixels=True):
         live = pipeline.live_previews.image(source_id)
         cached = pipeline.previews.get(source_id)
         if live and (not cached or live[2] >= cached[2]):
             return live
         if cached:
             return (*cached, 'temporary', 'image/png')
-        saved = store.latest_evidence(source_id)
+        saved = store.latest_evidence(source_id, metadata_only=not pixels)
         return (*saved, 'saved', 'image/png') if saved else None
 
     def observe_image(source, monitoring, csrf, answers):
         sid = source['source_id']
-        image = latest_image(sid)
+        image = latest_image(sid, pixels=False)
         url = '/ui/live-preview/' + sid
         ids = [d['summary']['last_observation_id'] for d in answers if d['enabled'] and not d['summary'].get('disabled')]
         processed = answer_image_reference(store,pipeline,sid,ids)
@@ -620,7 +620,6 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         revision.append(markers)
         image_ids = []
         with store.connection() as db:
-            revision.append(tuple(db.execute("SELECT count(*),max(sequence) FROM observations WHERE source_id=? AND status!='retention_gap'", (source_id,)).fetchone()))
             for record in records:
                 spec = record['spec']
                 last = db.execute('SELECT captured_at_utc,processed_at_utc,answer_json,id,status FROM observations WHERE source_id=? AND question_id=? AND question_version=? AND temporal_eligible=1 ORDER BY sequence DESC LIMIT 1',
@@ -631,10 +630,11 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     image_ids.append(last[3] if last and last[4] != 'retention_gap' else None)
         processed = captured_reference(store,pipeline,source_id) if grid else answer_image_reference(store,pipeline,source_id,image_ids)
         revision.append(processed)
+        answers = summaries(source_id, zone=zone, current=True)
+        revision.append([d['summary'] for d in answers])
         etag = '"' + sha256(json.dumps(revision, default=lambda obj: asdict(obj), sort_keys=True).encode()).hexdigest() + '"'
         if request.headers.get('if-none-match') == etag:
             return Response(status_code=304, headers={'ETag': etag})
-        answers = summaries(source_id, zone=zone)
         answer_ids = [d['summary']['last_observation_id'] for d in answers if d['enabled'] and not d['summary'].get('disabled')]
         if answer_ids != image_ids:
             # A capture committed during rendering: bind pixels to the actual answer rows.
@@ -833,11 +833,9 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
             request.scope["session"]["timezone"] = zone
         range_start = datetime.combine(datetime.fromisoformat(request.query_params["from"]).date(), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("from") else None
         range_end = datetime.combine(datetime.fromisoformat(request.query_params["through"]).date() + timedelta(days=1), time(), tzinfo=ZoneInfo(zone)) if view not in ("questions", "overview", "events") and request.query_params.get("through") else None
-        data = ([] if view in ('questions', 'events') else
-                summaries(selected_sources if view == "metrics" else None if view == "overview" else selected, zone=zone, range_start=range_start, range_end=range_end))
-        if view == "overview" and selected_sources:
-            data = [d for d in data if d["source_id"] in selected_sources]
-        sources = [s for s in store.sources(tuple(pipeline.sources)) if not selected_sources or s["source_id"] in selected_sources]
+        data = (summaries(selected_sources, zone=zone, current=True) if view == 'overview' else
+                summaries(selected_sources, zone=zone, range_start=range_start, range_end=range_end) if view == 'metrics' else [])
+        sources = store.sources(tuple(sid for sid in pipeline.sources if not selected_sources or sid in selected_sources))
         content = [filters(view, selected, request)]
         if view == "overview":
             if not configure:
@@ -854,7 +852,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     if images=='captured':
                         ref=captured_reference(store,pipeline,sid)
                     else:
-                        image=latest_image(sid)
+                        image=latest_image(sid, pixels=False)
                         ref={'frame':image[0] if image else '', 'captured':image[2] if image else '',
                              'url':'/ui/live-preview/'+sid if image else '', 'message':'No preview available.'}
                     cards.append(grid_card(source,[d for d in data if d['source_id']==sid],ref,mode=images,
@@ -867,13 +865,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                 content.append(Div(P(recovery_message(app.state.sampler.last_error)), A('Open Diagnostics', href='/diagnostics', cls='button secondary'), cls='notice', role='status'))
             counts = condition_counts(data)
             active, unknown = counts['active'], counts['unknown']
-            count = sum(store.event_count(sid) for sid in selected_sources) if selected_sources else store.event_count()
             content += [Section(Div(H2("Choose an input"), A("Manage cameras", href="/cameras", cls="text-link") if configure else None, cls="section-heading"),
                                 *(capture_controls(s, csrf, operator, configure,
                                     [d for d in data if d['source_id'] == s['source_id']], zone,
                                     grid_url=observe_url('grid',images,selected_sources,s['source_id'])) for s in sources)),
                         Div(*(Div(Small(metric_label(label)), StrongText(number, data_condition_count="active" if label == "Active conditions" else "unknown" if label == "Unknown conditions" else None), cls="stat")
-                              for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown), ("Episodes recorded", count))), cls="stats")]
+                              for label, number in (("Configured sources", len(sources)), ("Active conditions", active), ("Unknown conditions", unknown))), cls="stats")]
             content.append(P("Sampling: " + "; ".join(f"{s.get('name') or s['source_id']} every {duration(s['sample_interval_seconds'])}" if s["enabled"] and s["sample_interval_seconds"] else f"{s.get('name') or s['source_id']} stopped" for s in sources),
                              " · ", A("Refresh view", href="/?" + urlencode([("view", view), *(("source", s) for s in pipeline.sources if s in selected_sources)]), cls="button secondary"), cls="muted"))
         elif view == "sources":
@@ -901,7 +898,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                         names[(row['source_id'],row['question_id'],row['version'])] = json.loads(row['specification'])['text']
             camera_names = {sid:source_name(sid) for sid in {e['source_id'] for e in timeline_rows}}
             content += [P('Episodes group individual observations after the required confirmations. ', A('Open Individual Observations to inspect results, saved images or delete recorded data.', href='/observations', cls='text-link')),
-                P('Camera buttons count all recorded episodes. The timeline shows up to the latest 1,000 episodes for your selection.', cls='muted'),
+                P(metric_label('Episodes recorded'), ': camera buttons count all recorded episodes. The timeline shows up to the latest 1,000 episodes for your selection.', cls='muted'),
                 episode_timeline(timeline_rows, camera_names, names, zone),
                 Section(H2("Confirmed episodes"), table(["Question / source", "Started", "Ended", "Status", "Estimated duration", "Unobserved gap"],
                 [Tr(Td(A(e["question_id"], href="/ui/observations/" + e["start_observation_id"]), Small(source_name(e["source_id"]) + " · version " + e["question_version"])),
@@ -1282,12 +1279,12 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         headers = {'X-VOP-Monitoring': str(bool(control['enabled'] and control['sample_interval_seconds'] > 0)).lower(),
                    'X-VOP-Preview-State': pipeline.live_previews.state(source_id),
                    'X-VOP-Preview-Error': pipeline.live_previews.error(source_id)}
-        image = latest_image(source_id)
+        image = latest_image(source_id, pixels=request.method != 'HEAD')
         if not image:
             return Response(status_code=204 if request.method == 'HEAD' else 404, headers=headers)
         frame_id, payload, captured_at, kind, content_type = image
         headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
-        headers['Content-Length'] = str(len(payload))
+        headers['Content-Length'] = str(payload if isinstance(payload, int) else len(payload))
         return Response(b'' if request.method == 'HEAD' else payload, media_type=content_type, headers=headers)
 
     @app.route('/ui/processed-image/{source_id}/{frame_id}', methods=['GET','HEAD'])

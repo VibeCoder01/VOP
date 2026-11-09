@@ -681,3 +681,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Monitoring: move storage and pause-gap work off the web event loop; bound busy retries to three attempts per step. Show readable storage errors and log sanitized SQLite codes for diagnosis.
 
 - Observe sampling summary: show camera names instead of source IDs, with ID fallback for unnamed cameras.
+
+- Observe speed: use committed current-state snapshots instead of historical replay; filter selected cameras first, omit historical episode counters, avoid image BLOB reads during page rendering and HEAD polling, and skip unused summaries in configuration navigation.
