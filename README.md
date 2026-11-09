@@ -1426,3 +1426,19 @@ if errors recur; do not assume this error means the database is damaged.
 
 The Observe sampling summary uses each camera’s configured name, falling back to
 its source ID only when no name is set. Monitoring intervals are unchanged.
+
+
+Observe navigation prioritises current state. Camera selection filters sources
+before reading answers; Full/Grid Observe and answer polling use compact snapshots
+published only after an observation transaction commits. They do not replay history
+or count historical episodes. Trends and Episodes remain the places to request
+historical calculations. Configuration navigation does not calculate those summaries.
+
+The snapshots are bounded, memory-only and rebuilt by existing startup/observation
+processing; they contain no images or history arrays and do not change backups.
+Latest-answer reads check the committed row identity, value, status and timestamp,
+then apply staleness and enabled/version controls. If a snapshot is unavailable,
+the latest recorded answer remains available while episode state is Unknown until
+normal processing refreshes it; the UI never waits for history or invents that state.
+Saved preview metadata and HEAD requests do not load image BLOBs. Actual image GETs
+still return the exact saved/processed image under existing access controls.

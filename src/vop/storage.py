@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 import json
 from pathlib import Path
+from threading import Lock
 import sqlite3
 from uuid import uuid4
 
@@ -84,8 +85,14 @@ def dumps(value) -> str:
     return json.dumps(value, default=json_default, allow_nan=False, sort_keys=True)
 
 
+class CurrentConnection(sqlite3.Connection):
+    """Hold compact state updates until this transaction commits."""
+
+
 class Store:
     def __init__(self, path: str | Path):
+        self._current = {}
+        self._current_lock = Lock()
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as connection:
@@ -123,13 +130,21 @@ class Store:
 
     @contextmanager
     def connection(self):
-        connection = sqlite3.connect(self.path, timeout=5)
+        connection = sqlite3.connect(self.path, timeout=5, factory=CurrentConnection)
+        connection.current_updates = {}
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
         try:
             with connection:
                 yield connection
+            # Publish only committed state, never results of a rolled-back capture.
+            if connection.current_updates:
+                with self._current_lock:
+                    self._current.update(connection.current_updates)
+                    # Bound volatile UI state; history remains solely in SQLite.
+                    while len(self._current) > 2048:
+                        self._current.pop(next(iter(self._current)))
         finally:
             connection.close()
 
@@ -256,7 +271,8 @@ class Store:
     def _rebuild(self, connection, source_id: str, question_id: str, version: str) -> dict:
         spec = connection.execute("SELECT specification FROM question_versions WHERE source_id=? AND question_id=? AND version=?", (source_id, question_id, version)).fetchone()
         policy = connection.execute("SELECT policy_json FROM query_policies WHERE source_id=? AND question_id=? AND version=?", (source_id, question_id, version)).fetchone()
-        summary = replay(self._history(connection, source_id, question_id, version), QueryPolicy(**json.loads(policy[0])) if policy else QueryPolicy(), kind=json.loads(spec[0])["kind"])
+        history = self._history(connection, source_id, question_id, version)
+        summary = replay(history, QueryPolicy(**json.loads(policy[0])) if policy else QueryPolicy(), kind=json.loads(spec[0])["kind"])
         connection.execute("DELETE FROM events WHERE source_id=? AND question_id=? AND question_version=?", (source_id, question_id, version))
         current = connection.execute("SELECT current_version FROM query_controls WHERE source_id=? AND question_id=?", (source_id, question_id)).fetchone()
         if current and current[0] != version:
@@ -265,6 +281,11 @@ class Store:
                     event.update(status="superseded", superseded_by_version=current[0])
         for event in summary["events"]:
             connection.execute("INSERT INTO events VALUES(?,?,?,?,?,?)", (event["id"], source_id, question_id, version, event["started_at_utc"], dumps(event)))
+        if hasattr(connection, 'current_updates'):
+            latest = next((r for r in reversed(history) if r.get('temporal_eligible', True)), None)
+            signature = (latest['id'], latest['status'], latest['answer'].get('value'), latest['captured_at_utc'], latest['processed_at_utc']) if latest else None
+            fields = ('state', 'latest_value', 'last_observation_id', 'last_observed_at_utc', 'last_sample_at_utc', 'review_required')
+            connection.current_updates[(source_id, question_id, version)] = (signature, {k: summary[k] for k in fields})
         return summary
 
     def replay_all(self):
@@ -281,6 +302,34 @@ class Store:
         result = replay(history, QueryPolicy(**json.loads(policy[0])) if policy else QueryPolicy(), kind=kind, as_of=as_of, timezone_name=timezone_name, range_start=range_start, range_end=range_end)
         if source and not source[0] or control and (not control[0] or control[1] != version):
             result.update(state="UNKNOWN", latest_value=None, disabled=True)
+        return result
+
+    def current_summary(self, source_id, question_id, version, *, kind='binary', as_of=None, **_):
+        """Current answers only: indexed latest-row reads, no historical replay."""
+        key = (source_id, question_id, version)
+        with self.connection() as db:
+            row = db.execute('SELECT id,captured_at_utc,processed_at_utc,status,answer_json FROM observations WHERE source_id=? AND question_id=? AND question_version=? AND temporal_eligible=1 ORDER BY sequence DESC LIMIT 1', key).fetchone()
+            policy = db.execute('SELECT policy_json FROM query_policies WHERE source_id=? AND question_id=? AND version=?', key).fetchone()
+            control = db.execute('SELECT enabled,current_version FROM query_controls WHERE source_id=? AND question_id=?', key[:2]).fetchone()
+            source = db.execute('SELECT enabled FROM source_controls WHERE source_id=?', (source_id,)).fetchone()
+        with self._current_lock:
+            cached = self._current.get(key)
+        if cached and cached[0] == ((row['id'], row['status'], json.loads(row['answer_json']).get('value'), row['captured_at_utc'], row['processed_at_utc']) if row else None):
+            result = dict(cached[1])
+        else:
+            # A cold or externally changed store may lack episode state. Do not invent it
+            # or make the UI wait for history. Normal saves/startup rebuild populate it.
+            value = json.loads(row['answer_json']).get('value') if row and row['status']=='success' else None
+            stamp = (row['captured_at_utc'] or row['processed_at_utc']) if row else None
+            result = dict(state='UNKNOWN', latest_value=value, last_observation_id=row['id'] if row and row['status']!='retention_gap' else None,
+                last_observed_at_utc=stamp if value is not None else None, last_sample_at_utc=stamp, review_required=False)
+        gap = json.loads(policy[0]).get('max_gap_seconds', 60) if policy else 60
+        stale = bool(result['last_sample_at_utc'] and (utc(as_of or utcnow())-utc(result['last_sample_at_utc'])).total_seconds() > gap)
+        result['stale'] = stale
+        if stale:
+            result.update(state='UNKNOWN', latest_value=None)
+        if source and not source[0] or not control or not control[0] or control[1]!=version:
+            result.update(state='UNKNOWN', latest_value=None, disabled=True)
         return result
 
     def events(self, source_id: str | None = None, *, limit: int = 100, source_ids: tuple[str, ...] = ()) -> list[dict]:
@@ -303,9 +352,9 @@ class Store:
             row = connection.execute("SELECT evidence_png FROM frames WHERE source_id=? AND frame_id=?", (source_id, frame_id)).fetchone()
         return bytes(row[0]) if row and row[0] is not None else None
 
-    def latest_evidence(self, source_id):
+    def latest_evidence(self, source_id, *, metadata_only=False):
         with self.connection() as connection:
-            row = connection.execute('SELECT frame_id,evidence_png,captured_at_utc FROM frames WHERE source_id=? AND evidence_png IS NOT NULL ORDER BY captured_at_utc DESC LIMIT 1', (source_id,)).fetchone()
+            row = connection.execute('SELECT frame_id,' + ('length(evidence_png)' if metadata_only else 'evidence_png') + ',captured_at_utc FROM frames WHERE source_id=? AND evidence_png IS NOT NULL ORDER BY captured_at_utc DESC LIMIT 1', (source_id,)).fetchone()
         return tuple(row) if row else None
 
     def delete_evidence(self, source_id: str, frame_id: str):

@@ -87,7 +87,7 @@ def test_answer_fragments_refresh_scores_and_unknowns_without_capturing(app, mon
         assert 'Between Medium and Bright' in soup.text
         assert 'not a calibrated probability' in str(soup)
         assert response.headers['cache-control'] == 'no-store'
-        states = [cell.text for cell in soup.select('tbody tr td:nth-child(2)')]
+        states = [cell.text.strip() for cell in soup.select('tbody tr td:nth-child(2)')]
         assert int(response.headers['x-vop-active']) == sum(state in ('ACTIVE', 'RECOVERING') for state in states)
         assert int(response.headers['x-vop-unknown']) == states.count('UNKNOWN')
         counts = client.get(route + '?counts_only=1')
