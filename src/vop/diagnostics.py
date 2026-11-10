@@ -103,11 +103,12 @@ def snapshot(app):
     rules_running=bool(app.state.reliable.thread and app.state.reliable.thread.is_alive())
     actions_running=bool(app.state.actions.thread and app.state.actions.thread.is_alive())
     actions_paused=app.state.actions.paused()
+    automation_attention = [{'id':m['id'],'name':m['name'],'issues':issues} for m,issues in app.state.actions.automation_attention()]
     colours += ['red' if app.state.reliable.last_error else 'green' if rules_running and not rules_paused else 'amber',
-                'red' if app.state.actions.last_error else 'green' if actions_running and not actions_paused else 'amber']
+                'red' if app.state.actions.last_error else 'green' if actions_running and not actions_paused and not automation_attention else 'amber']
     if not cameras: colours.append('amber')
     overall='red' if 'red' in colours else 'amber' if 'amber' in colours else 'green'
-    return {'checked_at': now.isoformat(), 'scheduler_running': scheduler_running, 'overall':overall,
+    return {'automation_attention':automation_attention, 'checked_at': now.isoformat(), 'scheduler_running': scheduler_running, 'overall':overall,
         'stopping': pipeline.stopping, 'busy': pipeline.busy.locked(), 'activity': activity,
         'sampling_error': sampler.last_error, 'engine': {'name': pipeline.engine.engine_id,
             'ready_at_last_check': (health or {}).get('ready'), 'last_check': (health or {}).get('utc'),
@@ -177,8 +178,10 @@ def install_diagnostics(app):
                         [Tr(Td(r['stage']),*(Td(duration(r[k]/1000) if r[k] is not None else '—') for k in ('latest_ms','median_ms','p95_ms')),Td(str(r['count']))) for r in c['timings']['rows']])) for c in data['cameras'])),
             Section(H2('Other services'), signal('red' if data['rules_error'] else 'green' if data['rules_running'] and not data['rules_paused'] else 'amber','Notification rules need attention' if data['rules_error'] else 'Notification rules paused' if data['rules_paused'] else 'Notification service running' if data['rules_running'] else 'Notification service is stopped'),
                     A('Notification settings',href='/release?tab=rules',cls='button secondary') if operator and (data['rules_error'] or data['rules_paused']) else None,
-                    signal('red' if data['actions_error'] else 'green' if data['actions_running'] and not data['actions_paused'] else 'amber','Actions need attention' if data['actions_error'] else 'Automations paused' if data['actions_paused'] else 'Action service running' if data['actions_running'] else 'Action service is stopped'),
-                    A('Action settings',href='/actions',cls='button secondary') if operator and data['actions_error'] else None)]
+                    signal('red' if data['actions_error'] else 'green' if data['actions_running'] and not data['actions_paused'] and not data['automation_attention'] else 'amber','Actions need attention' if data['actions_error'] else 'Automations need attention' if data['automation_attention'] else 'Automations paused' if data['actions_paused'] else 'Action service running' if data['actions_running'] else 'Action service is stopped'),
+                    A('Action settings',href='/actions',cls='button secondary') if operator and data['actions_error'] else None,
+                    *(P(item['name'] + ': ' + ' '.join(item['issues'])) for item in data['automation_attention']),
+                    A('Review automations',href='/automations',cls='button secondary') if operator and data['automation_attention'] else None)]
         return app.state.page('Diagnostics', request, content, view='diagnostics', notice=request.query_params.get('notice'))
 
     @app.route('/diagnostics/reconnect', methods=['POST'])

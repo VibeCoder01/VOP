@@ -255,6 +255,8 @@ class Actions:
             raise ValueError('Choose between one and ten different actions.')
         value = body.get('value')
         q = question['spec']
+        if body.get('expected_question_version') and body['expected_question_version'] != q.version:
+            raise ValueError('The question changed again. Reopen this automation, review the current question and save again.')
         comparison = body.get('comparison', 'at_least' if q.kind == 'ordinal' else 'equals')
         if comparison not in (('at_least', 'at_most') if q.kind == 'ordinal' else ('equals',)):
             raise ValueError('Choose how to compare the answer.')
@@ -293,12 +295,16 @@ class Actions:
         if not record or not record['enabled']:
             return ['The question is deleted or paused. Choose an enabled question.']
         if record['spec'].version != config['question_version']:
-            return ['The question changed. Review and save this automation for the current version.']
+            return [f"Question changed from version {config['question_version']} to {record['spec'].version}. This automation cannot trigger. Open Review and reconnect, check the trigger, then save."]
         if not self.store.source_control(sid)['enabled']:
             return ['The camera is disabled. Enable it in Cameras.']
         if self.store.source_control(sid)['sample_interval_seconds'] == 0:
             return ['Monitoring is paused. Start monitoring in Observe, or run a manual observation.']
         return []
+
+    def automation_attention(self):
+        return [(m, issues) for m in self.automations() if m['enabled']
+                if (issues := self.automation_dependencies(m))]
 
     def delete(self, kind, key):
         identifier(key)

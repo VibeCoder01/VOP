@@ -1442,3 +1442,14 @@ the latest recorded answer remains available while episode state is Unknown unti
 normal processing refreshes it; the UI never waits for history or invents that state.
 Saved preview metadata and HEAD requests do not load image BLOBs. Actual image GETs
 still return the exact saved/processed image under existing access controls.
+
+
+An edited question can block an automation that still targets its older version.
+Observe and Activity show an attention banner; Configure → Automations marks the
+item Needs attention. Choose **Review and reconnect**, compare the previous/current
+question and check the trigger value and actions, then **Save and reconnect**.
+Diagnostics shows amber and lists the affected items even when the service is
+running. A question edited again during review requires reopening the form.
+Reconnection establishes a new baseline: it does not run an old Yes or replay an
+old episode. A new qualifying transition is required. Monitoring must also be
+running for automatic observations; follow any remaining camera warning.

@@ -683,3 +683,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Observe sampling summary: show camera names instead of source IDs, with ID fallback for unnamed cameras.
 
 - Observe speed: use committed current-state snapshots instead of historical replay; filter selected cameras first, omit historical episode counters, avoid image BLOB reads during page rendering and HEAD polling, and skip unused summaries in configuration navigation.
+
+- Automations: prominent blocked-version warnings, previous/current review with Save and reconnect, concurrent-edit guard, Observe/Activity attention banners and amber Diagnostics with repair guidance.
