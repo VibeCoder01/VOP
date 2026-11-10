@@ -421,6 +421,14 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         descriptions = {"overview": "Run an observation. Read the result.", "cameras": "Set up image inputs.",
                         "engines": "Set up and select the engine that answers questions.", "questions": "Choose what to ask about each image.",
                         "events": "Review episodes built from individual checks. These are sampled estimates, not continuous video.", "observations": "Review individual checks and their saved images, when available.", "metrics": "Review change over time.", "settings": "Manage this workspace."}
+        if view in ('overview', 'activity') and role == 'operator':
+            attention = app.state.actions.automation_attention()
+            if attention:
+                content.insert(0, Div(H2('Automations need attention'),
+                    *(P(m['name'] + ': ' + ' '.join(issues)) for m, issues in attention),
+                    A('Review automations', href='/automations', cls='button secondary'),
+                    P('In View mode, switch to Configure mode, then open Automations.', cls='muted') if not configure else None,
+                    cls='readiness warning', role='alert'))
         return Html(Head(Title(f"{title} · VOP v{app_version}"), Meta(charset="utf-8"), Meta(name="viewport", content="width=device-width, initial-scale=1"), Link(rel="stylesheet", href="/ui/style.css")),
                     Body(Div(Aside(A("VOP", Small('v' + app_version, cls='app-version', aria_label='VOP version ' + app_version), href='/cameras' if configure else '/', cls="brand"), Div("Visual Observability", cls="subtitle"),
                                    Nav(*(A(label, href=url, cls="current" if key == view else "", aria_current="page" if key == view else None) for key, label, url in navigation

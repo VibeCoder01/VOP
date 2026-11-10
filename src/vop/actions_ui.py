@@ -213,15 +213,17 @@ def install_actions(app, actions):
     def automation_list(request):
         names = {a['id']: a['name'] for a in actions.definitions()}
         questions = {(sid, r['spec'].question_id): r['spec'] for sid in pipeline.sources for r in store.questions(sid)}
+        items = actions.automations()
+        problems = {m['id']: actions.automation_dependencies(m) for m in items}
         rows = [Tr(Td(m['name']), Td(pipeline.sources[m['source_id']].name if m['source_id'] in pipeline.sources else m['source_id'],
                     P(questions[(m['source_id'], m['question_id'])].text) if (m['source_id'], m['question_id']) in questions else None,
                     P(trigger_description(m, questions.get((m['source_id'], m['question_id']))))), Td(', '.join(names.get(a, 'Deleted action') for a in m['actions'])),
-                    Td('Enabled' if m['enabled'] else 'Paused', *(P(issue, cls='muted') for issue in actions.automation_dependencies(m))), Td(Div(back('Edit', '/automations/edit?id=' + m['id']),
-                    back('Delete…', '/automations/' + m['id'] + '/delete'), cls='actions'))) for m in actions.automations()]
+                    Td(Div('Needs attention', *(P(issue) for issue in problems[m['id']]), cls='readiness warning', role='status') if m['enabled'] and problems[m['id']] else 'Enabled' if m['enabled'] else 'Paused'), Td(Div(back('Review and reconnect' if any('Question changed' in issue for issue in problems[m['id']]) else 'Edit', '/automations/edit?id=' + m['id']),
+                    back('Delete…', '/automations/' + m['id'] + '/delete'), cls='actions'))) for m in items]
         return page('Automations', request, [P('Connect confirmed episodes and answer changes to named actions.'),
             Div(back('Add automation', '/automations/edit'), back('Actions', '/actions'), cls='actions'),
             app.state.table(['Name', 'When', 'Then', 'Status', 'Controls'], rows) if rows else P('No automations yet.'),
-            P('Automations are paused globally.' if actions.paused() else 'Automations are running. Individual paused automations stay paused.', cls='notice'),
+            P('Automations are paused globally.' if actions.paused() else 'Automation service is running. Automations marked Needs attention cannot run automatically. Individual paused automations stay paused.', cls='notice'),
             Form(hidden(csrf(request)), Input(type='hidden', name='paused', value='no' if actions.paused() else 'yes'),
                  Button('Resume automations' if actions.paused() else 'Pause automations'), method='post', action='/automations/pause')], 'automations')
 
@@ -240,6 +242,20 @@ def install_actions(app, actions):
             return page('Add automation', request, [P('Add an enabled camera question and at least one action first.', cls='notice'),
                         Div(back('Actions', '/actions'), back('Questions', '/?view=questions'), cls='actions')], 'automations')
         q = current[2]
+        changed = bool(m and current[0] == selected and m.get('question_version') != q.version)
+        review = None
+        if changed:
+            with store.connection() as db:
+                old = db.execute('SELECT specification FROM question_versions WHERE source_id=? AND question_id=? AND version=?',
+                    (m['source_id'], m['question_id'], m['question_version'])).fetchone()
+            previous = json.loads(old[0])['text'] if old else 'Previous question is unavailable'
+            review = Div(H2('Reconnect this automation'),
+                P('This automation cannot trigger because its question was edited.'),
+                P('Previously, version ' + m['question_version'] + ': ' + previous),
+                P('Now, version ' + q.version + ': ' + q.text),
+                A('Review current question and areas', href='/ui/questions/' + m['source_id'] + '/' + m['question_id'], cls='button secondary'),
+                P('Review the answer value, trigger and linked actions below. Save and reconnect uses the current question. No old triggers will run; a new qualifying transition is required.'),
+                cls='readiness warning', role='alert')
         options = list(TRIGGERS.items()) if q.kind == 'binary' else [(k,v) for k,v in TRIGGERS.items() if k not in ('start', 'end', 'duration')]
         values = [('true', 'Yes'), ('false', 'No')] if q.kind == 'binary' else [(json.dumps(name), name + ' — ' + description) for name, description in q.choices] if q.kind == 'choice' else [(str(i), f'{label} ({i})') for i, label in enumerate(q.levels)]
         trigger = request.query_params.get('trigger', m.get('trigger', options[0][0]))
@@ -248,7 +264,7 @@ def install_actions(app, actions):
         chooser = Form(Input(type='hidden', name='id', value=mid), choose('Camera and question', 'condition', [(c[0],c[1]) for c in conditions], current[0]),
                        choose('When', 'trigger', options, trigger), Button('Choose trigger'), method='get', action='/automations/edit', cls='filters')
         fields = [hidden(csrf(request)), Input(type='hidden', name='id', value=mid), Input(type='hidden', name='condition', value=current[0]),
-                  Input(type='hidden', name='trigger', value=trigger), field('Name', 'name', m.get('name', ''), required=True, maxlength=100),
+                  Input(type='hidden', name='trigger', value=trigger), Input(type='hidden', name='expected_question_version', value=q.version), field('Name', 'name', m.get('name', ''), required=True, maxlength=100),
                   H2('When'), P(current[1] + ' — ' + TRIGGERS[trigger])]
         if trigger == 'value':
             fields += [choose('Answer', 'value', values, json.dumps(m.get('value', True if q.kind == 'binary' else q.choices[0][0] if q.kind == 'choice' else 0)))]
@@ -265,13 +281,14 @@ def install_actions(app, actions):
                            field('From', 'start', m.get('start', ''), type='time'), field('Until', 'end', m.get('end', ''), type='time')),
                    choose('Status', 'enabled', [('', 'Paused'), ('yes', 'Enabled')], 'yes' if m.get('enabled') else ''),
                    P('Only new transitions run actions. Saving, resuming and restarting do not replay old episodes. Missing observations do not mean an episode ended.', cls='muted'),
-                   Div(Button('Save automation'), Button('Preview automation', formaction='/automations/preview'), back('Cancel', '/automations'), cls='actions')]
+                   Div(Button('Save and reconnect' if changed else 'Save automation'), Button('Preview automation', formaction='/automations/preview'), back('Cancel', '/automations'), cls='actions')]
         return page('Edit automation' if m else 'Add automation', request, [P('The original camera or question is unavailable. Choose its replacement before saving.', cls='notice') if m and current[0] != selected else None,
-                    chooser, Form(*fields, method='post', action='/automations/save', cls='editor')], 'automations')
+                    review, chooser, Form(*fields, method='post', action='/automations/save', cls='editor')], 'automations')
 
     def automation_body(form):
         sid, qid = str(form.get('condition', '')).split('/', 1)
         return {'id': str(form.get('id', '')), 'name': str(form.get('name', '')), 'source_id': sid, 'question_id': qid,
+                'expected_question_version': str(form.get('expected_question_version', '')),
                 'trigger': str(form.get('trigger')), 'value': json.loads(str(form.get('value', 'null'))), 'actions': list(form.getlist('actions')),
                 'seconds': duration_input(str(form.get('seconds', '00:00:30'))), 'cooldown': duration_input(str(form.get('cooldown', '00:01:00'))),
                 'max_hour': int(form.get('max_hour', 10)), 'enabled': form.get('enabled') == 'yes',
