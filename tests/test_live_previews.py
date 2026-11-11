@@ -56,7 +56,7 @@ def test_decoder_opens_once_drains_frames_and_masks_every_publication(monkeypatc
     assert len(frames) >= 2 and opened[0].reads > len(frames)
     for _, payload, _ in frames:
         with Image.open(BytesIO(payload)) as image:
-            assert image.size == (960, 540) and image.getpixel((10, 10)) == (0, 0, 0)
+            assert image.size == (479, 540) and image.getpixel((10, 10)) == (255, 255, 255)  # Masked left border cropped before thumbnail.
 
 
 def test_preview_timeout_retry_lease_expiry_and_configuration_change():
@@ -135,7 +135,7 @@ def test_visible_preview_is_authorized_independent_and_does_not_record_answers(a
     made = []
     payload = encode_preview(Image.new('RGB', (1920, 1080), 'white'), [[0, 0, .5, 1]])
     image = Image.open(BytesIO(payload))
-    assert image.size == (960, 540) and image.getpixel((10, 10)) == (0, 0, 0)
+    assert image.size == (479, 540) and image.getpixel((10, 10)) == (255, 255, 255)  # Masked left border cropped before thumbnail.
     def factory(source):
         worker = Worker(source)
         worker.frames.append(('fixture-live', payload, '2026-10-22T10:00:00+00:00'))

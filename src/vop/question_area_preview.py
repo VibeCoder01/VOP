@@ -23,13 +23,17 @@ SCRIPT = r"""(() => {
     const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
     const left = (w - iw) / 2, top = (h - ih) / 2;
+    let crop; try { crop = JSON.parse(tile.dataset?.crop || '[0,0,1,1]') || [0,0,1,1]; } catch (_) { crop = [0,0,1,1]; }
+    const [cx,cy,cw,ch] = crop;
     overlay = document.createElementNS(ns, 'svg');
     overlay.setAttribute('class', 'question-area-overlay');
     overlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
     overlay.setAttribute('aria-hidden', 'true');
     for (const kind of ['include','exclude']) for (const [x,y,rw,rh] of areas[kind]) {
+      const x0=Math.max(x,cx), y0=Math.max(y,cy), x1=Math.min(x+rw,cx+cw), y1=Math.min(y+rh,cy+ch);
+      if (x1<=x0 || y1<=y0) continue;
       const rect = document.createElementNS(ns, 'rect');
-      for (const [name, value] of Object.entries({x:left+x*iw,y:top+y*ih,width:rw*iw,height:rh*ih,class:kind})) rect.setAttribute(name, String(value));
+      for (const [name, value] of Object.entries({x:left+(x0-cx)/cw*iw,y:top+(y0-cy)/ch*ih,width:(x1-x0)/cw*iw,height:(y1-y0)/ch*ih,class:kind})) rect.setAttribute(name, String(typeof value === 'number' ? Math.round(value*1e6)/1e6 : value));
       overlay.append(rect);
     }
     box.append(overlay);

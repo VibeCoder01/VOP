@@ -9,7 +9,7 @@ from vop.stage_timings import StageTimings
 
 from vop.config import Settings, SourceSpec
 from vop.contracts import AnswerKind, QuestionSpec, FrameEnvelope, InferenceEngine, InferenceRequest, ProviderError, Status, failed, infer, json_default, utcnow, result as make_result
-from vop.preprocessing import preprocess
+from vop.preprocessing import preprocess, redaction_box, normalised_box
 from vop.inputs.sources import FrameSource, SourceAdapters
 from vop.storage import Store
 
@@ -45,6 +45,7 @@ class Pipeline:
         self.skipped = 0
         self.timing_samples = deque(maxlen=100)
         self.previews = {}  # One masked/downscaled image per configured input (maximum 32).
+        self.engine_previews = {}  # Latest exact masked engine inputs; bounded to 32 MiB.
         self.processed_previews = {}  # Completed answer frames; capture/test previews must not replace these.
         self.mask_grabs = {}  # One temporary, privacy-masked editor image per source.
         self._latest_preview = None
@@ -61,6 +62,7 @@ class Pipeline:
             with self.preview_lock:
                 self.previews.clear()
                 self.processed_previews.clear()
+                self.engine_previews.clear()
                 self.mask_grabs.clear()
                 self._latest_preview = None
             if hasattr(self, 'live_previews'):
@@ -83,6 +85,9 @@ class Pipeline:
         if frame_id is None and hasattr(self, 'live_previews'):
             self.live_previews.clear(source_id)
         with self.preview_lock:
+            engine = self.engine_previews.get(source_id)
+            if engine and (frame_id is None or engine['frame'] == frame_id):
+                self.engine_previews.pop(source_id, None)
             if frame_id is None:
                 self.mask_grabs.pop(source_id, None)
             processed = self.processed_previews.get(source_id)
@@ -156,10 +161,13 @@ class Pipeline:
                     raise ProviderError("frame_conflict", "Frame ID was reused for different content")
                 return {**previous, "duplicate": True}
             with trace.stage("prepare_image"):
+                source_crop = normalised_box((frame.width,frame.height), redaction_box((frame.width,frame.height), source.settings.get('privacy_masks', [])))
                 preview = preprocess(frame, source.settings.get("privacy_masks", []), preview=True)
             preview_token = self.remember_preview(source_id, frame.frame_id, preview.payload, frame.captured_at_utc)
             request = InferenceRequest(frame, source.questions, utcnow() + timedelta(seconds=self.settings.inference_timeout_seconds))
             records = [{"spec": q, "policy": self.store.policy(source_id, q.question_id, q.version)} for q in source.questions]
+            engine_views = {}
+            crop_boxes = {}
             if any(q.kind not in self.engine.capabilities() for q in source.questions):
                 outcome = failed(request, self.engine, ProviderError("unsupported_kind", "Request exceeds declared engine capabilities", Status.UNSUPPORTED))
             else:
@@ -173,10 +181,18 @@ class Pipeline:
                 for (roi, include, exclude), group in groups.items():
                     # Strip original metadata for every backend before optional remote transmission.
                     with trace.stage('prepare_image'):
-                        input_frame = preprocess(frame, masks, roi, include_regions=include, exclude_regions=exclude)
-                    group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
-                    with trace.stage('engine_request'):
-                        group_result = infer(self.engine, group_request)
+                        box = redaction_box((frame.width,frame.height), masks, roi, include_regions=include, exclude_regions=exclude)
+                        for q in group: crop_boxes[q.question_id] = normalised_box((frame.width,frame.height), box)
+                    try:
+                        with trace.stage('prepare_image'):
+                            input_frame = preprocess(frame, masks, roi, include_regions=include, exclude_regions=exclude, require_visible=True)
+                        for q in group: engine_views[(q.question_id,q.version)] = input_frame
+                        group_request = InferenceRequest(input_frame, tuple(group), request.deadline_utc)
+                        with trace.stage('engine_request'):
+                            group_result = infer(self.engine, group_request)
+                    except ProviderError as error:
+                        group_request = InferenceRequest(frame, tuple(group), request.deadline_utc)
+                        group_result = failed(group_request, self.engine, error)
                     if (group_result.frame_id != frame.frame_id or group_result.source_id != source_id
                         or group_result.engine_id != self.engine.engine_id or group_result.engine_version != self.engine.engine_version
                         or [(a.question_id, a.question_version) for a in group_result.answers] != [(q.question_id, q.version) for q in group]):
@@ -206,7 +222,9 @@ class Pipeline:
             except (TypeError, ValueError):
                 outcome = failed(request, self.engine, ProviderError("provider_contract", "Provider fields are not finite JSON values"))
                 result = json.loads(json.dumps(asdict(outcome), default=json_default, allow_nan=False))
-            result["preprocessing"] = {"privacy_mask_count": len(source.settings.get("privacy_masks", [])),
+            result["preprocessing"] = {"source_crop": source_crop,
+                                       "question_crops": crop_boxes,
+                                       "privacy_mask_count": len(source.settings.get("privacy_masks", [])),
                                        "roi_question_ids": [r["spec"].question_id for r in self.store.questions(source_id) if r["policy"].roi],
                                        'question_masks': {r['spec'].question_id: {'include': r['policy'].include_regions, 'exclude': r['policy'].exclude_regions}
                                                           for r in records if r['policy'].include_regions or r['policy'].exclude_regions}}
@@ -219,6 +237,13 @@ class Pipeline:
             with self.preview_lock:
                 if self.previews.get(source_id) is preview_token:
                     self.processed_previews[source_id] = preview_token
+                    self.engine_previews.pop(source_id, None)
+                    self.engine_previews[source_id] = {'frame':frame.frame_id, 'images':engine_views}
+                    def cached_bytes():
+                        unique = {id(f.payload):f.payload for entry in self.engine_previews.values() for f in entry['images'].values()}
+                        return sum(len(p) for p in unique.values())
+                    while self.engine_previews and cached_bytes() > 32*1024*1024:
+                        self.engine_previews.pop(next(iter(self.engine_previews)))
             completed = True
             return saved
         finally:

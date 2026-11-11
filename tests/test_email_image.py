@@ -56,7 +56,8 @@ def test_exact_trigger_image_is_pinned_and_emailed_after_new_frames(app,mail):
     images = [p for p in sent[0].walk() if p.get_content_type() == 'image/png']
     assert len(images) == 1 and images[0].get_payload(decode=True) == expected
     img = Image.open(BytesIO(expected))
-    assert img.getpixel((0,0)) == (0,0,0)
+    assert img.width == trigger.width - int(trigger.width*.5) - 1
+    assert img.getpixel((0,0)) == (0,128,0)  # Private outer border removed; exact green trigger retained.
     assert img.getpixel((img.width-1,img.height-1)) == (0,128,0)
     html = sent[0].get_body(preferencelist=('html',)).get_content()
     assert html.count('cid:') == 2 and '&lt;script&gt;' in html and '<script>' not in html

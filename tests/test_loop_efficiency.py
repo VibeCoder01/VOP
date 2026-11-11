@@ -111,7 +111,7 @@ def test_camera_answer_rows_use_one_native_answer_query(app, monkeypatch):
         sql = traced(app.state.store, monkeypatch)
         response = client.get('/ui/camera-answers/' + SID, headers=HEADERS)
         assert response.status_code == 200 and 'Episode State' in response.text
-        assert len([q for q in sql if q.startswith('SELECT id,answer_json FROM observations WHERE id IN')]) == 1
+        assert len([q for q in sql if q.startswith('SELECT o.id,o.answer_json,r.frame_id FROM observations o JOIN runs')]) == 1
         assert not any(q.startswith('SELECT answer_json FROM observations WHERE id=') for q in sql)
 
 

@@ -24,7 +24,7 @@ def editor(source_id, include=(), exclude=(), *, privacy=False):
           'Include areas to use only those parts of the image. Exclude areas to ignore them. No areas means the whole image.'),
         P('Existing privacy areas stay black in this grab. Save and grab again after removing a privacy area.' if privacy else
           'Camera privacy masks always apply first. A blue outline shows any advanced ROI crop, which also applies.', cls='muted'),
-        P('Grabs use the saved camera connection. Save any connection changes first.', cls='muted') if privacy else None,
+        P('The editor keeps full-frame coordinates. Normal previews and engine inputs crop fully redacted outer borders. Grabs use the saved camera connection; save connection changes first.', cls='muted') if privacy else None,
         Input(type='hidden', name='include_regions', value=json.dumps(include)) if not privacy else None,
         Input(type='hidden', name='privacy_masks' if privacy else 'exclude_regions', value=json.dumps(exclude)),
         Div(Button('Grab image', type='button', data_mask_grab='', cls='secondary'),
@@ -92,7 +92,7 @@ def install(app):
                 frame = pipeline.live_previews.capture(source, pipeline.capture_adapter.capture)
                 if frame.source_id != source_id:
                     raise ValueError('Camera frame source mismatch')
-                masked = preprocess(frame, source.settings.get('privacy_masks', ()), preview=True)
+                masked = preprocess(frame, source.settings.get('privacy_masks', ()), preview=True, crop_redacted=False)
                 item = {'status':'ready', 'payload':masked.payload, 'token':token,
                         'captured':frame.captured_at_utc.isoformat(), 'expires':monotonic()+300}
             except Exception:

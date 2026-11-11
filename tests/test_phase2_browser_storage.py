@@ -171,8 +171,8 @@ def test_privacy_masks_precede_crop_and_retention(settings):
     frame = capture_inline(settings.sources[0])
     masked = preprocess(frame, [[0, 0, 0.5, 1]], roi=[0, 0, 0.5, 1])
     with Image.open(BytesIO(masked.payload)) as image:
-        assert image.getpixel((50, 80)) == (0, 0, 0)
-        assert image.size == (192, 256)
+        assert image.size == (1, 1)  # No visible area remains inside this fully redacted ROI.
+        assert image.getpixel((0, 0)) == (0, 0, 0)
     assert masked.frame_id == frame.frame_id and masked.captured_at_utc == frame.captured_at_utc
     assert masked.sha256 != frame.sha256
 
