@@ -1453,3 +1453,7 @@ running. A question edited again during review requires reopening the form.
 Reconnection establishes a new baseline: it does not run an old Yes or replay an
 old episode. A new qualifying transition is required. Monitoring must also be
 running for automatic observations; follow any remaining camera warning.
+
+Camera-image magnification in Full/Grid Observe waits for one continuous second
+of pointer hover. Leaving cancels/shrinks immediately; image refreshes do not reset
+the wait. Keyboard focus remains immediate. Touch taps do not start hover timers.
