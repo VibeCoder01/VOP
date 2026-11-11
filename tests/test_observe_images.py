@@ -46,7 +46,8 @@ def test_observe_keeps_each_latest_masked_image_and_tracks_monitoring(app, monke
         assert response.status_code == 200 and response.headers['x-vop-frame-id'] == first_id
         assert response.headers['x-vop-monitoring'] == 'true'
         assert response.headers['cache-control'] == 'no-store'
-        assert Image.open(BytesIO(response.content)).convert('RGB').getpixel((0, 0)) == (0, 0, 0)
+        image = Image.open(BytesIO(response.content)).convert('RGB')
+        assert image.getpixel((0, 0)) == (255, 255, 255)
         assert store.evidence(first.source_id, first_id) is None
         head = client.head('/ui/live-preview/' + second.source_id)
         assert head.status_code == 200 and not head.content

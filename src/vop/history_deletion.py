@@ -151,6 +151,7 @@ def delete_question_data(db, chosen):
         body['answers'] = [a for a in body['answers'] if a['question_id'] != qid]
         preprocessing = body.get('preprocessing', {})
         preprocessing.get('question_masks', {}).pop(qid, None)
+        preprocessing.get('question_crops', {}).pop(qid, None)
         if 'roi_question_ids' in preprocessing:
             preprocessing['roi_question_ids'] = [key for key in preprocessing['roi_question_ids'] if key != qid]
         # Opaque shared payloads can contain any answer. Keep typed answers and

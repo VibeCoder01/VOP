@@ -182,7 +182,7 @@ OBSERVE_ANSWERS_JS = MARKER_JS + """async function updateProcessedImage(panel, r
   const caption = tile.querySelector('[data-processed-caption]');
   if (response) {
     tile.dataset.wantedFrame = response.headers.get('X-VOP-Processed-frame') || '';
-    for (const key of ['url','captured','message']) tile.dataset[key] = response.headers.get('X-VOP-Processed-' + key) || '';
+    for (const key of ['url','captured','message','crop']) tile.dataset[key] = response.headers.get('X-VOP-Processed-' + key) || '';
   }
   function clear(message) {
     const shown = tile.querySelector('img');
@@ -532,7 +532,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                     P(local_time(processed['captured'],settings.timezone_name) if processed['captured'] else '',data_processed_caption='',cls='muted'),
                     Noscript(P(A('Open processed image',href=processed['url'],cls='text-link'))) if processed['url'] else None,
                     id='processed-image-' + sid,cls='image-tile',data_processed_image='',data_frame=processed['frame'],
-                    data_url=processed['url'],data_captured=processed['captured'],data_message=processed['message']),cls='image-pair'),
+                    data_url=processed['url'],data_captured=processed['captured'],data_message=processed['message'],data_crop=processed.get('crop','[0,0,1,1]')),cls='image-pair'),
                 Small('Hover over an image or focus it to enlarge.'),
                 open=monitoring, data_image_panel='', cls='image-disclosure', aria_label='Images from ' + source['name']),
             cls='observe-image monitoring' if monitoring else 'observe-image', data_observe_preview=sid,
@@ -566,22 +566,27 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                          'Native model option score; not a calibrated probability.' if scored else 'Selected category only; no option score was returned.')
                      for name, _ in spec.choices), cls='answer-options')
 
-    def camera_answer_content(answers, zone, markers=None):
+    def camera_answer_content(answers, zone, markers=None, operator=False):
         rows = []
         if markers is None:
             markers = automation_markers(store, answers[0]['source_id'], {d['spec'].question_id:d['spec'].version for d in answers}) if answers else {}
         ids = [d['summary']['last_observation_id'] for d in answers if d['summary']['last_observation_id']]
         native_answers = {}
+        native_frames = {}
         if ids:
             with store.connection() as db:
-                native_answers = {row['id']: json.loads(row['answer_json']) for row in db.execute(
-                    'SELECT id,answer_json FROM observations WHERE id IN (' + ','.join('?' for _ in ids) + ')', ids)}
+                rows = db.execute('SELECT o.id,o.answer_json,r.frame_id FROM observations o JOIN runs r ON r.id=o.run_id WHERE o.id IN (' + ','.join('?' for _ in ids) + ')', ids).fetchall()
+                native_answers = {row['id']:json.loads(row['answer_json']) for row in rows}
+                native_frames = {row['id']:row['frame_id'] for row in rows}
         for d in answers:
             summary, spec = d['summary'], d['spec']
             native = native_answers.get(summary['last_observation_id'], {})
             areas = {'include': d['policy'].include_regions, 'exclude': d['policy'].exclude_regions}
             has_areas = bool(areas['include'] or areas['exclude'])
-            rows.append(Tr(Td(StrongText(spec.text), automation_marker(markers.get(spec.question_id)), Small('Version ' + spec.version)),
+            engine = pipeline.engine_previews.get(d['source_id'], {})
+            engine_frame = native_frames.get(summary['last_observation_id'])
+            engine_link = A('Engine image', href='/ui/engine-image/' + d['source_id'] + '/' + str(engine_frame) + '/' + spec.question_id + '/' + spec.version, cls='text-link', title='Exact cropped, privacy-masked input for this question. Temporary; no new capture.') if operator and engine_frame and engine.get('frame')==engine_frame and (spec.question_id,spec.version) in engine.get('images',{}) else None
+            rows.append(Tr(Td(StrongText(spec.text), automation_marker(markers.get(spec.question_id)), Small('Version ' + spec.version, ' · ' if engine_link else None, engine_link)),
                 Td(badge(summary['state'])), Td(answer_label(summary['latest_value'], spec.levels)),
                 Td(answer_graph(spec, summary['latest_value'], native)),
                 Td(local_time(summary['last_observed_at_utc'], zone)),
@@ -593,10 +598,10 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         return {'active': sum(d['summary']['state'] in ('ACTIVE', 'RECOVERING') for d in answers),
                 'unknown': sum(d['summary']['state'] == 'UNKNOWN' for d in answers)}
 
-    def camera_answers(source, answers, zone):
+    def camera_answers(source, answers, zone, operator=False):
         return Details(Summary(Span('Show answers', cls='show-answers'), Span('Hide answers', cls='hide-answers'), cls='button secondary'),
             P('Answers update after each observation. Live images update separately.', cls='muted'),
-            Div(camera_answer_content(answers, zone), data_answer_content=''),
+            Div(camera_answer_content(answers, zone, operator=operator), data_answer_content=''),
             cls='camera-answers', aria_label='Latest answers for ' + source['name'],
             data_processed_target='processed-image-' + source['source_id'],data_zone=zone,
             data_active=condition_counts(answers)['active'], data_unknown=condition_counts(answers)['unknown'],
@@ -657,7 +662,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         headers = {**({'ETag':etag} if etag else {}), **{'X-VOP-' + key: str(value) for key, value in condition_counts(answers).items()}}
         headers.update({'X-VOP-Processed-' + key: value or '' for key,value in processed.items()})
         headers['X-VOP-Monitoring'] = str(bool(control['enabled'] and control['sample_interval_seconds']>0)).lower()
-        content = '' if counts_only else to_xml(grid_lights(answers,answer_label) if grid else camera_answer_content(answers, zone, markers))
+        content = '' if counts_only else to_xml(grid_lights(answers,answer_label) if grid else camera_answer_content(answers, zone, markers, operator=request.scope.get('auth_role')=='operator'))
         return Response(content, media_type='text/html', headers=headers)
 
     def capture_controls(source, csrf, operator, configure, answers=(), zone=None, grid_url=None):
@@ -684,7 +689,7 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
                        action("Run synthetic demo", f"/ui/sources/{sid}/demo", csrf, secondary=True) if configure and source['enabled'] and source['kind'] == 'synthetic' and isinstance(pipeline.engine, MockInferenceEngine) and store.questions(sid, active_only=True) else None,
                        cls="actions"),
                        A('Grid View',href=grid_url,cls='button secondary grid-view-link') if grid_url and not configure else None,
-                       camera_answers(source, answers, zone or settings.timezone_name), cls="observe-controls"), cls="capture-source",id='camera-'+sid)
+                       camera_answers(source, answers, zone or settings.timezone_name, operator=operator), cls="observe-controls"), cls="capture-source",id='camera-'+sid)
 
     @app.route('/ui/sources/{source_id}/monitor', methods=['POST'])
     async def monitor(source_id: str, request):
@@ -1300,6 +1305,23 @@ def install_dashboard(app, settings, store, pipeline, engine, token, viewer_toke
         headers.update({'X-VOP-Frame-Id': frame_id, 'X-VOP-Captured-At': captured_at, 'X-VOP-Preview-Kind': kind})
         headers['Content-Length'] = str(payload if isinstance(payload, int) else len(payload))
         return Response(b'' if request.method == 'HEAD' else payload, media_type=content_type, headers=headers)
+
+    @app.route('/ui/engine-image/{source_id}/{frame_id}/{question_id}/{version}', methods=['GET','HEAD'])
+    def engine_image(source_id: str, frame_id: str, question_id: str, version: str, request):
+        if request.scope.get('auth_role') != 'operator':
+            return Response('Images require operator permission', status_code=403)
+        if source_id not in pipeline.sources:
+            return Response(status_code=404)
+        entry = pipeline.engine_previews.get(source_id, {})
+        frame = entry.get('images',{}).get((question_id,version)) if entry.get('frame')==frame_id else None
+        if frame is None:
+            return Response('This engine image is no longer available. Wait for a new observation.', status_code=404)
+        with store.connection() as db:
+            valid = db.execute('SELECT 1 FROM observations o JOIN runs r ON r.id=o.run_id JOIN query_controls q ON q.source_id=o.source_id AND q.question_id=o.question_id WHERE o.source_id=? AND o.question_id=? AND o.question_version=? AND r.frame_id=? AND o.status!=? AND q.current_version=? ORDER BY o.sequence DESC LIMIT 1',
+                (source_id,question_id,version,frame_id,'retention_gap',version)).fetchone()
+        if not valid:
+            return Response('This engine image is no longer available. Wait for a new observation.', status_code=404)
+        return Response(b'' if request.method=='HEAD' else frame.payload,media_type='image/png',headers={'Content-Length':str(len(frame.payload))})
 
     @app.route('/ui/processed-image/{source_id}/{frame_id}', methods=['GET','HEAD'])
     def processed_image(source_id: str, frame_id: str, request):

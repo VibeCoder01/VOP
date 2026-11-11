@@ -1457,3 +1457,24 @@ running for automatic observations; follow any remaining camera warning.
 Camera-image magnification in Full/Grid Observe waits for one continuous second
 of pointer hover. Leaving cancels/shrinks immediately; image refreshes do not reset
 the wait. Keyboard focus remains immediate. Touch taps do not start hover timers.
+
+
+Fully redacted outer borders are automatically cropped from new camera previews,
+processed/saved source images and engine inputs. Crops use configured privacy and
+question include/exclude geometry, not black-pixel detection: naturally dark scene
+content is preserved. Internal hidden holes stay black; separated visible regions
+are kept in one bounding rectangle, not stitched together. ROI and mask coordinates
+remain relative to the original camera frame. The mask editor deliberately keeps
+that full-frame coordinate view. If no area remains visible for a question, VOP
+records `no_visible_image` and does not send that question to an engine.
+
+Live and Last processed source images show the source privacy crop. Questions with
+different include/exclude/ROI settings can have different engine crops: **Engine
+image** next to each answer opens its exact current engine input (operator only).
+These inputs are temporary, latest-frame-only, with a global 32 MiB memory cap;
+if evicted, deleted or replaced, the link reports unavailable and never substitutes
+another frame. No extra capture/inference is requested. Engine inputs are not saved
+as additional evidence. Save image and email `{image}` continue using the canonical
+privacy-masked source image, now border-cropped. Old recorded images stay unchanged.
+The observation preprocessing metadata records source and per-question crop bounds;
+hovered question outlines are remapped to the cropped source image.

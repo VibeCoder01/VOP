@@ -103,7 +103,7 @@ def test_inference_roi_groups_share_original_frame_and_privacy_mask(settings):
     frame = capture_inline(source)
     result = app.state.pipeline.run(source.source_id, frame)
     assert len(seen) == 2 and {s[0] for s in seen} == {frame.frame_id}
-    assert {s[1] for s in seen} == {192, 384}
+    assert {s[1] for s in seen} == {114, 306}  # Same original ROI, then remove private x=0..77 from each input.
     assert result["result"]["preprocessing"]["privacy_mask_count"] == 1
     assert len(result["result"]["answers"]) == 3
 

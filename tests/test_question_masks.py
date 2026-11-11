@@ -35,10 +35,9 @@ def test_include_union_exclude_and_camera_privacy_order(app):
     frame=white_frame(app.state.pipeline.sources[SID])
     result=preprocess(frame, [[0,0,.2,1]], include_regions=((0,0,.8,1),),exclude_regions=((.5,0,.1,1),))
     with Image.open(BytesIO(result.payload)) as image:
-        assert image.getpixel((10,50))==(0,0,0)  # A question cannot undo camera privacy.
-        assert image.getpixel((30,50))==(255,255,255)
-        assert image.getpixel((55,50))==(0,0,0)
-        assert image.getpixel((90,50))==(0,0,0)
+        assert image.size == (59,100)  # Original x=21..79: redacted outer borders removed.
+        assert image.getpixel((0,50))==(255,255,255)
+        assert image.getpixel((34,50))==(0,0,0)  # Original x=55 remains excluded.
     assert Image.open(BytesIO(frame.payload)).getpixel((10,50))==(255,255,255)
     union=preprocess(frame,include_regions=((0,0,.2,1),(.8,0,.2,1)))
     image=Image.open(BytesIO(union.payload))
@@ -72,16 +71,16 @@ def test_pipeline_groups_by_full_question_mask_and_preserves_provenance(app):
         def infer(self,request):
             image=Image.open(BytesIO(request.frame.payload))
             for question in request.questions:
-                seen[question.question_id]=(image.getpixel((25,50)),image.getpixel((75,50)))
+                seen[question.question_id]=(image.size,image.getpixel((25,50)))
             return super().infer(request)
     pipeline.engine=Inspect(pipeline.settings.mock_answers,pipeline.settings.engine_id)
     records=store.questions(SID)
     store.edit_question(SID,records[0]['spec'],QueryPolicy(include_regions=((0,0,.5,1),)))
     store.edit_question(SID,records[1]['spec'],QueryPolicy(exclude_regions=((0,0,.5,1),)))
     saved=pipeline.run(SID,white_frame(pipeline.sources[SID]))
-    assert seen[records[0]['spec'].question_id]==((255,255,255),(0,0,0))
-    assert seen[records[1]['spec'].question_id]==((0,0,0),(255,255,255))
-    assert seen[records[2]['spec'].question_id]==((255,255,255),(255,255,255))
+    assert seen[records[0]['spec'].question_id]==((50,100),(255,255,255))
+    assert seen[records[1]['spec'].question_id]==((50,100),(255,255,255))
+    assert seen[records[2]['spec'].question_id]==((100,100),(255,255,255))
     assert len(saved['result']['preprocessing']['question_masks'])==2
     assert len(saved['result']['answers'])==3
     from vop.history_deletion import question_selection, delete_question_data
@@ -90,6 +89,7 @@ def test_pipeline_groups_by_full_question_mask_and_preserves_provenance(app):
         delete_question_data(db,question_selection(db,SID,qid))
         body=json.loads(db.execute('SELECT result_json FROM runs WHERE id=?',(saved['run_id'],)).fetchone()[0])
         assert qid not in body['preprocessing']['question_masks']
+        assert qid not in body['preprocessing']['question_crops']
         assert len(body['preprocessing']['question_masks'])==1
 
 

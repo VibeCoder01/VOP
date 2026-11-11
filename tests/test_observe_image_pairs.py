@@ -50,8 +50,9 @@ def test_processed_pair_keeps_completed_frame_until_new_answers_commit(app, monk
                 assert response.headers['x-vop-processed-frame'] == first.frame_id
                 url = response.headers['x-vop-processed-url']
                 image = Image.open(BytesIO(client.get(url).content)).convert('RGB')
-                assert image.getpixel((0,0)) == (0,0,0)
-                assert image.getpixel((39,0)) == (255,0,0)
+                assert image.width == first.width-int(first.width*.5)-1
+                assert image.getpixel((0,0)) == (255,0,0)
+                assert image.getpixel((image.width-1,0)) == (255,0,0)
                 soup = BeautifulSoup(client.get('/').text,'html.parser')
                 pair = soup.select_one('.image-pair')
                 assert len(pair.select('.image-stage img')) == 2
@@ -66,7 +67,7 @@ def test_processed_pair_keeps_completed_frame_until_new_answers_commit(app, monk
         assert updated.headers['x-vop-processed-frame'] == second.frame_id
         assert client.get('/ui/processed-image/' + SID + '/' + first.frame_id).status_code == 404
         image = Image.open(BytesIO(client.get(updated.headers['x-vop-processed-url']).content)).convert('RGB')
-        assert image.getpixel((39,0)) == (0,0,255)
+        assert image.getpixel((image.width-1,0)) == (0,0,255)
         for method in (client.get,client.head):
             assert method(updated.headers['x-vop-processed-url'],headers={'Authorization':'Bearer '+VIEWER}).status_code == 403
 

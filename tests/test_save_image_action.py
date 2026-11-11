@@ -45,7 +45,8 @@ def test_manual_save_uses_normal_masked_evidence_without_changing_capture_settin
     assert store.evidence(SID,frame.frame_id)==expected
     assert store.observation(context['observation_id'])['image_saved']
     image=Image.open(BytesIO(expected))
-    assert image.getpixel((0,0))==(0,0,0)
+    assert image.width == frame.width - int(frame.width*.5) - 1
+    assert image.getpixel((0,0))==(255,255,255)  # Fully private border was removed.
     assert store.source_control(SID)==before
     # Normal image deletion remains final: there is no queued copy to restore it.
     store.delete_evidence(SID,frame.frame_id)

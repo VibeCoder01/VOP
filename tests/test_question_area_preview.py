@@ -61,6 +61,10 @@ listeners.focusin({target});assert.equal(box.children.length,2);
 listeners.focusout({relatedTarget:null});assert.ok(box.children[1].removed);
 img.hidden=true;listeners.mouseover({target});assert.equal(box.children.length,2);
 img.hidden=false;listeners.mouseover({target});document.hidden=true;listeners.visibilitychange();assert.ok(box.children[2].removed);
+document.hidden=false;tile.dataset={crop:'[0.5,0,0.5,1]'};
+row.dataset.questionAreas=JSON.stringify({include:[[.6,.2,.2,.4]],exclude:[]});
+listeners.mouseover({target});const cropped=box.children.at(-1).children[0];
+assert.equal(cropped.attrs.x,'140');assert.equal(cropped.attrs.width,'80');
 assert.ok(!/fetch\(/.test(SCRIPT_TEXT));
 console.log('PASS');
 """

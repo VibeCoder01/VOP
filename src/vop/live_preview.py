@@ -10,7 +10,7 @@ from PIL import Image
 
 from vop.contracts import ProviderError, utcnow
 from vop.inputs.sources import camera_endpoint, camera_locator
-from vop.preprocessing import mask_image
+from vop.preprocessing import privacy_view
 
 FPS = 5
 LEASE_SECONDS = 15
@@ -18,7 +18,7 @@ MAX_CAMERAS = 4
 
 
 def encode_preview(image, masks):
-    image = mask_image(image, masks)
+    image = privacy_view(image, masks)
     image.thumbnail((960, 540))
     buffer = BytesIO()
     image.save(buffer, format='JPEG', quality=80)

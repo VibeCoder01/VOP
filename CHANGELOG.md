@@ -687,3 +687,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Automations: prominent blocked-version warnings, previous/current review with Save and reconnect, concurrent-edit guard, Observe/Activity attention banners and amber Diagnostics with repair guidance.
 
 - Observe: wait one second before magnifying hovered camera images in Full/Grid views; cancel on leaving and keep keyboard focus immediate.
+
+- Images: crop configured redacted outer borders before inference and in source previews/evidence; preserve full-frame mask/ROI coordinates and internal redactions. Expose exact temporary per-question Engine image links and remap area overlays. Fully hidden questions fail clearly without inference.
