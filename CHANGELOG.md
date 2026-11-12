@@ -691,3 +691,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Images: crop configured redacted outer borders before inference and in source previews/evidence; preserve full-frame mask/ROI coordinates and internal redactions. Expose exact temporary per-question Engine image links and remap area overlays. Fully hidden questions fail clearly without inference.
 
 - Question deletion: preview and delete dependent automations/notification rules atomically, recheck concurrent dependency edits, wait for active service actions, and retain reusable actions/accounts and unrelated history.
+
+- CI: align legacy removal regression checks with permanent dependency deletion and the expanded stale-confirmation message; retain restart/backup and permission checks.

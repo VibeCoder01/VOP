@@ -196,7 +196,9 @@ def test_permanent_removed_question_delete_erases_target_history_restart_and_bac
         assert all(o['question_id'] != 'red_square' for o in after)
         assert {o['id']: o['answer']['value'] for o in after} == {o['id']: o['answer']['value'] for o in before if o['question_id'] != 'red_square'}
         assert store.events() == events
-        assert app.state.reliable.rules()[0]['enabled'] is False
+        assert app.state.reliable.rules() == []
+        with store.connection() as db:
+            assert not db.execute("SELECT 1 FROM rule_versions WHERE id='deleted-question-rule'").fetchone()
         app.state.reliable.evaluate()
         assert client.post(base+'/restore', data={'csrf': csrf}).status_code == 400
         assert client.get(base+'/delete').status_code == 400
@@ -242,5 +244,5 @@ def test_permanent_question_delete_permissions_csrf_and_active_guard(app, monkey
         assert client.post(base+'/delete', data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
         # Missing data confirmation must never delete a question.
-        assert 'Question setup or alert rules changed' in client.post(base+'/delete', data=form).text
+        assert 'Question setup, automations or notification rules changed' in client.post(base+'/delete', data=form).text
         assert any(r['spec'].question_id == 'red_square' for r in app.state.store.questions(SID))
