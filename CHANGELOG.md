@@ -693,3 +693,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Question deletion: preview and delete dependent automations/notification rules atomically, recheck concurrent dependency edits, wait for active service actions, and retain reusable actions/accounts and unrelated history.
 
 - CI: align legacy removal regression checks with permanent dependency deletion and the expanded stale-confirmation message; retain restart/backup and permission checks.
+
+- CI preview smoke: verify cropped outer redaction plus a preserved internal redaction using explicit synthetic pixels.
