@@ -1478,3 +1478,17 @@ as additional evidence. Save image and email `{image}` continue using the canoni
 privacy-masked source image, now border-cropped. Old recorded images stay unchanged.
 The observation preprocessing metadata records source and per-question crop bounds;
 hovered question outlines are remapped to the cropped source image.
+
+
+Question deletion lists its dependent automations and notification rules by name
+before confirmation, and permanently deletes them with the question's data. This
+applies to single/bulk deletion and disabled dependencies too. If the dependency
+configuration changes after the preview, confirm a fresh preview. Deletion waits
+for observation/notification/service-action work; target Activity and delivery
+records are removed and remaining queued work from deleted automations is cancelled.
+Reusable action definitions, uploaded audio and protected action accounts remain.
+Unrelated questions/dependencies/history are kept. Old notification rule revisions
+for the deleted question are removed; a rule moved to another question retains its
+current definition/revision/state. Already dispatched messages/device commands or
+browser playback cannot be recalled. History-only deletion keeps its existing rule
+and automation disabling behaviour. No existing questions are deleted by upgrading.

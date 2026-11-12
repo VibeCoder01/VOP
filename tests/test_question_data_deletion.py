@@ -142,12 +142,12 @@ def test_purge_needs_current_configuration_and_is_atomic(app, monkeypatch):
         assert client.post(URL, data=form).status_code == 403
         client.post('/ui/mode', data={'csrf': csrf, 'mode': 'configure'})
         missing = client.post(URL, data={**form, 'expected_data': ''})
-        assert 'Question setup or alert rules changed. Review the selection' in missing.text
+        assert 'Question setup, automations or notification rules changed. Review the selection' in missing.text
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))
         # A changed question setup still invalidates confirmation.
         with store.connection() as db: db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, QID))
         changed = client.post(URL, data=form)
-        assert 'Question setup or alert rules changed. Review the selection' in changed.text
+        assert 'Question setup, automations or notification rules changed. Review the selection' in changed.text
         assert any(q['spec'].question_id == QID for q in store.questions(SID, include_removed=True))
         before = store.observations(SID, limit=100)
         def fail(db, chosen):

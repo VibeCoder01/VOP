@@ -405,7 +405,7 @@ def test_summary_cache_invalidates_samples_policy_and_history_deletion(app, monk
     assert len(calls) == 4
 
 
-def test_question_data_deletion_erases_action_history_and_pauses_automation(app, monkeypatch):
+def test_question_data_deletion_erases_action_history_and_deletes_automation(app, monkeypatch):
     from vop.history_deletion import question_selection, delete_question_data
     actions = app.state.actions
     sound(actions)
@@ -420,7 +420,8 @@ def test_question_data_deletion_erases_action_history_and_pauses_automation(app,
     with actions.store.connection() as db:
         db.execute('BEGIN IMMEDIATE')
         delete_question_data(db, question_selection(db, SID, QID))
-    assert actions.jobs() == [] and not actions.automations()[0]['enabled']
+    assert actions.jobs() == [] and actions.automations() == []
+    assert actions.definitions()[0]['id']=='bell'
 
 
 def test_ordinal_and_choice_forms_only_offer_valid_named_values(app):
