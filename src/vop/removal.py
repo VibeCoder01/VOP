@@ -249,7 +249,7 @@ def install_removal(app, store, pipeline, reliable):
         items = [(sid, qid, checked(sid, qid, removed=None), question_selection(db, sid, qid, include_runs=False)) for sid, qid in pairs]
         # Confirmation covers all data for these question identities, including observations
         # arriving while monitoring runs. Bind it to configuration, not changing history.
-        fingerprint = sha256(dumps([(sid, qid, record, chosen['rules'])
+        fingerprint = sha256(dumps([(sid, qid, record, chosen['rules'], chosen['automations'])
                                     for sid, qid, record, chosen in items]).encode()).hexdigest()
         return items, fingerprint
 
@@ -259,7 +259,7 @@ def install_removal(app, store, pipeline, reliable):
         try:
             reliable.lock.acquire()
             try:
-                with store.connection() as db:
+                with app.state.actions.lock, store.connection() as db:
                     db.execute('BEGIN IMMEDIATE')
                     items, fingerprint = question_snapshot(db, pairs)
                     if expected_version is not None and expected_version != items[0][2]['spec'].version:
@@ -292,8 +292,12 @@ def install_removal(app, store, pipeline, reliable):
             items, fingerprint = question_snapshot(db, pairs)
         rows = []
         warnings = []
+        dependencies = []
         for sid, qid, record, chosen in items:
             counts = chosen['counts']
+            for label,key in (('Automation','automations'),('Notification rule','rules')):
+                for item in chosen[key]:
+                    dependencies.append(P(label + ': ' + json.loads(item['configuration']).get('name',item['id'])))
             rows.append(Tr(Td(pipeline.sources[sid].name or sid), Td(record['spec'].text),
                            *(Td(str(counts[key])) for key in ('answers', 'images', 'episodes', 'alerts'))))
             if counts['shared_images'] and (not bulk or not warnings):
@@ -302,11 +306,13 @@ def install_removal(app, store, pipeline, reliable):
                     ' shared with other questions. Those images will disappear from their results too.'))
         return app.state.page('Delete questions' if bulk else 'Delete question', request, [
             H2(f'{len(items)} selected questions' if bulk else items[0][2]['spec'].text),
-            P('Question setup or alert rules changed. Review the selection and confirm again.', cls='notice', role='status') if changed else None,
+            P('Question setup, automations or notification rules changed. Review the selection and confirm again.', cls='notice', role='status') if changed else None,
             P('This permanently deletes the selected questions and their recorded data. They cannot be restored from the app.' if bulk else 'This permanently deletes the question and its recorded data. It cannot be restored from the app.'),
             P('Deletes answers across all versions, associated saved images, raw engine data, episodes, alerts and delivery records. Timestamp-only deletion gaps for these questions are also removed.'),
-            P('Other questions’ normalised answers are kept, but shared images and raw engine details are cleared. Related alert rules are disabled.'),
-            P('Deletion waits for the current observation to finish. Monitoring stays on for the other questions.'),
+            P('Other questions’ normalised answers are kept, but shared images and raw engine details are cleared. Dependent automations and notification rules are deleted. Reusable actions, audio clips and protected action settings are kept.'),
+            H2('Also deletes these dependencies') if dependencies else None,
+            *dependencies,
+            P('Deletion waits for the current observation and any action running in the VOP service. Queued dependent actions will not run. Monitoring stays on for the other questions.'),
             P('Counts are a preview. Delete includes any new data recorded for these questions before deletion starts. You do not need to pause the camera.'),
             P('Images and raw engine details shared with other questions will also be cleared, including any saved after this preview.'),
             P('The question IDs stay reserved. Leave the ID blank when adding a replacement question.'),

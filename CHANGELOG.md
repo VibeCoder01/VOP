@@ -689,3 +689,5 @@ Automation trigger descriptions now include the configured Yes/No, choice or ord
 - Observe: wait one second before magnifying hovered camera images in Full/Grid views; cancel on leaving and keep keyboard focus immediate.
 
 - Images: crop configured redacted outer borders before inference and in source previews/evidence; preserve full-frame mask/ROI coordinates and internal redactions. Expose exact temporary per-question Engine image links and remap area overlays. Fully hidden questions fail clearly without inference.
+
+- Question deletion: preview and delete dependent automations/notification rules atomically, recheck concurrent dependency edits, wait for active service actions, and retain reusable actions/accounts and unrelated history.

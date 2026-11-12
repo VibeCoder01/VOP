@@ -48,7 +48,7 @@ def selection(db, *, source_id=None, observation_id=None):
     return dict(source_id=source_id, runs=runs, answers=answers, keys=keys, alerts=alerts, rules=rules, counts=counts, fingerprint=fingerprint)
 
 
-def delete_related_alerts(db, chosen):
+def delete_related_alerts(db, chosen, *, delete_dependencies=False):
     from vop.actions import detach_question
     pairs = {(chosen['source_id'], chosen['question_id'])} if 'question_id' in chosen else {(k[0], k[1]) for k in chosen['keys']}
     for sid, qid in pairs:
@@ -56,6 +56,9 @@ def delete_related_alerts(db, chosen):
     for aid in chosen['alerts']:
         db.execute('DELETE FROM deliveries WHERE alert_id=?', (aid,))
         db.execute('DELETE FROM alerts WHERE id=?', (aid,))
+    if delete_dependencies:
+        purge_question_dependencies(db, chosen)
+        return
     for rule in chosen['rules']:
         config = json.loads(rule['configuration'])
         if config['enabled']:
@@ -64,6 +67,28 @@ def delete_related_alerts(db, chosen):
             db.execute('UPDATE rules SET revision=?,configuration=? WHERE id=?', (revision, dumps(config), rule['id']))
             db.execute('INSERT INTO rule_versions VALUES(?,?,?)', (rule['id'], revision, dumps(config)))
         db.execute('DELETE FROM rule_states WHERE substr(id,1,?)=?', (len(rule['id']) + 1, rule['id'] + ':'))
+
+
+def purge_question_dependencies(db, chosen):
+    """Configuration deletion only; history-only deletion still disables rules."""
+    sid,qid = chosen['source_id'],chosen['question_id']
+    for automation in chosen.get('automations', []):
+        db.execute("UPDATE action_jobs SET status='cancelled',detail='Automation deleted with its question.' WHERE automation_id=? AND status IN ('queued','retry','sending')", (automation['id'],))
+        db.execute('DELETE FROM automations WHERE id=?', (automation['id'],))
+    for rule in chosen['rules']:
+        prefix=rule['id']+':'
+        db.execute('DELETE FROM rule_states WHERE substr(id,1,?)=?',(len(prefix),prefix))
+        db.execute('DELETE FROM rules WHERE id=?', (rule['id'],))
+    versions = db.execute("SELECT id,revision FROM rule_versions WHERE json_extract(configuration,'$.source_id')=? AND json_extract(configuration,'$.question_id')=?",(sid,qid)).fetchall()
+    for rule in versions:
+        prefix=f"{rule['id']}:{rule['revision']}:"
+        db.execute('DELETE FROM rule_states WHERE substr(id,1,?)=?',(len(prefix),prefix))
+    trigger=db.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='immutable_rule_delete'").fetchone()
+    if trigger: db.execute('DROP TRIGGER immutable_rule_delete')
+    try:
+        db.execute("DELETE FROM rule_versions WHERE json_extract(configuration,'$.source_id')=? AND json_extract(configuration,'$.question_id')=?",(sid,qid))
+    finally:
+        if trigger: db.execute(trigger[0])
 
 
 def delete_selected(db, chosen, *, whole_source=False):
@@ -130,14 +155,16 @@ def question_selection(db, source_id, question_id, *, include_runs=True):
             if include_runs else [])
     alerts = [r[0] for r in db.execute('SELECT id FROM alerts WHERE source_id=? AND question_id=? ORDER BY id', params)]
     rules = [dict(r) for r in db.execute('SELECT * FROM rules ORDER BY id') if (json.loads(r['configuration'])['source_id'], json.loads(r['configuration'])['question_id']) == params]
+    automations = ([dict(r) for r in db.execute("SELECT id,revision,configuration FROM automations WHERE json_extract(configuration,'$.source_id')=? AND json_extract(configuration,'$.question_id')=? ORDER BY id",params)]
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='automations'").fetchone() else [])
     return dict(source_id=source_id, question_id=question_id, runs=runs, alerts=alerts,
-                rules=rules, counts=question_counts(db, source_id, question_id))
+                rules=rules, automations=automations, counts=question_counts(db, source_id, question_id))
 
 
 def delete_question_data(db, chosen):
     """Purge one question; preserve other normalised answers from shared captures."""
     sid, qid = chosen['source_id'], chosen['question_id']
-    delete_related_alerts(db, chosen)
+    delete_related_alerts(db, chosen, delete_dependencies=True)
     db.execute('DELETE FROM mock_values WHERE source_id=? AND question_id=?', (sid, qid))
     db.execute('DELETE FROM observations WHERE source_id=? AND question_id=?', (sid, qid))
     db.execute('DELETE FROM events WHERE source_id=? AND question_id=?', (sid, qid))

@@ -135,7 +135,7 @@ def test_bulk_preview_staleness_restored_guard_and_atomic_rollback(app, monkeypa
         with store.connection() as db:
             db.execute('UPDATE query_controls SET enabled=0 WHERE source_id=? AND question_id=?', (SID, 'red_square'))
         stale = client.post(BULK, data=form)
-        assert 'Question setup or alert rules changed. Review the selection' in stale.text
+        assert 'Question setup, automations or notification rules changed. Review the selection' in stale.text
         assert {r['spec'].question_id for r in store.questions(SID, include_removed=True)} == {'red_square', 'background', 'brightness'}
         form = confirmation(stale)
         before = store.observations(SID, limit=100)
@@ -248,7 +248,7 @@ def test_confirmed_deletion_waits_and_rechecks_without_blocking_dashboard(app, m
         assert all(not lock.locked() for lock in (admission, busy, reliable))
         assert store.source_control(SID) == controls
         if changed_while_waiting == 'configuration':
-            assert 'Question setup or alert rules changed. Review the selection' in response.text
+            assert 'Question setup, automations or notification rules changed. Review the selection' in response.text
             assert store.observations(SID, limit=100) == before
             assert client.post(route, data=confirmation(response, route)).status_code == 200
         if changed_while_waiting == 'observation':
